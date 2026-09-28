@@ -42,9 +42,19 @@ db.serialize(() => {
         id TEXT PRIMARY KEY, name TEXT, password TEXT, phone TEXT, assigned_sections TEXT, assigned_grades TEXT, is_proctor INTEGER DEFAULT 0
     )`);
 
-    // አዲሱ የውጤት መሙያ - በየኮርሱ እና በየመምህሩ ይይዛል
+    // Old assessments table (kept for fallback)
+    db.run(`CREATE TABLE IF NOT EXISTS assessments (
+        student_id TEXT PRIMARY KEY, quiz REAL, mid REAL, final REAL, total REAL, remark TEXT
+    )`);
+
+    // NEW TABLE: To handle multiple courses/teachers grading the same student
     db.run(`CREATE TABLE IF NOT EXISTS course_assessments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, student_id TEXT, course_id INTEGER, teacher_id TEXT, quiz REAL, mid REAL, final REAL, total REAL, remark TEXT
+        id INTEGER PRIMARY KEY AUTOINCREMENT, student_id TEXT, teacher_id TEXT, course_code TEXT, course_title TEXT, 
+        quiz REAL, mid REAL, final REAL, total REAL, remark TEXT
+    )`);
+
+    db.run(`CREATE TABLE IF NOT EXISTS withdrawals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, student_id TEXT, reason TEXT, details TEXT, status TEXT, admin_reply TEXT
     )`);
 
     db.run(`CREATE TABLE IF NOT EXISTS courses (
@@ -60,9 +70,8 @@ db.serialize(() => {
         id INTEGER PRIMARY KEY AUTOINCREMENT, sender_role TEXT, sender_name TEXT, target_audience TEXT, message TEXT, created_at TEXT
     )`);
 
-    // አዲሱ የተማሪዎች መልዕክት/ፈቃድ መጠየቂያ - በቀጥታ ለተመረጠው ኮርስ/መምህር
-    db.run(`CREATE TABLE IF NOT EXISTS student_messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, student_id TEXT, student_name TEXT, class_level TEXT, course_id INTEGER, course_title TEXT, teacher_id TEXT, reason TEXT, teacher_feedback TEXT, status TEXT, created_at TEXT
+    db.run(`CREATE TABLE IF NOT EXISTS absence_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, student_id TEXT, student_name TEXT, class_level TEXT, reason TEXT, teacher_feedback TEXT, status TEXT, created_at TEXT
     )`);
 
     db.run(`CREATE TABLE IF NOT EXISTS daily_attendance (
@@ -106,17 +115,28 @@ function generateStudentID() { return `ALLS-${Math.floor(1000 + Math.random() * 
 function generateTeacherID() { return `T-${Math.floor(100 + Math.random() * 900)}`; }
 function generate4DigitPIN() { return Math.floor(1000 + Math.random() * 9000).toString(); }
 
-// SMART CLASS MATCHER (Grade 1 - Section A <=> 1A)
-function isMatch(dbCls, searchCls) {
-    if (!dbCls || !searchCls) return false;
-    if (dbCls.trim().toLowerCase() === searchCls.trim().toLowerCase()) return true;
-    let a = dbCls.replace(/Grade\s+/i, '').replace(/\s*-\s*Section\s*/i, '').replace(/\s+/g, '').toUpperCase();
-    let b = searchCls.replace(/Grade\s+/i, '').replace(/\s*-\s*Section\s*/i, '').replace(/\s+/g, '').toUpperCase();
-    return a === b;
-}
-
 function ensureSectionExists(secName) {
     db.run(`INSERT OR IGNORE INTO sections (name, proctor_name, proctor_phone) VALUES (?, '', '')`, [secName]);
+}
+
+// HELPER: To accurately match "1A" with "Grade 1 - Section A" and avoid "No students" error
+function isClassMatch(c1, c2) {
+    if (!c1 || !c2) return false;
+    let s1 = c1.toString().replace(/\s+/g, '').toLowerCase();
+    let s2 = c2.toString().replace(/\s+/g, '').toLowerCase();
+    if (s1 === s2) return true;
+
+    let parseShort = (c) => {
+        let g = c.match(/grade\s*(\d+)/i);
+        let s = c.match(/section\s*([a-z])/i);
+        if (g && s) return `${g[1]}${s[1]}`.toLowerCase();
+        return c.replace(/\s+/g, '').toLowerCase();
+    };
+
+    let p1 = parseShort(c1);
+    let p2 = parseShort(c2);
+
+    return p1 === p2 || p1 === s2 || p2 === s1 || s1.includes(s2) || s2.includes(s1);
 }
 
 function assignClassSection(requestedYearLevel, callback) {
@@ -141,10 +161,8 @@ function csvCell(v) {
     if (s.search(/("|,|\n)/g) >= 0) s = `"${s}"`;
     return s;
 }
-
 function esc(v) { return v === null || v === undefined ? '' : String(v).replace(/"/g, '&quot;'); }
 
-// ================= LANDING & AUTH =================
 app.get('/', (req, res) => {
     const lang = req.query.lang === 'en' ? 'en' : 'am';
     const t = lang === 'en' ? {
@@ -179,21 +197,131 @@ app.get('/', (req, res) => {
 
 app.get('/forgot-password', (req, res) => {
     const lang = req.query.lang || 'am';
-    res.send(`<!DOCTYPE html><html lang="${lang}"><head><meta charset="UTF-8"><title>Reset Password</title>
-    <style>body{font-family:sans-serif; background:#f4f7f6; padding:20px;} .box{max-width:400px; margin:auto; background:white; padding:30px; border-radius:10px; text-align:center;} input,button{width:100%; padding:12px; margin-bottom:15px; border-radius:5px; border:1px solid #ccc;} button{background:#8e44ad; color:white; font-weight:bold; cursor:pointer; border:none;}</style></head><body>
-    <div class="box"><h2>🔑 Reset My Password</h2><form action="/api/forgot-password" method="POST"><input type="text" name="phone" placeholder="Phone Number" required><input type="text" name="mother_name" placeholder="Mother's Name" required><button type="submit">Reset Password</button></form><a href="/">Back</a></div></body></html>`);
+    res.send(`
+    <!DOCTYPE html><html lang="${lang}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Reset Password</title>
+    <style>body{font-family:sans-serif; background:#f4f7f6; padding:20px;} .box{max-width:400px; margin:auto; background:white; padding:30px; border-radius:10px; box-shadow:0 4px 10px rgba(0,0,0,0.1); text-align:center;} input,button{width:100%; padding:12px; margin-bottom:15px; border-radius:5px; border:1px solid #ccc; font-size:16px;} button{background:#8e44ad; color:white; font-weight:bold; cursor:pointer; border:none;}</style>
+    </head><body>
+        <div class="box">
+            <img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="width: 80px; height: 80px; display: block; margin: 0 auto 10px; border-radius: 50%;">
+            <h2>🔑 የይለፍ ቃል ዳግም አስጀምር</h2>
+            <p style="color:#666; font-size:14px;">በምዝገባ ጊዜ የተጠቀሙበትን ስልክ ቁጥር እና የእናትዎን ስም ያስገቡ።</p>
+            <form action="/api/forgot-password?lang=${lang}" method="POST">
+                <input type="text" name="phone" placeholder="ስልክ ቁጥር (Phone Number)" required>
+                <input type="text" name="mother_name" placeholder="የእናት ስም (Mother's Name)" required>
+                <button type="submit">የይለፍ ቃል ዳግም አስጀምር</button>
+            </form>
+            <a href="/?lang=${lang}">ወደ መግቢያ ተመለስ</a>
+        </div>
+    </body></html>`);
 });
 
 app.post('/api/forgot-password', (req, res) => {
-    let { phone, mother_name } = req.body;
+    const lang = req.query.lang || 'am';
+    const { phone, mother_name } = req.body;
     let newPin = generate4DigitPIN();
     db.get(`SELECT student_id FROM students WHERE phone = ? AND mother_name = ?`, [phone, mother_name], (err, s) => {
         if (s) {
             return db.run(`UPDATE students SET password = ? WHERE student_id = ?`, [newPin, s.student_id], () => {
-                res.send(`<div style="text-align:center; padding:40px; font-family:sans-serif;"><h2 style="color:green;">✅ Password Reset!</h2><p>Your new PIN is: <span style="color:red; font-size:24px; font-weight:bold;">${newPin}</span></p><br><a href="/">Back</a></div>`);
+                res.send(`<div style="text-align:center; padding:40px; font-family:sans-serif;"><h2 style="color:green;">✅ የይለፍ ቃል ተቀይሯል!</h2><p>አዲሱ የይለፍ ቁጥርዎ: <span style="color:red; font-size:24px; font-weight:bold;">${newPin}</span></p><a href="/?lang=${lang}">Back</a></div>`);
             });
         }
-        res.send(`<div style="text-align:center; padding:40px; font-family:sans-serif;"><h3 style="color:red;">❌ No matching account found.</h3><br><a href="/forgot-password">Back</a></div>`);
+        res.send(`<div style="text-align:center; padding:40px; font-family:sans-serif;"><h3 style="color:red;">❌ ተመሳሳይ አካውንት አልተገኘም!</h3><a href="/forgot-password?lang=${lang}">Back</a></div>`);
+    });
+});
+
+app.get('/student-register', (req, res) => {
+    const lang = req.query.lang || 'am';
+    let gradeOptions = '';
+    for(let i=1; i<=12; i++) gradeOptions += `<option value="Grade ${i}">Grade ${i}</option>`;
+
+    res.send(`
+    <!DOCTYPE html><html lang="${lang}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Registration</title>
+    <style>body{font-family:sans-serif; background:#eef2f5; padding:15px;} .box{max-width:600px; margin:auto; background:white; padding:25px; border-radius:10px;} input,select{width:100%; padding:10px; margin:5px 0 15px; border:1px solid #ccc; border-radius:5px;} .row{display:flex; gap:10px;} .col{flex:1;} button{width:100%; padding:12px; background:#27ae60; color:white; font-weight:bold; border:none; border-radius:5px; cursor:pointer;} button:disabled {background:#95a5a6;}</style>
+    </head><body>
+        <div class="box">
+            <div style="text-align:right;"><a href="/student-register?lang=am">አማርኛ</a> | <a href="/student-register?lang=en">English</a></div>
+            <img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="width: 80px; height: 80px; display: block; margin: 0 auto 10px; border-radius: 50%;">
+            <h2>📝 የተማሪዎች ምዝገባ ፎርም</h2>
+            <form action="/api/register?lang=${lang}" method="POST" enctype="multipart/form-data" onsubmit="document.getElementById('subBtn').disabled=true; document.getElementById('subBtn').innerText='⏳ እባክዎ ይጠብቁ... (Loading)';">
+                <div class="row"><div class="col"><label>ሙሉ ስም:</label><input type="text" name="name" required></div><div class="col"><label>የእናት ስም:</label><input type="text" name="mother_name" required></div></div>
+                <div class="row"><div class="col"><label>ጾታ:</label><select name="gender"><option value="Male">ወንድ</option><option value="Female">ሴት</option></select></div><div class="col"><label>ዕድሜ:</label><input type="number" name="age" required></div></div>
+                <div class="row"><div class="col"><label>ስልክ:</label><input type="text" name="phone" required></div><div class="col"><label>የአደጋ ጊዜ ተጠሪ:</label><input type="text" name="emergency_phone" required></div></div>
+                <div class="row"><div class="col"><label>ክልል:</label><input type="text" name="region" required></div><div class="col"><label>ዞን:</label><input type="text" name="zone" required></div></div>
+                <div class="row"><div class="col"><label>ወረዳ:</label><input type="text" name="woreda" required></div><div class="col"><label>ቀበሌ:</label><input type="text" name="kebele" required></div></div>
+                <label>የክፍል ደረጃ (Grade):</label><select name="year_level">${gradeOptions}</select>
+                <label>ጉርድ ፎቶ:</label><input type="file" name="student_photo" accept="image/*" required>
+                <label>የክፍያ ማረጋገጫ:</label><select name="payment_type" id="payType" onchange="document.getElementById('slipBox').style.display = this.value=='slip_file'?'block':'none'; document.getElementById('txnBox').style.display = this.value=='txn_id'?'block':'none';">
+                    <option value="txn_id">የትራንዛክሽን ቁጥር</option><option value="slip_file">የደረሰኝ ፎቶ ያያይዙ</option>
+                </select>
+                <div id="txnBox"><input type="text" name="txn_id" placeholder="Transaction ID"></div>
+                <div id="slipBox" style="display:none;"><input type="file" name="bank_slip_file" accept="image/*,.pdf"></div>
+                <button type="submit" id="subBtn">ምዝገባ ላክ (Submit)</button>
+            </form><br><a href="/?lang=${lang}">ወደ ኋላ (Back)</a>
+        </div>
+    </body></html>`);
+});
+
+app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 }, { name: 'bank_slip_file', maxCount: 1 }]), (req, res) => {
+    const lang = req.query.lang || 'am';
+    try {
+        let { name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, year_level, payment_type, txn_id } = req.body;
+        let autoID = generateStudentID(); 
+        let autoPIN = generate4DigitPIN();
+
+        assignClassSection(year_level, (assignedSection) => {
+            let photoPath = (req.files && req.files['student_photo']) ? req.files['student_photo'][0].filename : '';
+            let slipPath = payment_type === 'slip_file' && (req.files && req.files['bank_slip_file']) ? req.files['bank_slip_file'][0].filename : txn_id;
+
+            db.run(`INSERT INTO pending_students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            [autoID, autoPIN, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, assignedSection, payment_type, slipPath, photoPath], function(err) {
+                if (err) return res.send(`<div style="text-align:center; padding:40px;"><h3 style="color:red;">❌ የዳታቤዝ ስህተት አጋጥሟል!</h3><a href="/student-register">Back</a></div>`);
+                
+                res.send(`
+                <div style="text-align:center; padding:40px; font-family:sans-serif;">
+                    <h2 style="color:green;">✅ ጥያቄዎ ተልኳል!</h2>
+                    <div style="background:#eef2f5; display:inline-block; padding:20px; border-radius:8px; text-align:left;">
+                        <p><strong>ክፍል:</strong> ${assignedSection}</p>
+                        <p><strong>መታወቂያ ቁጥር (ID):</strong> <span style="color:red; font-size:20px;">${autoID}</span></p>
+                        <p><strong>የሚስጥር ቁጥር (PIN):</strong> <span style="color:red; font-size:20px;">${autoPIN}</span></p>
+                        <p style="color:#e67e22; font-size:13px;">⏳ ምዝገባዎ ለአድሚን ገምጋሚ ተልኳል። ሲፈቀድ መግባት ይችላሉ።</p>
+                        <p><a href="/download-pending-slip/${this.lastID}" style="background:#e67e22; color:white; padding:10px; text-decoration:none; border-radius:5px;">📥 Download PDF</a></p>
+                    </div><br><br><a href="/?lang=${lang}">Home</a>
+                </div>`);
+            });
+        });
+    } catch (error) {
+        res.send(`<div style="text-align:center; padding:40px;"><h3 style="color:red;">❌ ስህተት ተከስቷል።</h3><a href="/student-register">Back</a></div>`);
+    }
+});
+
+app.get('/download-pending-slip/:id', (req, res) => {
+    db.get(`SELECT * FROM pending_students WHERE id = ? UNION SELECT * FROM students WHERE student_id = ?`, [req.params.id, req.params.id], (err, st) => {
+        if (!st) return res.send('Not found');
+        const doc = new PDFDocument({ margin: 40 });
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename=Registration-${st.student_id}.pdf`);
+        doc.pipe(res);
+
+        let schoolLogo = path.join(__dirname, 'uploads', 'logo.jpg');
+        if (fs.existsSync(schoolLogo)) doc.image(schoolLogo, 40, 20, { width: 40, height: 40 });
+
+        doc.fontSize(18).fillColor('#1f4e79').text('AMANUEL LIGHT AND LIFE SCHOOL', { align: 'center' }).moveDown();
+        doc.moveTo(40, doc.y).lineTo(555, doc.y).strokeColor('#ccc').stroke().moveDown();
+
+        let photoFile = path.join(__dirname, 'uploads', st.photo || '');
+        if (st.photo && fs.existsSync(photoFile)) doc.image(photoFile, 420, doc.y, { width: 110, height: 130 });
+
+        const line = (label, val) => doc.fontSize(11).fillColor('#000').text(`${label}: `, 40, doc.y, { continued: true }).fillColor('#333').text(`${val || '-'}`);
+
+        line('ID Number', st.student_id);
+        line('Password PIN', st.password);
+        line('Full Name', `${st.name || ''}`);
+        line('Mother Name', `${st.mother_name || ''}`);
+        line('Gender', st.gender);
+        line('Phone', st.phone);
+        line('Grade / Section', st.class_level);
+        line('Status', st.status || 'Pending Admin Approval');
+        doc.end();
     });
 });
 
@@ -207,7 +335,7 @@ app.post('/login', (req, res) => {
     } else if (role === 'teacher') {
         db.get(`SELECT * FROM teachers WHERE id = ? AND password = ?`, [uKey.toUpperCase(), password], (err, t) => {
             if (t) { req.session.teacherId = t.id; return res.redirect(`/teacher-dashboard?lang=${lang}`); }
-            res.send(`<h3 style="color:red; text-align:center; margin-top:50px;">❌ Invalid Login <a href="/?lang=${lang}">Back</a></h3>`);
+            res.send(`<h3 style="color:red; text-align:center; margin-top:50px;">❌ Invalid <a href="/?lang=${lang}">Back</a></h3>`);
         });
     } else if (role === 'student') {
         db.get(`SELECT * FROM students WHERE student_id = ? AND password = ?`, [uKey.toUpperCase(), password], (err, s) => {
@@ -217,352 +345,45 @@ app.post('/login', (req, res) => {
     }
 });
 
-// ================= STUDENT REGISTRATION =================
-app.get('/student-register', (req, res) => {
-    const lang = req.query.lang === 'en' ? 'en' : 'am';
-    let gradeOptions = '';
-    for(let i=1; i<=12; i++) { gradeOptions += `<option value="Grade ${i}">Grade ${i}</option>`; }
-    
-    res.send(`
-    <!DOCTYPE html><html lang="${lang}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Registration</title>
-    <style>body{font-family:sans-serif; background:#eef2f5; padding:15px;} .box{max-width:600px; margin:auto; background:white; padding:25px; border-radius:10px;} input,select{width:100%; padding:10px; margin:5px 0 15px; border:1px solid #ccc; border-radius:5px;} .row{display:flex; gap:10px;} .col{flex:1;} button{width:100%; padding:12px; background:#27ae60; color:white; font-weight:bold; border:none; border-radius:5px; cursor:pointer;} button:disabled {background:#95a5a6;}</style>
-    </head><body>
-        <div class="box">
-            <h2>📝 Student Registration Form</h2>
-            <form action="/api/register" method="POST" enctype="multipart/form-data" onsubmit="document.getElementById('subBtn').disabled=true; document.getElementById('subBtn').innerText='⏳ Loading...';">
-                <div class="row"><div class="col"><label>Full Name:</label><input type="text" name="name" required></div><div class="col"><label>Mother's Name:</label><input type="text" name="mother_name" required></div></div>
-                <div class="row"><div class="col"><label>Gender:</label><select name="gender"><option value="Male">Male</option><option value="Female">Female</option></select></div><div class="col"><label>Age:</label><input type="number" name="age" required></div></div>
-                <div class="row"><div class="col"><label>Phone:</label><input type="text" name="phone" required></div><div class="col"><label>Emergency Phone:</label><input type="text" name="emergency_phone" required></div></div>
-                <div class="row"><div class="col"><label>Region:</label><input type="text" name="region" required></div><div class="col"><label>Zone:</label><input type="text" name="zone" required></div></div>
-                <div class="row"><div class="col"><label>Woreda:</label><input type="text" name="woreda" required></div><div class="col"><label>Kebele:</label><input type="text" name="kebele" required></div></div>
-                <label>Grade Level:</label><select name="year_level">${gradeOptions}</select>
-                <label>Passport Photo:</label><input type="file" name="student_photo" accept="image/*" required>
-                <label>Payment Type:</label><select name="payment_type" onchange="document.getElementById('slipBox').style.display = this.value=='slip_file'?'block':'none'; document.getElementById('txnBox').style.display = this.value=='txn_id'?'block':'none';">
-                    <option value="txn_id">Transaction ID</option><option value="slip_file">Upload Slip</option>
-                </select>
-                <div id="txnBox"><input type="text" name="txn_id" placeholder="Transaction ID"></div>
-                <div id="slipBox" style="display:none;"><input type="file" name="bank_slip_file" accept="image/*,.pdf"></div>
-                <button type="submit" id="subBtn">Submit</button>
-            </form><br><a href="/">Back</a>
-        </div>
-    </body></html>`);
-});
-
-app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 }, { name: 'bank_slip_file', maxCount: 1 }]), (req, res) => {
-    try {
-        let { name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, year_level, payment_type, txn_id } = req.body;
-        let autoID = generateStudentID(); 
-        let autoPIN = generate4DigitPIN();
-
-        assignClassSection(year_level, (assignedSection) => {
-            let photoPath = (req.files && req.files['student_photo']) ? req.files['student_photo'][0].filename : '';
-            let slipPath = payment_type === 'slip_file' && (req.files && req.files['bank_slip_file']) ? req.files['bank_slip_file'][0].filename : txn_id;
-
-            db.run(`INSERT INTO pending_students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-            [autoID, autoPIN, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, assignedSection, payment_type, slipPath, photoPath], function(err) {
-                if (err) return res.send(`<div style="text-align:center; padding:40px;"><h3 style="color:red;">❌ Database Error</h3><a href="/student-register">Back</a></div>`);
-                
-                res.send(`
-                <div style="text-align:center; padding:40px; font-family:sans-serif;">
-                    <h2 style="color:green;">✅ Request Sent!</h2>
-                    <div style="background:#eef2f5; display:inline-block; padding:20px; border-radius:8px; text-align:left;">
-                        <p><strong>Class:</strong> ${assignedSection}</p>
-                        <p><strong>ID Number:</strong> <span style="color:red; font-size:20px;">${autoID}</span></p>
-                        <p><strong>Password PIN:</strong> <span style="color:red; font-size:20px;">${autoPIN}</span></p>
-                        <p style="color:#e67e22;">⏳ Sent to Admin for review.</p>
-                        <p><a href="/download-pending-slip/${this.lastID}" style="background:#e67e22; color:white; padding:10px; text-decoration:none; border-radius:5px;">📥 Download PDF</a></p>
-                    </div><br><br><a href="/">Home</a>
-                </div>`);
-            });
-        });
-    } catch (error) { res.send(`<div style="text-align:center; padding:40px;"><h3 style="color:red;">❌ Error occurred.</h3><a href="/student-register">Back</a></div>`); }
-});
-
-app.get('/download-pending-slip/:id', (req, res) => {
-    db.get(`SELECT * FROM pending_students WHERE id = ? UNION SELECT * FROM students WHERE student_id = ?`, [req.params.id, req.params.id], (err, st) => {
-        if (!st) return res.send('Not found');
-        const doc = new PDFDocument({ margin: 40 });
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename=Registration-${st.student_id}.pdf`);
-        doc.pipe(res);
-        doc.fontSize(18).fillColor('#1f4e79').text('AMANUEL LIGHT AND LIFE SCHOOL', { align: 'center' }).moveDown();
-        doc.fontSize(13).fillColor('#333').text('Registration Details: ' + st.name, { align: 'center' }).moveDown();
-        doc.text(`ID: ${st.student_id}`).text(`PIN: ${st.password}`).text(`Class: ${st.class_level}`);
-        doc.end();
-    });
-});
-
-
-// ================= TEACHER DASHBOARD =================
-app.get('/teacher-dashboard', (req, res) => {
-    if (!req.session.teacherId) return res.redirect('/');
-    const lang = req.query.lang === 'en' ? 'en' : 'am';
-    
-    db.get(`SELECT * FROM teachers WHERE id = ?`, [req.session.teacherId], (err, teacher) => {
-        // Teacher's assigned classes from the teacher table
-        let assignedClasses = teacher.assigned_sections ? teacher.assigned_sections.split(',').map(s => s.trim()) : [];
-        let selectedClass = req.query.cls || assignedClasses[0] || '';
-
-        // Get ALL students and filter using the smart Matcher to fix the "No students" issue
-        db.all(`SELECT * FROM students`, [], (err, allStudents) => {
-            let classStudents = allStudents.filter(s => isMatch(s.class_level, selectedClass));
-            let studentIds = classStudents.map(s => s.student_id);
-
-            // Find courses this teacher teaches IN THIS SELECTED CLASS
-            db.all(`SELECT * FROM courses WHERE teacher_id = ?`, [teacher.id], (err, myAllCourses) => {
-                let classCoursesTaughtByMe = myAllCourses.filter(c => isMatch(c.class_level, selectedClass));
-                
-                // Get all assessments for these students
-                let placeholders = studentIds.map(()=>'?').join(',');
-                let query = placeholders ? `SELECT * FROM course_assessments WHERE student_id IN (${placeholders})` : `SELECT * FROM course_assessments WHERE 1=0`;
-                
-                db.all(query, studentIds, (err, assessments) => {
-                    
-                    // Fetch messages/absence requests sent TO THIS TEACHER for courses in this class
-                    db.all(`SELECT * FROM student_messages WHERE teacher_id = ? AND class_level = ? OR class_level LIKE ? ORDER BY id DESC`, [teacher.id, selectedClass, `%${selectedClass.replace(/Grade\s+/i, '').replace(/\s*-\s*Section\s*/i, '').replace(/\s+/g, '')}%`], (err, messages) => {
-
-                        let classTabs = assignedClasses.map(c => `<a href="/teacher-dashboard?cls=${encodeURIComponent(c)}" style="padding:8px 15px; background:${c===selectedClass?'#1f4e79':'#ccc'}; color:white; text-decoration:none; border-radius:4px; font-weight:bold; margin-right:5px;">${c}</a>`).join('');
-
-                        // GENERATE GRADING TABLES PER COURSE
-                        let coursesHtml = classCoursesTaughtByMe.map(course => {
-                            let rows = classStudents.map((st, idx) => {
-                                let gradeRec = assessments.find(a => a.student_id === st.student_id && a.course_id === course.id) || {};
-                                return `<tr>
-                                    <td><b>${idx + 1}</b></td>
-                                    <td>${st.student_id}</td>
-                                    <td style="text-align:left;">${st.name}</td>
-                                    <form action="/teacher/save-course-grade" method="POST">
-                                        <input type="hidden" name="course_id" value="${course.id}">
-                                        <input type="hidden" name="student_id" value="${st.student_id}">
-                                        <input type="hidden" name="cls" value="${selectedClass}">
-                                        <td><input type="number" name="quiz" value="${gradeRec.quiz||0}" min="0" max="20" style="width:50px;"></td>
-                                        <td><input type="number" name="mid" value="${gradeRec.mid||0}" min="0" max="30" style="width:50px;"></td>
-                                        <td><input type="number" name="final" value="${gradeRec.final||0}" min="0" max="50" style="width:50px;"></td>
-                                        <td><strong>${gradeRec.total||0}</strong></td>
-                                        <td><button type="submit" style="background:#27ae60;color:white;border:none;padding:5px 10px; border-radius:3px; cursor:pointer;">💾 Save</button></td>
-                                    </form>
-                                </tr>`;
-                            }).join('');
-
-                            return `
-                            <div style="background:white; padding:15px; border-radius:8px; margin-bottom:20px; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-                                <h3 style="background:#1f4e79; color:white; padding:10px; margin:-15px -15px 15px -15px; border-top-left-radius:8px; border-top-right-radius:8px;">📚 Subject: ${course.title} (${course.code})</h3>
-                                <table border="1" width="100%" style="border-collapse:collapse; text-align:center; min-width:600px;">
-                                    <tr style="background:#eef2f5;"><th>No</th><th>ID</th><th>Name</th><th>Quiz(20)</th><th>Mid(30)</th><th>Final(50)</th><th>Total</th><th>Action</th></tr>
-                                    ${rows || '<tr><td colspan="8">No students found</td></tr>'}
-                                </table>
-                            </div>`;
-                        }).join('');
-
-                        if(classCoursesTaughtByMe.length === 0 && selectedClass) {
-                            coursesHtml = `<p style="color:red; font-weight:bold;">No courses assigned to you in ${selectedClass}. Admin needs to add courses.</p>`;
-                        }
-
-                        let msgRows = messages.map(msg => `
-                            <div style="background:#fdf2e9; padding:10px; border-left:4px solid #e67e22; margin-bottom:10px;">
-                                <small>📅 ${msg.created_at}</small><br>
-                                <strong>From: ${msg.student_name} (${msg.student_id})</strong><br>
-                                <strong>Course:</strong> ${msg.course_title}<br>
-                                📝 <strong>Message/Reason:</strong> ${msg.reason}<br>
-                                ${msg.teacher_feedback ? `<span style="color:green; font-weight:bold;">💬 Sent Reply: ${msg.teacher_feedback}</span>` : `
-                                <form action="/teacher/reply-message" method="POST" style="margin-top:5px; display:flex; gap:5px;">
-                                    <input type="hidden" name="msg_id" value="${msg.id}">
-                                    <input type="hidden" name="cls" value="${selectedClass}">
-                                    <input type="text" name="feedback" placeholder="Reply to student..." required style="flex:1; padding:4px;">
-                                    <button type="submit" style="background:#16a085; color:white; border:none; padding:4px 8px; border-radius:3px;">Send</button>
-                                </form>`}
-                            </div>`).join('');
-
-                        res.send(`
-                        <div style="font-family:sans-serif; padding:20px; max-width:900px; margin:auto;">
-                            <h2>👨‍🏫 Teacher Portal: ${teacher.name}</h2>
-                            <div style="margin:15px 0; background:#eef2f5; padding:10px; border-radius:5px;">
-                                <strong>Select Class to Manage:</strong><br><br>
-                                ${classTabs || '<p>No classes assigned.</p>'}
-                            </div>
-
-                            ${selectedClass ? `
-                            <div style="margin-bottom:15px;">
-                                <a href="/attendance-sheet/${encodeURIComponent(selectedClass)}" target="_blank" style="background:#2980b9; color:white; padding:10px; display:inline-block; border-radius:5px; text-decoration:none; margin-right:10px; font-weight:bold;">📋 Daily Attendance (${selectedClass})</a>
-                            </div>
-
-                            <div style="display:flex; gap:20px; flex-wrap:wrap;">
-                                <div style="background:white; padding:15px; border-radius:8px; margin-bottom:20px; flex:1; min-width:300px; max-height: 250px; overflow-y:auto; border:1px solid #ccc;">
-                                    <h3>📩 Direct Messages & Absence Requests</h3>
-                                    ${msgRows || '<p style="color:#777;">No messages.</p>'}
-                                </div>
-                            </div>
-                            
-                            <!-- DYNAMIC GRADING TABLES PER COURSE -->
-                            ${coursesHtml}
-                            
-                            ` : ''}
-                            <br><a href="/logout" style="color:red; font-weight:bold; font-size:18px;">🔒 Logout</a>
-                        </div>`);
-                    });
-                });
-            });
-        });
-    });
-});
-
-app.post('/teacher/save-course-grade', (req, res) => {
-    if (!req.session.teacherId) return res.redirect('/');
-    let { course_id, student_id, cls, quiz, mid, final } = req.body;
-    let q = parseFloat(quiz)||0, m = parseFloat(mid)||0, f = parseFloat(final)||0;
-    let total = q + m + f;
-    
-    db.get(`SELECT id FROM course_assessments WHERE student_id=? AND course_id=?`, [student_id, course_id], (err, row) => {
-        if(row) {
-            db.run(`UPDATE course_assessments SET quiz=?, mid=?, final=?, total=? WHERE id=?`, [q, m, f, total, row.id], () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(cls)}`));
-        } else {
-            db.run(`INSERT INTO course_assessments (student_id, course_id, teacher_id, quiz, mid, final, total) VALUES (?,?,?,?,?,?,?)`,
-            [student_id, course_id, req.session.teacherId, q, m, f, total], () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(cls)}`));
-        }
-    });
-});
-
-app.post('/teacher/reply-message', (req, res) => {
-    if (!req.session.teacherId) return res.redirect('/');
-    db.run(`UPDATE student_messages SET teacher_feedback = ?, status = 'Replied' WHERE id = ?`, [req.body.feedback, req.body.msg_id], () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(req.body.cls)}`));
-});
-
-// ================= STUDENT DASHBOARD =================
-app.get('/student-dashboard', (req, res) => {
-    if (!req.session.studentId) return res.redirect('/');
-    const lang = req.query.lang || 'am';
-
-    db.get(`SELECT * FROM students WHERE student_id = ?`, [req.session.studentId], (err, student) => {
-        db.all(`SELECT * FROM courses`, [], (err, allCourses) => {
-            let myCourses = allCourses.filter(c => isMatch(c.class_level, student.class_level));
-            
-            db.all(`SELECT * FROM course_assessments WHERE student_id = ?`, [student.student_id], (err, grades) => {
-                db.all(`SELECT * FROM student_messages WHERE student_id = ? ORDER BY id DESC`, [student.student_id], (err, myMessages) => {
-                    db.get(`SELECT * FROM sections WHERE name = ? OR name LIKE ?`, [student.class_level, `%${student.class_level.replace(/Grade\s+/i, '').replace(/\s*-\s*Section\s*/i, '').replace(/\s+/g, '')}%`], (err, section) => {
-
-                        let monitor = section || { proctor_name: "N/A", proctor_phone: "-" };
-                        
-                        // Academic Breakdown per course
-                        let academicRows = myCourses.map((c, idx) => {
-                            let g = grades.find(x => x.course_id === c.id) || {};
-                            return `<tr>
-                                <td>${idx+1}</td>
-                                <td style="text-align:left;"><b>${c.title}</b><br><small style="color:#666;">${c.teacher_name}</small></td>
-                                <td>${g.quiz||'-'}</td><td>${g.mid||'-'}</td><td>${g.final||'-'}</td>
-                                <td><strong style="color:#27ae60;">${g.total||'-'}</strong></td>
-                            </tr>`;
-                        }).join('');
-
-                        let msgSelectOptions = myCourses.map(c => `<option value="${c.id}|${c.title}|${c.teacher_id}">${c.title} - ${c.teacher_name}</option>`).join('');
-
-                        let myMsgRows = myMessages.map(msg => `
-                            <div style="background:#f9f9f9; padding:10px; border:1px solid #ddd; margin-bottom:5px; border-radius:4px;">
-                                <small>📅 ${msg.created_at} | <b>Course:</b> ${msg.course_title}</small><br>
-                                <strong>My Message:</strong> ${msg.reason}<br>
-                                ${msg.teacher_feedback ? `<span style="color:green; font-weight:bold;">💬 Teacher Reply: ${msg.teacher_feedback}</span>` : `<span style="color:orange;">⏳ Pending reply...</span>`}
-                            </div>`).join('');
-
-                        res.send(`
-                        <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Student Dashboard</title>
-                        <style>body{font-family:sans-serif; background:#f4f7f6; padding:20px;} .container{max-width:800px; margin:auto;} .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px; box-shadow:0 2px 5px rgba(0,0,0,0.1); overflow-x:auto;} table{width:100%; border-collapse:collapse; margin-top:10px; min-width:400px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#1f4e79; color:white;}</style></head>
-                        <body>
-                            <div class="container">
-                                <h2>🎓 Student Dashboard: ${student.name}</h2>
-                                <div class="card" style="display:flex; gap:20px; align-items:center; flex-wrap:wrap;">
-                                    <div><img src="/uploads/${student.photo}" style="width:100px; height:120px; object-fit:cover; border-radius:5px; display:block; margin-bottom:8px;"></div>
-                                    <div style="flex:1;">
-                                        <p><b>Class:</b> ${student.class_level} | <b>Proctor:</b> ${monitor.proctor_name} (${monitor.proctor_phone})</p>
-                                        <a href="/download-id-pdf/${student.student_id}" style="display:inline-block; padding:8px 12px; background:#27ae60; color:white; text-decoration:none; border-radius:5px; font-weight:bold;">📥 Download Digital ID</a>
-                                    </div>
-                                </div>
-
-                                <div class="card">
-                                    <h3 style="margin-top:0;">📊 Academic Record (ውጤት መግለጫ)</h3>
-                                    <table>
-                                        <tr><th>No</th><th>Course & Teacher</th><th>Quiz(20)</th><th>Mid(30)</th><th>Final(50)</th><th>Total</th></tr>
-                                        ${academicRows || '<tr><td colspan="6">No courses assigned to your class yet.</td></tr>'}
-                                    </table>
-                                </div>
-
-                                <div class="card" style="background:#fdf2e9; border: 1px solid #e67e22;">
-                                    <h3 style="color:#d35400; margin-top:0;">📩 Send Message / Request Absence to Teacher</h3>
-                                    <form action="/student/send-message" method="POST">
-                                        <label><b>Select Subject/Teacher:</b></label><br>
-                                        <select name="course_data" required style="width:100%; padding:10px; margin-bottom:10px; border-radius:5px;">
-                                            <option value="">-- Choose Subject --</option>
-                                            ${msgSelectOptions}
-                                        </select>
-                                        <textarea name="reason" placeholder="Write your message here..." style="width:100%; padding:10px; margin-bottom:10px; border-radius:5px; border:1px solid #ccc;" rows="3" required></textarea>
-                                        <button type="submit" style="background:#e67e22; color:white; padding:10px; border:none; border-radius:5px; width:100%; font-weight:bold; cursor:pointer;">Send Message</button>
-                                    </form>
-                                    <hr style="margin:15px 0;">
-                                    <h4>📋 My Message History & Replies</h4>
-                                    ${myMsgRows || '<p style="font-size:12px; color:#777;">No messages sent yet.</p>'}
-                                </div>
-                                <a href="/logout" style="color:red; font-weight:bold; font-size:18px;">🔒 Logout</a>
-                            </div>
-                        </body></html>`);
-                    });
-                });
-            });
-        });
-    });
-});
-
-app.post('/student/send-message', (req, res) => {
-    if (!req.session.studentId) return res.redirect('/');
-    let [course_id, course_title, teacher_id] = req.body.course_data.split('|');
-    
-    db.get('SELECT name, class_level FROM students WHERE student_id=?', [req.session.studentId], (err, st) => {
-        if(st) {
-            let timestamp = new Date().toLocaleString(); 
-            db.run(`INSERT INTO student_messages (student_id, student_name, class_level, course_id, course_title, teacher_id, reason, status, created_at) VALUES (?,?,?,?,?,?,?,?,?)`, 
-            [req.session.studentId, st.name, st.class_level, course_id, course_title, teacher_id, req.body.reason, 'Pending', timestamp], () => {
-                res.redirect('/student-dashboard');
-            });
-        }
-    });
-});
-
-
-// ================= ADMIN & PDF GEN (Maintained from before) =================
-
+// ================= DIRECTOR / ADMIN DASHBOARD =================
 app.get('/admin', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
-    const lang = req.query.lang === 'en' ? 'en' : 'am';
-    
+    const lang = req.query.lang || 'am';
+
     db.all(`SELECT * FROM pending_students`, [], (err, pending) => {
         db.all(`SELECT * FROM students ORDER BY class_level`, [], (err, students) => {
             db.all(`SELECT * FROM teachers`, [], (err, teachers) => {
                 db.all(`SELECT * FROM sections ORDER BY name`, [], (err, sections) => {
                     db.all(`SELECT * FROM courses ORDER BY class_level, code`, [], (err, courses) => {
 
-                        let pRows = pending.map(s => `<tr><td><img src="/uploads/${s.photo}" width="30"></td><td>${s.student_id}</td><td>${s.name}</td><td><a href="/admin/approve/${s.id}" style="color:green; font-weight:bold;">✅ Approve</a></td></tr>`).join('');
+                        let pRows = pending.map(s => `<tr><td><img src="/uploads/${s.photo}" width="30"></td><td>${s.student_id}</td><td>${s.name}</td><td>${s.payment_type}</td><td><a href="/admin/approve/${s.id}?lang=${lang}" style="color:green; font-weight:bold;">✅ Approve</a></td></tr>`).join('');
 
                         let sRows = students.map(s => `<tr>
                             <td>${s.student_id}</td><td>${s.name}</td><td><a href="/class-hub/${encodeURIComponent(s.class_level)}" style="color:#2980b9; font-weight:bold;" target="_blank">📂 ${s.class_level}</a></td><td>${s.phone}</td>
                             <td><span style="color:red; font-weight:bold;">${s.password}</span></td>
-                            <td><form action="/admin/update-pass" method="POST" style="display:flex; gap:4px;"><input type="hidden" name="type" value="student"><input type="hidden" name="id" value="${s.student_id}"><input type="text" name="new_pass" placeholder="New PIN" style="width:70px;"><button type="submit">Reset</button></form></td>
-                            <td><a href="/admin/delete-student/${s.student_id}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td>
+                            <td><a href="/admin/edit-student/${s.student_id}?lang=${lang}" style="color:#2980b9; font-weight:bold;">✏️ Edit</a></td>
+                            <td><form action="/admin/update-pass?lang=${lang}" method="POST" style="display:flex; gap:4px;"><input type="hidden" name="type" value="student"><input type="hidden" name="id" value="${s.student_id}"><input type="text" name="new_pass" placeholder="New PIN" style="width:70px;"><button type="submit">Reset</button></form></td>
+                            <td><a href="/admin/delete-student/${s.student_id}?lang=${lang}" onclick="return confirm('Delete this student permanently?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td>
                             </tr>`).join('');
 
                         let tRows = teachers.map(tc => `<tr>
                             <td>${tc.id}</td><td>${tc.name}</td><td>${tc.assigned_grades || 'None'}</td><td>${tc.assigned_sections || 'None'}</td><td>${tc.phone}</td>
                             <td><span style="color:red; font-weight:bold;">${tc.password}</span></td>
-                            <td><a href="/admin/delete-teacher/${tc.id}" onclick="return confirm('Remove?')" style="color:red; font-weight:bold;">🗑️ Remove</a></td>
+                            <td><a href="/admin/edit-teacher/${tc.id}?lang=${lang}" style="color:#2980b9; font-weight:bold;">✏️ Edit</a></td>
+                            <td><a href="/admin/delete-teacher/${tc.id}?lang=${lang}" onclick="return confirm('Remove this teacher permanently?')" style="color:red; font-weight:bold;">🗑️ Remove</a></td>
                             </tr>`).join('');
 
                         let secRows = sections.map(sec => `<tr>
                             <td><a href="/class-hub/${encodeURIComponent(sec.name)}" style="color:#16a085; font-weight:bold;" target="_blank">📂 ${sec.name}</a></td>
-                            <td><form action="/admin/edit-section/${sec.id}" method="POST" style="display:flex; gap:4px;">
+                            <td><form action="/admin/edit-section/${sec.id}?lang=${lang}" method="POST" style="display:flex; gap:4px;">
                                 <select name="proctor_name" style="width:140px;">
                                     <option value="${esc(sec.proctor_name)}">${sec.proctor_name || '-- Select Proctor --'}</option>
                                     ${teachers.map(tc => `<option value="${esc(tc.name)}">${tc.name}</option>`).join('')}
                                 </select>
                                 <button type="submit">Save</button></form></td>
-                            <td><a href="/admin/delete-section/${sec.id}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td>
+                            <td><a href="/admin/delete-section/${sec.id}?lang=${lang}" onclick="return confirm('Delete this section?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td>
                             <td>
-                                <a href="/attendance-sheet/${encodeURIComponent(sec.name)}" style="color:#2980b9; font-weight:bold; margin-right:10px;" target="_blank">📋 Attendance</a>
+                                <a href="/attendance-sheet/${encodeURIComponent(sec.name)}" style="color:#2980b9; font-weight:bold; margin-right:10px;" target="_blank">📋 Attendance Sheet</a>
                             </td>
                             </tr>`).join('');
 
@@ -570,92 +391,80 @@ app.get('/admin', (req, res) => {
                         let teacherOptions = teachers.map(tc => `<option value="${tc.id}">${tc.name}</option>`).join('');
 
                         let gradeCheckboxes = '';
-                        for(let i=1; i<=12; i++) { gradeCheckboxes += `<label style="margin-right:8px;"><input type="checkbox" name="grades" value="Grade ${i}"> Grade ${i}</label>`; }
+                        for(let i=1; i<=12; i++) {
+                            gradeCheckboxes += `<label style="margin-right:8px;"><input type="checkbox" name="grades" value="Grade ${i}"> Grade ${i}</label>`;
+                        }
 
                         let cRows = courses.map(c => `<tr><td>${c.code}</td><td>${c.title}</td><td>${c.credit_hours}</td><td>${c.class_level}</td><td>${c.teacher_name||'-'}</td>
-                            <td><a href="/admin/delete-course/${c.id}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td></tr>`).join('');
-
-                        let filterCategory = req.query.cat || '1-4';
-                        let filteredSections = sections.filter(sec => {
-                            let match = sec.name.match(/Grade\s+(\d+)/i);
-                            if (!match) return false;
-                            let gNum = parseInt(match[1]);
-                            if (filterCategory === '1-4') return gNum >= 1 && gNum <= 4;
-                            if (filterCategory === '5-8') return gNum >= 5 && gNum <= 8;
-                            if (filterCategory === '9-12') return gNum >= 9 && gNum <= 12;
-                            return false;
-                        });
-
-                        let periodHubRows = filteredSections.map(sec => {
-                            let classCourses = courses.filter(c => c.class_level === sec.name);
-                            let courseList = classCourses.map(cc => `<span style="display:inline-block; background:#e2e8f0; padding:3px 6px; border-radius:3px; margin:2px; font-size:11px;">${cc.title} (${cc.teacher_name || 'No Teacher'})</span>`).join('');
-                            return `<tr><td><b>${sec.name}</b></td><td>${sec.proctor_name || 'Not Assigned'}</td><td style="text-align:left;">${courseList || 'No courses assigned yet'}</td>
-                                <td><a href="/attendance-sheet/${encodeURIComponent(sec.name)}" target="_blank" style="background:#2980b9; color:white; padding:5px 10px; text-decoration:none; border-radius:3px; font-weight:bold; font-size:12px;">Attendance</a></td>
-                            </tr>`;
-                        }).join('');
+                            <td><a href="/admin/delete-course/${c.id}?lang=${lang}" onclick="return confirm('Delete this course?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td></tr>`).join('');
 
                         res.send(`
                         <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Director Hub - Amanuel School</title>
-                        <style>body{font-family:sans-serif; background:#eef2f5; padding:20px;} .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px; overflow-x:auto;} table{width:100%; border-collapse:collapse; min-width:600px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#2c3e50; color:white;} input,select{padding:6px;}</style></head>
+                        <style>body{font-family:sans-serif; background:#eef2f5; padding:20px;} .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px; overflow-x:auto;} table{width:100%; border-collapse:collapse; min-width:600px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#2c3e50; color:white;} .btn{display:inline-block; padding:10px 14px; background:#16a085; color:white; text-decoration:none; border-radius:5px; font-weight:bold; margin-right:10px;} input,select{padding:6px;} textarea{width:100%; padding:10px; border-radius:5px; border:1px solid #ccc; margin-bottom:10px;}</style></head>
                         <body>
-                            <h2><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 10px;"> 🔐 Director / Admin Dashboard</h2>
+                            <h2><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 10px;"> 🔐 የዳይሬክተር / አድሚን መቆጣጠሪያ</h2>
 
-                            <div class="card" style="background:#fff3cd; border:1px solid #ffeeba;">
-                                <h3>📅 Director Weekly Class Period Hub</h3>
-                                <div style="margin-bottom:15px;">
-                                    <a href="/admin?cat=1-4" style="padding:8px 15px; background:${filterCategory==='1-4'?'#1f4e79':'#ccc'}; color:white; text-decoration:none; border-radius:4px; font-weight:bold; margin-right:5px;">Grade 1 - 4</a>
-                                    <a href="/admin?cat=5-8" style="padding:8px 15px; background:${filterCategory==='5-8'?'#1f4e79':'#ccc'}; color:white; text-decoration:none; border-radius:4px; font-weight:bold; margin-right:5px;">Grade 5 - 8</a>
-                                    <a href="/admin?cat=9-12" style="padding:8px 15px; background:${filterCategory==='9-12'?'#1f4e79':'#ccc'}; color:white; text-decoration:none; border-radius:4px; font-weight:bold;">Grade 9 - 12</a>
-                                </div>
-                                <table><tr><th>Class Section</th><th>Proctor</th><th>Assigned Courses</th><th>Actions</th></tr>${periodHubRows||'<tr><td colspan="4">Empty</td></tr>'}</table>
+                            <div class="card" style="background:#e8f4fd;">
+                                <h3>📢 ማስታወቂያ ላክ</h3>
+                                <form action="/admin/send-notification" method="POST">
+                                    <textarea name="message" rows="3" placeholder="Write your notification here..." required></textarea>
+                                    <button type="submit" style="background:#3498db; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">Send Notification</button>
+                                </form>
                             </div>
 
                             <div class="card">
-                                <h3>📁 Director Academic Year Report</h3>
-                                <a href="/director-report" target="_blank" style="background:#8e44ad; color:white; padding:10px 15px; text-decoration:none; border-radius:5px; font-weight:bold;">View Report (Sept-May)</a>
+                                <h3>📁 የዳይሬክተር ሳምንታዊ እና ወርሃዊ ሪፖርት</h3>
+                                <a href="/director-report" target="_blank" style="background:#8e44ad; color:white; padding:10px 15px; text-decoration:none; border-radius:5px; font-weight:bold; display:inline-block;">📁 View Director Academic Year Report</a>
                             </div>
 
-                            <div class="card"><h3>Pending Registrations</h3><table><tr><th>Photo</th><th>ID</th><th>Name</th><th>Action</th></tr>${pRows||'<tr><td colspan="4">None</td></tr>'}</table></div>
+                            <div class="card"><h3>አዲስ ተመዝጋቢዎች (Pending)</h3><table><tr><th>Photo</th><th>ID</th><th>Name</th><th>Payment</th><th>Action</th></tr>${pRows||'<tr><td colspan="5">None</td></tr>'}</table></div>
 
                             <div class="card">
-                                <h3>Manage Sections & Proctors</h3>
-                                <form action="/admin/add-section" method="POST" style="display:flex; gap:8px; margin-bottom:10px;">
+                                <h3>ክፍሎችን እና ተቆጣጣሪዎችን (Proctors) ማስተዳደሪያ</h3>
+                                <form action="/admin/add-section?lang=${lang}" method="POST" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
                                     <input type="text" name="name" placeholder="Class Name (e.g. Grade 1 - Section A)" required style="flex:2;">
-                                    <button type="submit" style="background:#2980b9; color:white; padding:8px;">➕ Add Section</button>
+                                    <select name="proctor_name" style="flex:1;">
+                                        <option value="">-- Select Proctor Teacher --</option>
+                                        ${teachers.map(tc => `<option value="${esc(tc.name)}">${tc.name}</option>`).join('')}
+                                    </select>
+                                    <button type="submit" style="background:#2980b9; color:white; border:none; padding:8px 14px; border-radius:5px;">➕ Add Section</button>
                                 </form>
-                                <table><tr><th>Section Name</th><th>Proctor</th><th>Delete</th><th>Link</th></tr>${secRows||'<tr><td colspan="4">None</td></tr>'}</table>
+                                <table><tr><th>Section Name</th><th>Proctor Name (Teacher)</th><th>Delete</th><th>Sheets & Portals</th></tr>${secRows||'<tr><td colspan="4">None</td></tr>'}</table>
                             </div>
 
                             <div class="card">
-                                <h3>Manage Teachers</h3>
-                                <form action="/admin/add-teacher" method="POST" style="background:#f9f9f9; padding:15px; border-radius:5px;">
+                                <h3>ሁሉንም መምህራን ማስተዳደሪያ</h3>
+                                <form action="/admin/add-teacher?lang=${lang}" method="POST" style="margin-bottom:15px; background:#f9f9f9; padding:15px; border-radius:5px;">
                                     <div style="display:flex; gap:10px; margin-bottom:10px;">
-                                        <input type="text" name="name" placeholder="Teacher Name" required style="flex:1;">
-                                        <input type="text" name="phone" placeholder="Phone" required style="flex:1;">
-                                        <input type="text" name="assigned_sections" placeholder="Sections (Grade 1 - Section A, Grade 1 - Section B)" required style="flex:2;">
+                                        <input type="text" name="name" placeholder="Teacher Full Name" required style="flex:1;">
+                                        <input type="text" name="phone" placeholder="Phone Number" required style="flex:1;">
+                                        <input type="text" name="assigned_sections" placeholder="Assigned Sections (e.g. Grade 1 - Section A, 2A, 3B)" required style="flex:2;">
                                     </div>
-                                    <button type="submit" style="background:#2980b9; color:white; padding:10px;">➕ Add Teacher</button>
+                                    <label style="font-weight:bold; font-size:13px;">Assign Grades (Select 1-12):</label><br>
+                                    <div style="margin:8px 0; display:flex; flex-wrap:wrap; gap:10px;">${gradeCheckboxes}</div>
+                                    <button type="submit" style="background:#2980b9; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">➕ Add Teacher</button>
                                 </form>
-                                <table><tr><th>ID</th><th>Name</th><th>Grades</th><th>Classes</th><th>Phone</th><th>Pass</th><th>Remove</th></tr>${tRows||'<tr><td colspan="7">None</td></tr>'}</table>
+                                <table><tr><th>ID</th><th>Name</th><th>Grades (1-12)</th><th>Classes</th><th>Phone</th><th>Password</th><th>Edit</th><th>Remove</th></tr>${tRows||'<tr><td colspan="8">None</td></tr>'}</table>
                             </div>
 
                             <div class="card">
-                                <h3>Manage Courses</h3>
-                                <form action="/admin/add-course" method="POST" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+                                <h3>ትምህርቶችን / Courses ማስተዳደሪያ</h3>
+                                <form action="/admin/add-course?lang=${lang}" method="POST" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
                                     <input type="text" name="code" placeholder="Course Code" required>
                                     <input type="text" name="title" placeholder="Course Title" required>
+                                    <input type="number" name="credit_hours" placeholder="Cr.Hr" required style="width:80px;">
                                     <select name="class_level">${sectionOptions}</select>
-                                    <select name="teacher_id"><option value="">-- Assign Teacher --</option>${teacherOptions}</select>
-                                    <button type="submit" style="background:#2980b9; color:white; padding:8px;">➕ Add Course</button>
+                                    <select name="teacher_id"><option value="">-- No Teacher --</option>${teacherOptions}</select>
+                                    <button type="submit" style="background:#2980b9; color:white; border:none; padding:8px 14px; border-radius:5px;">➕ Add Course</button>
                                 </form>
                                 <table><tr><th>Code</th><th>Title</th><th>Cr.Hr</th><th>Section</th><th>Teacher</th><th>Delete</th></tr>${cRows||'<tr><td colspan="6">None</td></tr>'}</table>
                             </div>
 
                             <div class="card">
-                                <h3>All Students</h3>
-                                <table><tr><th>ID</th><th>Name</th><th>Class</th><th>Phone</th><th>Pass</th><th>Reset Pass</th><th>Delete</th></tr>${sRows||'<tr><td colspan="7">None</td></tr>'}</table>
+                                <h3>ሁሉም ተማሪዎች</h3>
+                                <table><tr><th>ID</th><th>Name</th><th>Class</th><th>Phone</th><th>Password</th><th>Edit</th><th>Reset Password</th><th>Delete</th></tr>${sRows||'<tr><td colspan="9">None</td></tr>'}</table>
                             </div>
-                            <br><a href="/logout" style="color:red; font-weight:bold;">🔒 Logout</a>
+                            <br><a href="/logout" style="color:red; font-weight:bold; font-size:18px;">🔒 ውጣ (Logout)</a>
                         </body></html>`);
                     });
                 });
@@ -669,126 +478,509 @@ app.get('/admin/approve/:id', (req, res) => {
     db.get(`SELECT * FROM pending_students WHERE id = ?`, [req.params.id], (err, st) => {
         if (!st) return res.redirect('/admin');
         db.run(`INSERT INTO students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo, status, admin_message) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [st.student_id, st.password, st.name, st.mother_name, st.gender, st.age, st.phone, st.emergency_phone, st.region, st.zone, st.woreda, st.kebele, st.class_level, st.payment_type, st.bank_slip_val, st.photo, 'Approved', 'Approved!'], () => {
+        [st.student_id, st.password, st.name, st.mother_name, st.gender, st.age, st.phone, st.emergency_phone, st.region, st.zone, st.woreda, st.kebele, st.class_level, st.payment_type, st.bank_slip_val, st.photo, 'Approved', '🎉 Your registration is approved! Download your Digital ID.'], (insertErr) => {
+            if (insertErr) console.error("Approve Insert Error:", insertErr);
             db.run(`DELETE FROM pending_students WHERE id = ?`, [req.params.id], () => res.redirect('/admin'));
         });
     });
 });
 
-app.post('/admin/add-teacher', (req, res) => {
-    if (!req.session.isAdmin) return res.redirect('/');
-    db.run(`INSERT INTO teachers (id, name, password, phone, assigned_sections, assigned_grades, is_proctor) VALUES (?,?,?,?,?,?,?)`,
-    [generateTeacherID(), req.body.name, generate4DigitPIN(), req.body.phone, req.body.assigned_sections || '', '', 0], () => res.redirect('/admin'));
-});
-app.get('/admin/delete-teacher/:id', (req, res) => {
-    if (!req.session.isAdmin) return res.redirect('/');
-    db.run(`DELETE FROM teachers WHERE id = ?`, [req.params.id], () => res.redirect('/admin'));
-});
-
-app.post('/admin/add-section', (req, res) => {
-    db.run(`INSERT OR IGNORE INTO sections (name, proctor_name, proctor_phone) VALUES (?,?,?)`, [req.body.name, '', ''], () => res.redirect('/admin'));
-});
-app.post('/admin/edit-section/:id', (req, res) => {
-    db.run(`UPDATE sections SET proctor_name=? WHERE id=?`, [req.body.proctor_name, req.params.id], () => res.redirect('/admin'));
-});
-app.get('/admin/delete-section/:id', (req, res) => {
-    db.run(`DELETE FROM sections WHERE id = ?`, [req.params.id], () => res.redirect('/admin'));
-});
-app.post('/admin/add-course', (req, res) => {
-    let { code, title, class_level, teacher_id } = req.body;
-    db.get(`SELECT name FROM teachers WHERE id = ?`, [teacher_id], (err, t) => {
-        db.run(`INSERT INTO courses (code, title, credit_hours, teacher_id, teacher_name, class_level) VALUES (?,?,?,?,?,?)`,
-        [code, title, 3, teacher_id, t ? t.name : '', class_level], () => res.redirect('/admin'));
-    });
-});
-app.get('/admin/delete-course/:id', (req, res) => {
-    db.run(`DELETE FROM courses WHERE id = ?`, [req.params.id], () => res.redirect('/admin'));
-});
-app.get('/admin/delete-student/:id', (req, res) => {
-    db.run(`DELETE FROM students WHERE student_id = ?`, [req.params.id], () => res.redirect('/admin'));
-});
-app.post('/admin/update-pass', (req, res) => {
-    let table = req.body.type === 'student' ? 'students' : 'teachers';
-    let idCol = req.body.type === 'student' ? 'student_id' : 'id';
-    db.run(`UPDATE ${table} SET password = ? WHERE ${idCol} = ?`, [req.body.new_pass, req.body.id], () => res.redirect('/admin'));
-});
-
+// SINGLE CLICK CLASS HUB FOR DIRECTORS & ADMINS WITH RANKING
 app.get('/class-hub/:className', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     let className = decodeURIComponent(req.params.className);
-    db.all(`SELECT * FROM students`, [], (err, allStudents) => {
-        let students = allStudents.filter(s => isMatch(s.class_level, className));
-        db.get(`SELECT * FROM sections WHERE name = ? OR name LIKE ?`, [className, `%${className.replace(/Grade\s+/i, '').replace(/\s*-\s*Section\s*/i, '').replace(/\s+/g, '')}%`], (err, section) => {
-            let sRows = students.map((s, idx) => `<tr><td><b>${idx + 1}</b></td><td>${s.student_id}</td><td style="text-align:left;">${s.name}</td><td>${s.gender}</td></tr>`).join('');
-            res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Class Hub</title><style>body{font-family:sans-serif; padding:20px;} table{width:100%; border-collapse:collapse; margin-top:10px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;}</style></head><body>
-                <h2>📂 Class Hub: ${className}</h2><p><strong>Proctor:</strong> ${section?section.proctor_name:'N/A'}</p>
-                <table><tr><th>No</th><th>ID</th><th>Name</th><th>Gender</th></tr>${sRows||'<tr><td colspan="4">No students</td></tr>'}</table>
-            </body></html>`);
+    
+    // We compute total dynamically from multiple teachers assessments if needed.
+    db.all(`SELECT s.* FROM students s WHERE s.class_level = ?`, [className], (err, students) => {
+        db.all(`SELECT * FROM course_assessments WHERE class_level = ? OR student_id IN (SELECT student_id FROM students WHERE class_level = ?)`, [className, className], (err, assessments) => {
+            
+            // Calculate total ranking score for each student from all courses
+            students.forEach(st => {
+                let st_ass = assessments.filter(a => a.student_id === st.student_id);
+                st.cumulative_total = st_ass.reduce((sum, a) => sum + (a.total || 0), 0);
+            });
+            students.sort((a, b) => b.cumulative_total - a.cumulative_total);
+
+            db.get(`SELECT * FROM sections WHERE name = ?`, [className], (err, section) => {
+                db.all(`SELECT * FROM courses WHERE class_level = ?`, [className], (err, courses) => {
+                    
+                    let sRows = students.map((s, idx) => `<tr>
+                        <td><b>${idx + 1}</b></td>
+                        <td>${s.student_id}</td>
+                        <td style="text-align:left;">${s.name}</td>
+                        <td>${s.gender}</td>
+                        <td>${s.cumulative_total}</td>
+                    </tr>`).join('');
+
+                    let cRows = courses.map(c => `<tr><td>${c.code}</td><td>${c.title}</td><td>${c.credit_hours}</td><td>${c.teacher_name || 'N/A'}</td></tr>`).join('');
+
+                    res.send(`
+                    <!DOCTYPE html><html><head><meta charset="UTF-8"><title>Class Hub - ${className}</title>
+                    <style>body{font-family:sans-serif; padding:20px; background:#f4f7f6;} .card{background:white; padding:20px; border-radius:8px; margin-bottom:15px;} table{width:100%; border-collapse:collapse; margin-top:10px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#1f4e79; color:white;}</style>
+                    </head><body>
+                        <a href="/admin" style="background:#7f8c8d; color:white; padding:8px 12px; text-decoration:none; border-radius:5px;">⬅️ Back to Admin Dashboard</a>
+                        <h2>📂 Class Hub: ${className}</h2>
+                        <div class="card">
+                            <p><strong>Proctor / Attendance Monitor:</strong> ${section ? section.proctor_name : 'N/A'}</p>
+                            <p><strong>Total Students:</strong> ${students.length}</p>
+                            <a href="/attendance-sheet/${encodeURIComponent(className)}" target="_blank" style="background:#2980b9; color:white; padding:8px 12px; text-decoration:none; border-radius:5px;">📋 Attendance Sheet</a>
+                        </div>
+                        <div class="card">
+                            <h3>📚 Subjects / Courses for this Class</h3>
+                            <table><tr><th>Code</th><th>Title</th><th>Cr.Hr</th><th>Teacher</th></tr>${cRows||'<tr><td colspan="4">No courses</td></tr>'}</table>
+                        </div>
+                        <div class="card">
+                            <h3>🏆 Students Ranking List (Total across all subjects) in ${className}</h3>
+                            <table><tr><th>Rank</th><th>ID</th><th>Full Name</th><th>Gender</th><th>Total Score</th></tr>${sRows||'<tr><td colspan="5">No students</td></tr>'}</table>
+                        </div>
+                    </body></html>`);
+                });
+            });
         });
     });
 });
 
+app.post('/admin/send-notification', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at) VALUES (?,?,?,?,?)`,
+        ['Admin', 'School Admin', 'ALL', req.body.message, new Date().toLocaleString()], () => res.redirect('/admin'));
+});
+
+// TEACHER DASHBOARD - Automatically fetches students and courses accurately
+app.get('/teacher-dashboard', (req, res) => {
+    if (!req.session.teacherId) return res.redirect('/');
+    
+    db.get(`SELECT * FROM teachers WHERE id = ?`, [req.session.teacherId], (err, teacher) => {
+        let assignedClasses = teacher.assigned_sections ? teacher.assigned_sections.split(',').map(s => s.trim()) : [];
+        let selectedClass = req.query.cls || assignedClasses[0] || '';
+
+        // 1. Fetch ALL students
+        db.all(`SELECT * FROM students ORDER BY name ASC`, [], (err, allStudents) => {
+            
+            // Filter students for the specific selected class using flexible match
+            let studentsInClass = allStudents.filter(s => isClassMatch(s.class_level, selectedClass));
+            
+            db.all(`SELECT * FROM course_assessments WHERE teacher_id = ?`, [req.session.teacherId], (err, assessments) => {
+                db.all(`SELECT * FROM courses WHERE teacher_id = ?`, [req.session.teacherId], (err, courses) => {
+                    
+                    let classCourses = courses.filter(c => isClassMatch(c.class_level, selectedClass));
+                    
+                    db.all(`SELECT * FROM absence_requests ORDER BY id DESC`, [], (err, allAbsences) => {
+                        let classAbsences = allAbsences.filter(ab => isClassMatch(ab.class_level, selectedClass));
+
+                        let classTabs = assignedClasses.map(c => `<a href="/teacher-dashboard?cls=${encodeURIComponent(c)}" style="padding:8px 15px; background:${c===selectedClass?'#1f4e79':'#ccc'}; color:white; text-decoration:none; border-radius:4px; font-weight:bold; margin-right:5px; display:inline-block; margin-bottom:5px;">${c}</a>`).join('');
+
+                        let studentRows = studentsInClass.map((st, idx) => {
+                            let asm = assessments.find(a => a.student_id === st.student_id) || {};
+                            return `<tr>
+                            <td><b>${idx + 1}</b></td>
+                            <td>${st.student_id}</td><td>${st.name}</td>
+                            <form action="/teacher/save-grade?cls=${encodeURIComponent(selectedClass)}" method="POST"><input type="hidden" name="student_id" value="${st.student_id}">
+                            <td><input type="number" name="quiz" value="${asm.quiz||0}" min="0" max="20" style="width:50px;"></td>
+                            <td><input type="number" name="mid" value="${asm.mid||0}" min="0" max="30" style="width:50px;"></td>
+                            <td><input type="number" name="final" value="${asm.final||0}" min="0" max="50" style="width:50px;"></td>
+                            <td><strong>${asm.total||0}</strong></td>
+                            <td><button type="submit" style="background:#27ae60;color:white;border:none;padding:5px 10px; border-radius:3px; cursor:pointer;">💾 Save/Update</button></td></form></tr>`;
+                        }).join('');
+
+                        let courseRows = classCourses.map(c => `<tr><td>${c.code}</td><td>${c.title}</td><td>${c.credit_hours}</td></tr>`).join('');
+                        
+                        let absRows = classAbsences.map(ab => `<div style="background:#fdf2e9; padding:10px; border-left:4px solid #e67e22; margin-bottom:10px;">
+                            <strong>${ab.student_name} (${ab.student_id})</strong> - <em>${ab.created_at}</em><br>
+                            📝 <strong>Reason/መልዕክት:</strong> ${ab.reason}<br>
+                            ${ab.teacher_feedback ? `<span style="color:green; font-weight:bold;">💬 Your Feedback: ${ab.teacher_feedback}</span>` : `
+                            <form action="/teacher/give-feedback?cls=${encodeURIComponent(selectedClass)}" method="POST" style="margin-top:5px; display:flex; gap:5px;">
+                                <input type="hidden" name="req_id" value="${ab.id}">
+                                <input type="text" name="feedback" placeholder="Reply to student..." required style="flex:1; padding:4px;">
+                                <button type="submit" style="background:#16a085; color:white; border:none; padding:4px 8px; border-radius:3px;">Send</button>
+                            </form>`}
+                        </div>`).join('');
+
+                        res.send(`
+                        <div style="font-family:sans-serif; padding:20px; max-width:900px; margin:auto;">
+                            <h2><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 10px;">👨‍🏫 Teacher Portal: ${teacher.name}</h2>
+                            
+                            <div style="margin:15px 0; background:#eef2f5; padding:10px; border-radius:5px;">
+                                <strong>Select Class to Manage (መምህር የትኛውን ክፍል ማስተዳደር ይፈልጋሉ):</strong><br><br>
+                                ${classTabs || '<p style="color:red;">No classes assigned to you yet.</p>'}
+                            </div>
+
+                            ${selectedClass ? `
+                            <div style="margin-bottom:15px;">
+                                <a href="/attendance-sheet/${encodeURIComponent(selectedClass)}" target="_blank" style="background:#2980b9; color:white; padding:10px; display:inline-block; border-radius:5px; text-decoration:none; margin-right:10px; font-weight:bold;">📋 Daily Attendance Sheet (${selectedClass})</a>
+                            </div>
+
+                            <div style="display:flex; gap:20px; flex-wrap:wrap;">
+                                <div style="background:#e8f4fd; padding:15px; border-radius:8px; margin-bottom:20px; flex:1; min-width:300px;">
+                                    <h3>📢 Send Notification to ${selectedClass}</h3>
+                                    <form action="/teacher/send-notification?cls=${encodeURIComponent(selectedClass)}" method="POST">
+                                        <textarea name="message" rows="3" placeholder="Write class notification here..." required style="width:100%; padding:10px; border-radius:5px; border:1px solid #ccc; margin-bottom:10px;"></textarea>
+                                        <button type="submit" style="background:#3498db; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">Send Notification</button>
+                                    </form>
+                                </div>
+                                
+                                <div style="background:white; padding:15px; border-radius:8px; margin-bottom:20px; flex:1; min-width:300px; max-height: 250px; overflow-y:auto; border:1px solid #ccc;">
+                                    <h3>📩 Student Requests & Absences (${selectedClass})</h3>${absRows || '<p style="color:#777;">No requests.</p>'}
+                                </div>
+                            </div>
+
+                            <div style="background:white; padding:15px; border-radius:8px; margin-bottom:20px;">
+                                <h3>📚 Your Courses for ${selectedClass}</h3>
+                                <table border="1" style="border-collapse:collapse; width:100%; text-align:center; margin-bottom:15px;">
+                                    <tr style="background:#1f4e79; color:white;"><th>Code</th><th>Title</th><th>Credit Hours</th></tr>
+                                    ${courseRows || '<tr><td colspan="3">No courses added yet</td></tr>'}
+                                </table>
+                            </div>
+
+                            <div style="overflow-x:auto;">
+                            <h3 style="background:#1f4e79; color:white; padding:10px; margin:0; border-top-left-radius:5px; border-top-right-radius:5px;">📝 የውጤት መሙያ (Grades Assessment) - ${selectedClass}</h3>
+                            <table border="1" width="100%" style="border-collapse:collapse; text-align:center; min-width:600px; background:white;">
+                                <tr style="background:#eef2f5;"><th>No</th><th>ID</th><th>Name</th><th>Quiz(20)</th><th>Mid(30)</th><th>Final(50)</th><th>Total</th><th>Action</th></tr>
+                                ${studentRows||'<tr><td colspan="8">No students in this class</td></tr>'}
+                            </table></div>` : ''}
+                            
+                            <br><a href="/logout" style="color:red; font-weight:bold; font-size:18px;">🔒 Logout</a>
+                        </div>`);
+                    });
+                });
+            });
+        });
+    });
+});
+
+app.post('/teacher/send-notification', (req, res) => {
+    if (!req.session.teacherId) return res.redirect('/');
+    let targetClass = req.query.cls || '';
+    db.get(`SELECT * FROM teachers WHERE id = ?`, [req.session.teacherId], (err, teacher) => {
+        db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at) VALUES (?,?,?,?,?)`,
+            ['Teacher', teacher.name, targetClass, req.body.message, new Date().toLocaleString()], () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}`));
+    });
+});
+
+app.post('/teacher/give-feedback', (req, res) => {
+    if (!req.session.teacherId) return res.redirect('/');
+    let targetClass = req.query.cls || '';
+    let { req_id, feedback } = req.body;
+    db.run(`UPDATE absence_requests SET teacher_feedback = ? WHERE id = ?`, [feedback, req_id], () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}`));
+});
+
+app.post('/teacher/save-grade', (req, res) => {
+    if (!req.session.teacherId) return res.redirect('/');
+    let targetClass = req.query.cls || '';
+    let { student_id, quiz, mid, final } = req.body;
+    let total = (parseFloat(quiz)||0) + (parseFloat(mid)||0) + (parseFloat(final)||0);
+    let remark = total >= 50 ? 'Pass' : 'Fail';
+
+    db.get(`SELECT * FROM courses WHERE teacher_id = ? AND (class_level = ? OR class_level LIKE ?)`, [req.session.teacherId, targetClass, `%${targetClass.replace("Grade ", "").replace(" - Section ", "")}%`], (err, course) => {
+        let courseCode = course ? course.code : 'N/A';
+        let courseTitle = course ? course.title : 'N/A';
+
+        db.get(`SELECT id FROM course_assessments WHERE student_id = ? AND teacher_id = ?`, [student_id, req.session.teacherId], (err, row) => {
+            if (row) {
+                db.run(`UPDATE course_assessments SET quiz=?, mid=?, final=?, total=?, remark=? WHERE id=?`, 
+                [quiz, mid, final, total, remark, row.id], () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}`));
+            } else {
+                db.run(`INSERT INTO course_assessments (student_id, teacher_id, course_code, course_title, quiz, mid, final, total, remark) VALUES (?,?,?,?,?,?,?,?,?)`,
+                [student_id, req.session.teacherId, courseCode, courseTitle, quiz, mid, final, total, remark], () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}`));
+            }
+        });
+    });
+});
+
+// STUDENT DASHBOARD - Maps all courses to display 10 teachers grades properly
+app.get('/student-dashboard', (req, res) => {
+    if (!req.session.studentId) return res.redirect('/');
+    
+    db.get(`SELECT s.* FROM students s WHERE s.student_id = ?`, [req.session.studentId], (err, student) => {
+        
+        db.all(`SELECT * FROM courses ORDER BY id`, [], (err, allCourses) => {
+            let myCourses = allCourses.filter(c => isClassMatch(c.class_level, student.class_level));
+            
+            db.all(`SELECT * FROM course_assessments WHERE student_id = ?`, [student.student_id], (err, myGrades) => {
+                db.get(`SELECT * FROM sections WHERE name = ? OR name LIKE ?`, [student.class_level, `%${student.class_level.replace("Grade ", "").replace(" - Section ", "")}%`], (err, section) => {
+                    db.all(`SELECT * FROM notifications ORDER BY id DESC`, [], (err, allNotifs) => {
+                        db.all(`SELECT * FROM absence_requests WHERE student_id = ? ORDER BY id DESC`, [student.student_id], (err, myAbsences) => {
+
+                            let monitor = section || { proctor_name: "N/A", proctor_phone: "-" };
+                            
+                            let myNotifs = allNotifs.filter(n => n.target_audience === 'ALL' || isClassMatch(n.target_audience, student.class_level));
+                            let notiRows = myNotifs.map(n => `<div style="background:${n.sender_role==='Admin'?'#f8d7da':'#d1ecf1'}; color:${n.sender_role==='Admin'?'#721c24':'#0c5460'}; padding:10px; margin-bottom:10px; border-radius:5px; border-left:5px solid ${n.sender_role==='Admin'?'#f5c6cb':'#bee5eb'};">
+                                <strong style="font-size:12px;">🔔 From: ${n.sender_name} (${n.created_at})</strong><br>
+                                ${n.message}
+                            </div>`).join('');
+
+                            let myAbsRows = myAbsences.map(ab => `<div style="background:#f9f9f9; padding:8px; border:1px solid #ddd; margin-bottom:5px; border-radius:4px;">
+                                <small>📅 ${ab.created_at}</small><br>
+                                <strong>Message:</strong> ${ab.reason}<br>
+                                ${ab.teacher_feedback ? `<span style="color:green; font-weight:bold;">💬 Teacher Reply: ${ab.teacher_feedback}</span>` : `<span style="color:orange;">⏳ Pending teacher response...</span>`}
+                            </div>`).join('');
+
+                            // Grades Table specifically mapping over the 10 courses
+                            let gradesHtml = myCourses.map(c => {
+                                let asm = myGrades.find(a => a.teacher_id === c.teacher_id) || {};
+                                return `<tr>
+                                    <td style="text-align:left;"><b>${c.title}</b><br><small style="color:#777;">Inst: ${c.teacher_name}</small></td>
+                                    <td>${asm.quiz || '-'}</td>
+                                    <td>${asm.mid || '-'}</td>
+                                    <td>${asm.final || '-'}</td>
+                                    <td><strong style="color:#27ae60;">${asm.total || '-'}</strong></td>
+                                    <td>${asm.remark || '-'}</td>
+                                </tr>`;
+                            }).join('');
+
+                            // Teacher selection for absence/requests
+                            let teacherOptions = myCourses.map(c => `<option value="${c.teacher_name}">ወደ: መምህር ${c.teacher_name} (${c.title})</option>`).join('');
+
+                            res.send(`
+                            <!DOCTYPE html><html><head><meta charset="UTF-8"><title>Student Dashboard - Amanuel School</title>
+                            <style>body{font-family:sans-serif; background:#f4f7f6; padding:20px;} .container{max-width:800px; margin:auto;} .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px; box-shadow:0 2px 5px rgba(0,0,0,0.1); overflow-x:auto;} table{width:100%; border-collapse:collapse; margin-top:10px; min-width:400px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#1f4e79; color:white;}</style></head>
+                            <body>
+                                <div class="container">
+                                    <h2><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 10px;">🎓 የተማሪ መቆጣጠሪያ</h2>
+                                    
+                                    ${myNotifs.length > 0 ? `<div class="card" style="background:#fff3cd; border:1px solid #ffeeba;"><h3>📢 ማስታወቂያዎች (Notifications)</h3>${notiRows}</div>` : ''}
+
+                                    <div class="card" style="background:#d4edda; color:#155724;">📢 <b>የአድሚን መልዕክት:</b> ${student.admin_message}</div>
+
+                                    <div class="card" style="display:flex; gap:20px; align-items:center; flex-wrap:wrap;">
+                                        <div>
+                                            <img src="/uploads/${student.photo}" style="width:100px; height:120px; object-fit:cover; border-radius:5px; display:block; margin-bottom:8px;">
+                                            <form action="/student/update-photo" method="POST" enctype="multipart/form-data">
+                                                <input type="file" name="new_photo" accept="image/*" required style="font-size:11px; width:130px; margin-bottom:4px;"><br>
+                                                <button type="submit" style="background:#2980b9; color:white; border:none; padding:4px 8px; border-radius:3px; cursor:pointer; font-size:11px;">📷 ፎቶ ቀይር</button>
+                                            </form>
+                                        </div>
+                                        <div style="flex:1;">
+                                            <h3>${student.name} (${student.student_id})</h3>
+                                            <p><b>ክፍል:</b> ${student.class_level} | <b>ተቆጣጣሪ:</b> ${monitor.proctor_name} (${monitor.proctor_phone})</p>
+                                            <a href="/download-id-pdf/${student.student_id}" style="display:inline-block; padding:10px; background:#27ae60; color:white; text-decoration:none; border-radius:5px; font-weight:bold;">📥 ዲጂታል መታወቂያ ያውርዱ</a>
+                                        </div>
+                                    </div>
+
+                                    <div class="card">
+                                        <h3>📊 የትምህርት ውጤቶች (Assessment & Grades)</h3>
+                                        <table><tr><th>Subject & Teacher</th><th>Quiz(20)</th><th>Mid(30)</th><th>Final(50)</th><th>Total(100)</th><th>Remark</th></tr>
+                                        ${gradesHtml||'<tr><td colspan="6">No grades posted yet.</td></tr>'}</table>
+                                    </div>
+
+                                    <div class="card" style="background:#fdf2e9; border: 1px solid #e67e22;">
+                                        <h3 style="color:#d35400;">⚠️ መልዕክት / ፈቃድ (Message Teacher)</h3>
+                                        <p style="font-size:13px; color:#555;">መልዕክት መላክ የሚፈልጉለትን መምህር ይምረጡ:</p>
+                                        <form action="/student/absence" method="POST">
+                                            <select name="target_teacher" required style="width:100%; padding:10px; margin-bottom:10px; border-radius:5px;">
+                                                <option value="Proctor/Monitor">ወደ: የክፍል ተቆጣጣሪ (Class Monitor)</option>
+                                                ${teacherOptions}
+                                            </select>
+                                            <textarea name="reason" placeholder="መልዕክትዎን ወይም የፈቃድ ጥያቄዎን እዚህ ይጻፉ..." style="width:100%; padding:10px; margin-bottom:10px; border-radius:5px; border:1px solid #ccc;" rows="3" required></textarea>
+                                            <button type="submit" style="background:#e67e22; color:white; padding:10px; border:none; border-radius:5px; width:100%; cursor:pointer; font-weight:bold;">ጥያቄውን ላክ (Send Message)</button>
+                                        </form>
+                                        <hr style="margin:15px 0;">
+                                        <h4>📋 የላኳቸው ጥያቄዎች እና የመምህር ምላሽ</h4>
+                                        ${myAbsRows || '<p style="font-size:12px; color:#777;">No requests sent yet.</p>'}
+                                    </div>
+                                    <a href="/logout" style="color:red; font-weight:bold; font-size:18px;">🔒 ውጣ (Logout)</a>
+                                </div>
+                            </body></html>`);
+                        });
+                    });
+                });
+            });
+        });
+    });
+});
+
+app.post('/student/update-photo', upload.single('new_photo'), (req, res) => {
+    if (!req.session.studentId) return res.redirect('/');
+    if (req.file) {
+        let newPhotoFilename = req.file.filename;
+        db.run(`UPDATE students SET photo = ? WHERE student_id = ?`, [newPhotoFilename, req.session.studentId], () => {
+            res.redirect('/student-dashboard');
+        });
+    } else {
+        res.redirect('/student-dashboard');
+    }
+});
+
+app.post('/student/absence', (req, res) => {
+    if (!req.session.studentId) return res.redirect('/');
+    db.get('SELECT name, class_level FROM students WHERE student_id=?', [req.session.studentId], (err, st) => {
+        if(st) {
+            let timestamp = new Date().toLocaleString(); 
+            let fullReason = `[ለ: ${req.body.target_teacher}] - ${req.body.reason}`;
+            db.run(`INSERT INTO absence_requests (student_id, student_name, class_level, reason, teacher_feedback, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
+            [req.session.studentId, st.name, st.class_level, fullReason, '', 'Pending', timestamp], () => {
+                res.redirect('/student-dashboard');
+            });
+        }
+    });
+});
+
+// DAILY ATTENDANCE (MONDAY - FRIDAY) WITH SAVE FUNCTIONALITY
 app.get('/attendance-sheet/:secName', (req, res) => {
     if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
     let sec = decodeURIComponent(req.params.secName);
     let selectedDate = req.query.date || new Date().toISOString().split('T')[0];
-    db.all(`SELECT * FROM students`, [], (err, allStudents) => {
-        let students = allStudents.filter(s => isMatch(s.class_level, sec)).sort((a,b)=>a.name.localeCompare(b.name));
+
+    db.all(`SELECT * FROM students ORDER BY name ASC`, [], (err, allStudents) => {
+        let studentsInClass = allStudents.filter(s => isClassMatch(s.class_level, sec));
+        
         db.all(`SELECT * FROM daily_attendance WHERE class_level = ? AND date = ?`, [sec, selectedDate], (err, records) => {
-            let attendanceMap = {}; records.forEach(r => attendanceMap[r.student_id] = r.status);
+            
+            let attendanceMap = {};
+            records.forEach(r => { attendanceMap[r.student_id] = r.status; });
+
             let rowsHtml = '';
-            for (let i = 0; i < 50; i++) {
-                let st = students[i]; let num = i + 1;
+            let totalRows = 50; 
+            
+            for (let i = 0; i < totalRows; i++) {
+                let st = studentsInClass[i];
+                let num = i + 1;
                 if (st) {
-                    let cs = attendanceMap[st.student_id] || '';
-                    rowsHtml += `<tr><td>${num}</td><td>${st.student_id}</td><td style="text-align:left;">${st.name}</td>
-                        <td><label><input type="radio" name="status_${st.student_id}" value="Present" ${cs==='Present'?'checked':''}> ✅ Present</label> &nbsp;
-                        <label><input type="radio" name="status_${st.student_id}" value="Absent" ${cs==='Absent'?'checked':''}> ❌ Absent</label></td></tr>`;
-                } else { rowsHtml += `<tr><td>${num}</td><td></td><td></td><td></td></tr>`; }
+                    let currentStatus = attendanceMap[st.student_id] || '';
+                    rowsHtml += `<tr>
+                        <td>${num}</td>
+                        <td>${st.student_id}</td>
+                        <td style="text-align:left;">${st.name}</td>
+                        <td>${st.gender}</td>
+                        <td>
+                            <label><input type="radio" name="status_${st.student_id}" value="Present" ${currentStatus==='Present'?'checked':''}> ✅ Present</label> &nbsp;
+                            <label><input type="radio" name="status_${st.student_id}" value="Absent" ${currentStatus==='Absent'?'checked':''}> ❌ Absent</label>
+                        </td>
+                    </tr>`;
+                } else {
+                    rowsHtml += `<tr>
+                        <td>${num}</td>
+                        <td>&nbsp;</td>
+                        <td>&nbsp;</td>
+                        <td>&nbsp;</td>
+                        <td>-</td>
+                    </tr>`;
+                }
             }
-            res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Attendance - ${sec}</title><style>body{font-family:sans-serif; padding:20px;} table{width:100%; border-collapse:collapse; margin-top:10px;} th,td{border:1px solid #000; padding:6px; text-align:center;}</style></head><body>
-                <h2>📋 Daily Attendance (Mon-Fri) - Class: ${sec}</h2>
-                <form method="GET"><label>Select Date:</label><input type="date" name="date" value="${selectedDate}" onchange="this.form.submit()"></form><br>
-                <form action="/save-attendance" method="POST"><input type="hidden" name="class_level" value="${sec}"><input type="hidden" name="date" value="${selectedDate}">
-                <table><tr><th>No.</th><th>ID</th><th>Name</th><th>Status</th></tr>${rowsHtml}</table><br><button type="submit" style="padding:10px; background:#2980b9; color:white; font-weight:bold;">💾 Save Attendance</button></form>
+
+            res.send(`
+            <!DOCTYPE html><html><head><meta charset="UTF-8"><title>Attendance Sheet - ${sec}</title>
+            <style>
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background: #fff; }
+                .sheet-table { width: 100%; border-collapse: collapse; font-size:13px; }
+                .sheet-table th, .sheet-table td { border: 1px solid #000; padding: 6px 10px; text-align: center; height: 25px; }
+                .sheet-table th { background: #d9d9d9; color: #000; }
+                .header-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px; }
+                button { background: #107c41; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight:bold; }
+                .save-btn { background: #2980b9; padding: 10px 20px; font-size: 15px; }
+                @media print { button, .no-print { display: none; } }
+            </style>
+            </head><body>
+                <div class="header-bar">
+                    <div>
+                        <h2>AMANUEL LIGHT AND LIFE SCHOOL</h2>
+                        <h3>📋 Daily Attendance Sheet (Monday - Friday) - Class: ${sec}</h3>
+                    </div>
+                    <div class="no-print">
+                        <form method="GET" action="/attendance-sheet/${encodeURIComponent(sec)}" style="display:inline-block; margin-right:10px;">
+                            <label><b>Select Date:</b></label>
+                            <input type="date" name="date" value="${selectedDate}" onchange="this.form.submit()" style="padding:5px;">
+                        </form>
+                        <button onclick="window.print()">🖨️ Print Sheet</button> <button onclick="window.close()">❌ Close</button>
+                    </div>
+                </div>
+
+                <form action="/save-attendance" method="POST">
+                    <input type="hidden" name="class_level" value="${sec}">
+                    <input type="hidden" name="date" value="${selectedDate}">
+                    <table class="sheet-table">
+                        <tr>
+                            <th>No.</th>
+                            <th>Student ID</th>
+                            <th>Student Full Name</th>
+                            <th>Gender</th>
+                            <th>Daily Status (✅ Present / ❌ Absent)</th>
+                        </tr>
+                        ${rowsHtml}
+                    </table>
+                    <br class="no-print">
+                    <div class="no-print" style="text-align:center;">
+                        <button type="submit" class="save-btn">💾 Save Attendance</button>
+                    </div>
+                </form>
+
+                <br><br>
+                <div style="display:flex; justify-content:space-between; font-weight:bold;">
+                    <p>Teacher's Signature: ______________________</p>
+                    <p>Director's Signature (Friday Submit): ______________________</p>
+                </div>
             </body></html>`);
         });
     });
 });
 
 app.post('/save-attendance', (req, res) => {
+    if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
     let { class_level, date } = req.body;
+
     db.all(`SELECT * FROM students`, [], (err, allStudents) => {
-        let students = allStudents.filter(s => isMatch(s.class_level, class_level));
+        if(err) return res.redirect('/teacher-dashboard');
+        
+        let studentsInClass = allStudents.filter(s => isClassMatch(s.class_level, class_level));
+
         db.run(`DELETE FROM daily_attendance WHERE class_level = ? AND date = ?`, [class_level, date], () => {
             let stmt = db.prepare(`INSERT INTO daily_attendance (student_id, student_name, class_level, date, status) VALUES (?, ?, ?, ?, ?)`);
-            students.forEach(st => {
+            studentsInClass.forEach(st => {
                 let status = req.body[`status_${st.student_id}`] || 'Absent';
                 stmt.run(st.student_id, st.name, class_level, date, status);
             });
-            stmt.finalize(() => res.send(`<script>alert('Saved!'); window.location.href='/teacher-dashboard';</script>`));
+            stmt.finalize(() => {
+                res.send(`<script>alert('Attendance saved successfully!'); window.location.href='/teacher-dashboard';</script>`);
+            });
         });
     });
-});
-
-app.get('/director-report', (req, res) => {
-    res.send(`<h2>Director Report generated... (Same as before)</h2>`); // Kept simple for brevity, logic remains from previous.
 });
 
 app.get('/download-id-pdf/:id', (req, res) => {
     db.get(`SELECT * FROM students WHERE student_id = ?`, [req.params.id], (err, student) => {
         if (!student) return res.send('Student not found');
+
         const doc = new PDFDocument({ size: [400, 260], margin: 0 });
         res.setHeader('Content-Type', 'application/pdf'); 
         res.setHeader('Content-Disposition', `attachment; filename=ID-${student.student_id}.pdf`);
         doc.pipe(res);
-        doc.rect(0, 0, 400, 260).fill('#fdfefe'); doc.rect(4, 4, 392, 46).fill('#1f4e79');
+
+        doc.rect(0, 0, 400, 260).fill('#fdfefe');
+        doc.rect(4, 4, 392, 252).lineWidth(1.5).strokeColor('#1f4e79').stroke();
+        doc.rect(4, 4, 392, 46).fill('#1f4e79');
+        
+        let schoolLogo = path.join(__dirname, 'uploads', 'logo.jpg');
+        if (fs.existsSync(schoolLogo)) {
+            doc.image(schoolLogo, 10, 8, { width: 38, height: 38 });
+        } else {
+            doc.circle(30, 27, 16).fill('#ffffff');
+            doc.fontSize(12).fillColor('#1f4e79').text('ALLS', 14, 20);
+        }
+
         doc.fontSize(12).fillColor('#ffffff').text('AMANUEL LIGHT AND LIFE SCHOOL', 55, 12, { width: 300 });
+        doc.fontSize(8.5).fillColor('#f4d03f').text('OFFICIAL DIGITAL STUDENT ID CARD', 55, 30, { width: 300 });
+
         let photoFile = path.join(__dirname, 'uploads', student.photo || '');
+        doc.rect(18, 60, 84, 100).lineWidth(1).strokeColor('#1f4e79').stroke();
         if (student.photo && fs.existsSync(photoFile)) doc.image(photoFile, 20, 62, { width: 80, height: 96 });
-        doc.fontSize(10).fillColor('#000').text(`${student.name}`, 115, 62);
-        doc.text(`ID: ${student.student_id}`, 115, 80).text(`Class: ${student.class_level}`, 115, 96);
-        doc.end();
+
+        doc.fontSize(10).fillColor('#000');
+        doc.font('Helvetica-Bold').text(`${student.name}`, 115, 62, { width: 260 });
+        doc.font('Helvetica').fontSize(9);
+        doc.text(`ID No: ${student.student_id}`, 115, 80);
+        doc.text(`Class: ${student.class_level}`, 115, 96);
+        doc.text(`Phone: ${student.phone}`, 115, 112);
+        doc.fillColor('#27ae60').font('Helvetica-Bold').text(`Status: ${student.status || 'Approved'}`, 115, 128);
+
+        doc.rect(4, 170, 392, 20).fill('#eef2f5');
+        doc.fontSize(7.5).fillColor('#555').text('This card is property of Amanuel Light and Life School. If found, please return to the office.', 12, 176, { width: 376, align: 'center' });
+
+        let qrData = `Name: ${student.name}\nID: ${student.student_id}\nGender: ${student.gender}\nClass: ${student.class_level}\nPhone: ${student.phone}`;
+
+        bwipjs.toBuffer({ bcid: 'qrcode', text: qrData, scale: 3 }, function (err, png) {
+            if (!err) doc.image(png, 172.5, 195, { width: 55, height: 55 });
+            doc.end();
+        });
     });
 });
 
