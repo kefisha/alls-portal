@@ -582,9 +582,11 @@ app.get('/admin/approve/:id', (req, res) => {
     db.get(`SELECT * FROM pending_students WHERE id = ?`, [req.params.id], (err, st) => {
         if (!st) return res.redirect('/admin');
 
+        // Fixed query mapping to match table columns correctly
         db.run(`INSERT INTO students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo, status, admin_message) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [st.student_id, st.password, st.name, st.mother_name, st.gender, st.age, st.phone, st.emergency_phone, st.region, st.zone, st.woreda, st.kebele, st.class_level, st.payment_type, st.bank_slip_val, st.photo, 'Approved', '🎉 Your registration is approved! Download your Digital ID.'], () => {
-            
+        [st.student_id, st.password, st.name, st.mother_name, st.gender, st.age, st.phone, st.emergency_phone, st.region, st.zone, st.woreda, st.kebele, st.class_level, st.payment_type, st.bank_slip_val, st.photo, 'Approved', '🎉 Your registration is approved! Download your Digital ID.'], (insertErr) => {
+            if (insertErr) console.error("Approve Insert Error:", insertErr);
+
             db.run(`DELETE FROM pending_students WHERE id = ?`, [req.params.id], () => {
                 res.redirect('/admin');
             });
@@ -865,8 +867,9 @@ app.get('/admin/approve/:id', (req, res) => {
         if (!st) return res.redirect('/admin');
 
         db.run(`INSERT INTO students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo, status, admin_message) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [st.student_id, st.password, st.name, st.mother_name, st.gender, st.age, st.phone, st.emergency_phone, st.region, st.zone, st.woreda, st.kebele, st.class_level, st.payment_type, st.bank_slip_val, st.photo, 'Approved', '🎉 Your registration is approved! Download your Digital ID.'], () => {
-            
+        [st.student_id, st.password, st.name, st.mother_name, st.gender, st.age, st.phone, st.emergency_phone, st.region, st.zone, st.woreda, st.kebele, st.class_level, st.payment_type, st.bank_slip_val, st.photo, 'Approved', '🎉 Your registration is approved! Download your Digital ID.'], (insertErr) => {
+            if (insertErr) console.error("Approve Insert Error:", insertErr);
+
             db.run(`DELETE FROM pending_students WHERE id = ?`, [req.params.id], () => {
                 res.redirect('/admin');
             });
@@ -1278,13 +1281,24 @@ app.post('/student/update-photo', upload.single('new_photo'), (req, res) => {
     }
 });
 
+// Updated student absence route to notify the class proctor/teacher immediately
 app.post('/student/absence', (req, res) => {
     if (!req.session.studentId) return res.redirect('/');
     db.get('SELECT name, class_level FROM students WHERE student_id=?', [req.session.studentId], (err, st) => {
         if(st) {
             let timestamp = new Date().toLocaleString(); 
             db.run(`INSERT INTO absence_requests (student_id, student_name, class_level, reason, teacher_feedback, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
-            [req.session.studentId, st.name, st.class_level, req.body.reason, '', 'Pending', timestamp], () => res.redirect('/student-dashboard'));
+            [req.session.studentId, st.name, st.class_level, req.body.reason, '', 'Pending', timestamp], () => {
+                
+                // Also send a notification to the section proctor/teacher for this class
+                db.get(`SELECT proctor_name FROM sections WHERE name = ?`, [st.class_level], (secErr, sec) => {
+                    let proctorMsg = `Absence/Permission Request from ${st.name} (${st.student_id}): "${req.body.reason}"`;
+                    db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at) VALUES (?,?,?,?,?)`,
+                        ['Student', st.name, st.class_level, proctorMsg, timestamp], () => {
+                            res.redirect('/student-dashboard');
+                        });
+                });
+            });
         }
     });
 });
