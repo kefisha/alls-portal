@@ -39,7 +39,7 @@ db.serialize(() => {
     )`);
 
     db.run(`CREATE TABLE IF NOT EXISTS teachers (
-        id TEXT PRIMARY KEY, name TEXT, password TEXT, phone TEXT, assigned_sections TEXT
+        id TEXT PRIMARY KEY, name TEXT, password TEXT, phone TEXT, assigned_sections TEXT, assigned_grades TEXT, is_proctor INTEGER DEFAULT 0
     )`);
 
     db.run(`CREATE TABLE IF NOT EXISTS assessments (
@@ -73,8 +73,8 @@ db.serialize(() => {
 
     db.get("SELECT COUNT(*) as count FROM teachers", (err, row) => {
         if (row && row.count === 0) {
-            db.run(`INSERT INTO teachers (id, name, password, phone, assigned_sections) VALUES 
-            ('T-101', 'Dr. Teshale Kebede', '123456', '0911001122', 'Grade 1 - Section A,Grade 1 - Section B')`);
+            db.run(`INSERT INTO teachers (id, name, password, phone, assigned_sections, assigned_grades, is_proctor) VALUES 
+            ('T-101', 'Dr. Teshale Kebede', '123456', '0911001122', 'Grade 1 - Section A', 'Grade 1', 1)`);
         }
     });
 
@@ -141,11 +141,11 @@ function esc(v) { return v === null || v === undefined ? '' : String(v).replace(
 app.get('/', (req, res) => {
     const lang = req.query.lang === 'en' ? 'en' : 'am';
     const t = lang === 'en' ? {
-        title: "🎓 AMANUEL LIGHT AND LIFE SCHOOL", stud: "Student", teach: "Teacher", admin: "Admin",
+        title: "🎓 AMANUEL LIGHT AND LIFE SCHOOL", stud: "Student", teach: "Teacher", admin: "Admin/Director",
         id: "ID Number / Username", pass: "Password PIN", btn: "Log In", reg: "📝 New Student Registration",
         forgot: "Forgot your password?", forgotBtn: "🔑 Reset My Password"
     } : {
-        title: "🎓 አማኑኤል ብርሃንና ሕይወት ትምህርት ቤት", stud: "ተማሪ (Student)", teach: "መምህር (Teacher)", admin: "አድሚን (Admin)",
+        title: "🎓 አማኑኤል ብርሃንና ሕይወት ትምህርት ቤት", stud: "ተማሪ (Student)", teach: "መምህር (Teacher)", admin: "ዳይሬክተር/አድሚን (Director/Admin)",
         id: "መታወቂያ ቁጥር (ID)", pass: "የሚስጥር ቁጥር (Password)", btn: "ግባ (Log In)", reg: "📝 አዲስ ተማሪ ምዝገባ",
         forgot: "የይለፍ ቃልዎን ረሱ?", forgotBtn: "🔑 የይለፍ ቃል ዳግም አስጀምር"
     };
@@ -388,18 +388,18 @@ app.post('/login', (req, res) => {
     }
 });
 
-// ================= ADMIN DASHBOARD (DIRECTOR & ALL INFO HUB) =================
+// ================= DIRECTOR / ADMIN DASHBOARD =================
 app.get('/admin', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const lang = req.query.lang === 'en' ? 'en' : 'am';
     const t = lang === 'en' ? {
         title: "Director / Admin Dashboard", sec: "Manage Sections & Class Proctors", pend: "Pending Registrations",
-        teach: "Manage Teachers & Multi-Class Assignments", courses: "Manage Courses", stud: "All Students",
+        teach: "Manage All Teachers (Add / Remove / Assign Classes 1-12)", courses: "Manage Courses", stud: "All Students",
         noti: "Broadcast Notification", logout: "Logout",
         directorReport: "📁 Director Weekly/Monthly Reports (Sept-May Attendance)"
     } : {
         title: "የዳይሬክተር / አድሚን መቆጣጠሪያ", sec: "ክፍሎችን እና የክፍል ተቆጣጣሪዎችን (Proctors) ማስተዳደሪያ", pend: "አዲስ ተመዝጋቢዎች",
-        teach: "መምህራንን እና የብዙ ክፍል ምደባዎችን ማስተዳደሪያ", courses: "ትምህርቶችን ማስተዳደሪያ", stud: "ሁሉም ተማሪዎች",
+        teach: "ሁሉንም መምህራን ማስተዳደሪያ (Add/Remove/ከ Grade 1-12 መደብ)", courses: "ትምህርቶችን ማስተዳደሪያ", stud: "ሁሉም ተማሪዎች",
         noti: "ማስታወቂያ ላክ", logout: "ውጣ",
         directorReport: "📁 የዳይሬክተር ሳምንታዊ እና ወርሃዊ ሪፖርት (ከሴፕቴምበር እስከ መይ)"
     };
@@ -422,17 +422,16 @@ app.get('/admin', (req, res) => {
                             </tr>`).join('');
 
                         let tRows = teachers.map(tc => `<tr>
-                            <td>${tc.id}</td><td>${tc.name}</td><td>${tc.assigned_sections || 'None'}</td><td>${tc.phone}</td>
+                            <td>${tc.id}</td><td>${tc.name}</td><td>${tc.assigned_grades || 'None'}</td><td>${tc.assigned_sections || 'None'}</td><td>${tc.phone}</td>
                             <td><span style="color:red; font-weight:bold;">${tc.password}</span></td>
                             <td><a href="/admin/edit-teacher/${tc.id}?lang=${lang}" style="color:#2980b9; font-weight:bold;">✏️ Edit</a></td>
-                            <td><form action="/admin/update-pass?lang=${lang}" method="POST" style="display:flex; gap:4px;"><input type="hidden" name="type" value="teacher"><input type="hidden" name="id" value="${tc.id}"><input type="text" name="new_pass" placeholder="New Pass" style="width:70px;"><button type="submit">Reset</button></form></td>
-                            <td><a href="/admin/delete-teacher/${tc.id}?lang=${lang}" onclick="return confirm('Delete this teacher?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td>
+                            <td><a href="/admin/delete-teacher/${tc.id}?lang=${lang}" onclick="return confirm('Remove this teacher permanently?')" style="color:red; font-weight:bold;">🗑️ Remove</a></td>
                             </tr>`).join('');
 
                         let secRows = sections.map(sec => `<tr>
                             <td><a href="/class-hub/${encodeURIComponent(sec.name)}" style="color:#16a085; font-weight:bold;" target="_blank">📂 ${sec.name}</a></td>
                             <td><form action="/admin/edit-section/${sec.id}?lang=${lang}" method="POST" style="display:flex; gap:4px;">
-                                <input type="text" name="proctor_name" value="${esc(sec.proctor_name)}" placeholder="Proctor/Monitor" style="width:110px;">
+                                <input type="text" name="proctor_name" value="${esc(sec.proctor_name)}" placeholder="Proctor" style="width:110px;">
                                 <input type="text" name="proctor_phone" value="${esc(sec.proctor_phone)}" placeholder="Phone" style="width:110px;">
                                 <button type="submit">Save</button></form></td>
                             <td><a href="/admin/delete-section/${sec.id}?lang=${lang}" onclick="return confirm('Delete this section?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td>
@@ -445,11 +444,17 @@ app.get('/admin', (req, res) => {
                         let sectionOptions = sections.map(sec => `<option value="${esc(sec.name)}">${sec.name}</option>`).join('');
                         let teacherOptions = teachers.map(tc => `<option value="${tc.id}">${tc.name}</option>`).join('');
 
+                        // Grades 1-12 checkboxes for teacher assignment
+                        let gradeCheckboxes = '';
+                        for(let i=1; i<=12; i++) {
+                            gradeCheckboxes += `<label style="margin-right:8px;"><input type="checkbox" name="grades" value="Grade ${i}"> Grade ${i}</label>`;
+                        }
+
                         let cRows = courses.map(c => `<tr><td>${c.code}</td><td>${c.title}</td><td>${c.credit_hours}</td><td>${c.class_level}</td><td>${c.teacher_name||'-'}</td>
                             <td><a href="/admin/delete-course/${c.id}?lang=${lang}" onclick="return confirm('Delete this course?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td></tr>`).join('');
 
                         res.send(`
-                        <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Admin - Amanuel School</title>
+                        <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Director Hub - Amanuel School</title>
                         <style>body{font-family:sans-serif; background:#eef2f5; padding:20px;} .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px; overflow-x:auto;} table{width:100%; border-collapse:collapse; min-width:600px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#2c3e50; color:white;} .btn{display:inline-block; padding:10px 14px; background:#16a085; color:white; text-decoration:none; border-radius:5px; font-weight:bold; margin-right:10px;} input,select{padding:6px;} textarea{width:100%; padding:10px; border-radius:5px; border:1px solid #ccc; margin-bottom:10px;}</style></head>
                         <body>
                             <div style="text-align:right;"><a href="/admin?lang=am">አማርኛ</a> | <a href="/admin?lang=en">English</a></div>
@@ -484,13 +489,17 @@ app.get('/admin', (req, res) => {
 
                             <div class="card">
                                 <h3>${t.teach}</h3>
-                                <form action="/admin/add-teacher?lang=${lang}" method="POST" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-                                    <input type="text" name="name" placeholder="Full Name" required>
-                                    <input type="text" name="phone" placeholder="Phone" required>
-                                    <input type="text" name="assigned_sections" placeholder="Assigned Classes (e.g. Grade 1 - Section A,Grade 2 - Section B)" style="flex:2;" required>
-                                    <button type="submit" style="background:#2980b9; color:white; border:none; padding:8px 14px; border-radius:5px;">➕ Add Teacher</button>
+                                <form action="/admin/add-teacher?lang=${lang}" method="POST" style="margin-bottom:15px; background:#f9f9f9; padding:15px; border-radius:5px;">
+                                    <div style="display:flex; gap:10px; margin-bottom:10px;">
+                                        <input type="text" name="name" placeholder="Teacher Full Name" required style="flex:1;">
+                                        <input type="text" name="phone" placeholder="Phone Number" required style="flex:1;">
+                                        <input type="text" name="assigned_sections" placeholder="Sections (e.g. Grade 1 - Section A,Grade 2 - Section B)" required style="flex:2;">
+                                    </div>
+                                    <label style="font-weight:bold; font-size:13px;">Assign Grades (Select 1-12):</label><br>
+                                    <div style="margin:8px 0; display:flex; flex-wrap:wrap; gap:10px;">${gradeCheckboxes}</div>
+                                    <button type="submit" style="background:#2980b9; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">➕ Add Teacher (Add/Assign)</button>
                                 </form>
-                                <table><tr><th>ID</th><th>Name</th><th>Assigned Classes</th><th>Phone</th><th>Password</th><th>Edit</th><th>Reset Password</th><th>Delete</th></tr>${tRows||'<tr><td colspan="8">None</td></tr>'}</table>
+                                <table><tr><th>ID</th><th>Name</th><th>Grades (1-12)</th><th>Classes</th><th>Phone</th><th>Password</th><th>Edit</th><th>Remove</th></tr>${tRows||'<tr><td colspan="8">None</td></tr>'}</table>
                             </div>
 
                             <div class="card">
@@ -527,7 +536,7 @@ app.get('/admin', (req, res) => {
     });
 });
 
-// SINGLE CLICK CLASS HUB FOR DIRECTORS & ADMINS
+// SINGLE CLICK CLASS HUB FOR DIRECTORS & ADMINS (Excel-like info center)
 app.get('/class-hub/:className', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     let className = decodeURIComponent(req.params.className);
@@ -545,7 +554,7 @@ app.get('/class-hub/:className', (req, res) => {
                     <a href="/admin" style="background:#7f8c8d; color:white; padding:8px 12px; text-decoration:none; border-radius:5px;">⬅️ Back to Admin / Director Dashboard</a>
                     <h2>📂 Class Hub: ${className}</h2>
                     <div class="card">
-                        <p><strong>Proctor / Monitor:</strong> ${section ? section.proctor_name : 'N/A'} (${section ? section.proctor_phone : ''})</p>
+                        <p><strong>Proctor / Attendance Monitor:</strong> ${section ? section.proctor_name : 'N/A'} (${section ? section.proctor_phone : ''})</p>
                         <p><strong>Total Students:</strong> ${students.length}</p>
                         <a href="/attendance-sheet/${encodeURIComponent(className)}" target="_blank" style="background:#2980b9; color:white; padding:8px 12px; text-decoration:none; border-radius:5px; margin-right:10px;">📋 Attendance Sheet</a>
                         <a href="/view-excel/${encodeURIComponent(className)}" target="_blank" style="background:#107c41; color:white; padding:8px 12px; text-decoration:none; border-radius:5px;">📊 Excel Grades View</a>
@@ -850,17 +859,27 @@ app.get('/admin/delete-student/:id', (req, res) => {
     });
 });
 
+// Teachers Management by Director (Add, Remove, Assign Grades/Classes)
 app.post('/admin/add-teacher', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     let { name, phone, assigned_sections } = req.body;
-    db.run(`INSERT INTO teachers (id, name, password, phone, assigned_sections) VALUES (?,?,?,?,?)`,
-    [generateTeacherID(), name, generate4DigitPIN(), phone, assigned_sections || ''], () => res.redirect('/admin'));
+    let gradesArr = req.body.grades ? (Array.isArray(req.body.grades) ? req.body.grades.join(', ') : req.body.grades) : '';
+    db.run(`INSERT INTO teachers (id, name, password, phone, assigned_sections, assigned_grades, is_proctor) VALUES (?,?,?,?,?,?,?)`,
+    [generateTeacherID(), name, generate4DigitPIN(), phone, assigned_sections || '', gradesArr, 0], () => res.redirect('/admin'));
 });
 
 app.get('/admin/edit-teacher/:id', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     db.get(`SELECT * FROM teachers WHERE id = ?`, [req.params.id], (err, t) => {
         if (!t) return res.send('Not found');
+        
+        let gradeCheckboxes = '';
+        for(let i=1; i<=12; i++) {
+            let gName = `Grade ${i}`;
+            let isChecked = t.assigned_grades && t.assigned_grades.includes(gName) ? 'checked' : '';
+            gradeCheckboxes += `<label style="margin-right:8px;"><input type="checkbox" name="grades" value="${gName}" ${isChecked}> ${gName}</label>`;
+        }
+
         res.send(`
         <div style="font-family:sans-serif; padding:20px; max-width:500px; margin:auto; background:white; border-radius:10px;">
             <h2>✏️ Edit Teacher: ${t.id}</h2>
@@ -869,6 +888,8 @@ app.get('/admin/edit-teacher/:id', (req, res) => {
                 <label>Full Name</label><input type="text" name="name" value="${esc(t.name)}" style="width:100%; padding:8px; margin-bottom:10px;">
                 <label>Phone</label><input type="text" name="phone" value="${esc(t.phone)}" style="width:100%; padding:8px; margin-bottom:10px;">
                 <label>Assigned Classes (Comma separated)</label><input type="text" name="assigned_sections" value="${esc(t.assigned_sections)}" style="width:100%; padding:8px; margin-bottom:10px;">
+                <label style="font-weight:bold; font-size:13px;">Assigned Grades (1-12):</label><br>
+                <div style="margin:8px 0; display:flex; flex-wrap:wrap; gap:10px;">${gradeCheckboxes}</div><br>
                 <button type="submit" style="width:100%; padding:12px; background:#27ae60; color:white; border:none; border-radius:5px; font-weight:bold;">💾 Save Changes</button>
             </form>
         </div>`);
@@ -877,8 +898,9 @@ app.get('/admin/edit-teacher/:id', (req, res) => {
 
 app.post('/admin/edit-teacher/:id', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
-    db.run(`UPDATE teachers SET name=?, phone=?, assigned_sections=?, password=? WHERE id=?`,
-    [req.body.name, req.body.phone, req.body.assigned_sections, req.body.password, req.params.id], () => res.redirect('/admin'));
+    let gradesArr = req.body.grades ? (Array.isArray(req.body.grades) ? req.body.grades.join(', ') : req.body.grades) : '';
+    db.run(`UPDATE teachers SET name=?, phone=?, assigned_sections=?, assigned_grades=?, password=? WHERE id=?`,
+    [req.body.name, req.body.phone, req.body.assigned_sections, gradesArr, req.body.password, req.params.id], () => res.redirect('/admin'));
 });
 
 app.get('/admin/delete-teacher/:id', (req, res) => {
