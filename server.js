@@ -42,10 +42,6 @@ db.serialize(() => {
         id TEXT PRIMARY KEY, name TEXT, password TEXT, phone TEXT, assigned_sections TEXT, assigned_grades TEXT, is_proctor INTEGER DEFAULT 0
     )`);
 
-    db.run(`CREATE TABLE IF NOT EXISTS assessments (
-        student_id TEXT PRIMARY KEY, quiz REAL, mid REAL, final REAL, total REAL, remark TEXT
-    )`);
-
     db.run(`CREATE TABLE IF NOT EXISTS course_assessments (
         id INTEGER PRIMARY KEY AUTOINCREMENT, student_id TEXT, teacher_id TEXT, course_code TEXT, course_title TEXT, 
         quiz REAL, mid REAL, final REAL, total REAL, remark TEXT
@@ -117,23 +113,34 @@ function ensureSectionExists(secName) {
     db.run(`INSERT OR IGNORE INTO sections (name, proctor_name, proctor_phone) VALUES (?, '', '')`, [secName]);
 }
 
+// አዲስ ማሻሻያ፡- አድሚኑ "1A" ብሎ ቢመዘግብ እና ተማሪው "Grade 1 - Section A" ቢባል ሁለቱንም አንድ መሆናቸውን አውቆ የሚያገናኝ (Smart Matcher)
 function isClassMatch(c1, c2) {
     if (!c1 || !c2) return false;
-    let s1 = c1.toString().replace(/\s+/g, '').toLowerCase();
-    let s2 = c2.toString().replace(/\s+/g, '').toLowerCase();
+    let s1 = c1.toString().toLowerCase().trim();
+    let s2 = c2.toString().toLowerCase().trim();
     if (s1 === s2) return true;
 
-    let parseShort = (c) => {
-        let g = c.match(/grade\s*(\d+)/i);
-        let s = c.match(/section\s*([a-z])/i);
-        if (g && s) return `${g[1]}${s[1]}`.toLowerCase();
-        return c.replace(/\s+/g, '').toLowerCase();
+    let extract = (str) => {
+        let num = str.match(/\d+/);
+        let n = num ? parseInt(num[0], 10) : null;
+        let secMatch = str.match(/section\s*([a-z])/i);
+        let s = secMatch ? secMatch[1].toLowerCase() : '';
+        if (!s) {
+            let charMatch = str.match(/\d+([a-z])/i);
+            if (charMatch) s = charMatch[1].toLowerCase();
+        }
+        return { n, s };
     };
 
-    let p1 = parseShort(c1);
-    let p2 = parseShort(c2);
+    let i1 = extract(c1);
+    let i2 = extract(c2);
 
-    return p1 === p2 || p1 === s2 || p2 === s1 || s1.includes(s2) || s2.includes(s1);
+    if (i1.n !== null && i2.n !== null) {
+        if (i1.n !== i2.n) return false; 
+        if (i1.s && i2.s) return i1.s === i2.s;
+        return true; 
+    }
+    return s1 === s2;
 }
 
 function assignClassSection(requestedYearLevel, callback) {
@@ -195,7 +202,7 @@ app.get('/', (req, res) => {
 });
 
 app.get('/forgot-password', (req, res) => {
-    const lang = req.query.lang === 'en' ? 'en' : 'am';
+    const lang = req.query.lang || 'am';
     res.send(`
     <!DOCTYPE html><html lang="${lang}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Reset Password</title>
     <style>body{font-family:sans-serif; background:#f4f7f6; padding:20px;} .box{max-width:400px; margin:auto; background:white; padding:30px; border-radius:10px; box-shadow:0 4px 10px rgba(0,0,0,0.1); text-align:center;} input,button{width:100%; padding:12px; margin-bottom:15px; border-radius:5px; border:1px solid #ccc; font-size:16px;} button{background:#8e44ad; color:white; font-weight:bold; cursor:pointer; border:none;}</style>
@@ -484,8 +491,6 @@ app.get('/admin/approve/:id', (req, res) => {
     });
 });
 
-// ================= ADMIN ADD / EDIT / DELETE ACTIONS =================
-
 app.post('/admin/add-teacher', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     let { name, phone, assigned_sections } = req.body;
@@ -618,19 +623,47 @@ app.get('/admin/delete-student/:id', (req, res) => {
     });
 });
 
-app.post('/admin/send-notification', (req, res) => {
+app.get('/admin/export-students', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
-    db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at) VALUES (?,?,?,?,?)`,
-        ['Admin', 'School Admin', 'ALL', req.body.message, new Date().toLocaleString()], () => res.redirect('/admin'));
+    db.all(`SELECT * FROM students ORDER BY class_level, name`, [], (err, students) => {
+        let header = ['student_id','name','mother_name','gender','age','phone','emergency_phone','region','zone','woreda','kebele','class_level','payment_type','status'];
+        let rows = [header.join(',')];
+        students.forEach(s => rows.push(header.map(col => csvCell(s[col])).join(',')));
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=alls_students.csv');
+        res.send(rows.join('\r\n'));
+    });
 });
 
-// SINGLE CLICK CLASS HUB FOR DIRECTORS & ADMINS WITH RANKING
+app.post('/admin/import-students', csvUpload.single('csv_file'), (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    if (!req.file) return res.redirect('/admin');
+    let lines = req.file.buffer.toString('utf8').split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+    if (lines.length && lines[0].toLowerCase().startsWith('name,')) lines.shift();
+
+    let processRow = (i) => {
+        if (i >= lines.length) return res.redirect('/admin');
+        let cols = lines[i].split(',').map(c => c.trim());
+        let [name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level] = cols;
+        if (!name) return processRow(i + 1);
+
+        let autoID = generateStudentID(); let autoPIN = generate4DigitPIN();
+        ensureSectionExists(class_level || 'Unassigned');
+        db.run(`INSERT INTO students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo, status, admin_message) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [autoID, autoPIN, name, mother_name || '', gender || '', age || null, phone || '', emergency_phone || '', region || '', zone || '', woreda || '', kebele || '', class_level || 'Unassigned', 'admin_added', '-', '', 'Approved', 'Added directly by Admin.'],
+        () => processRow(i + 1));
+    };
+    processRow(0);
+});
+
+// SINGLE CLICK CLASS HUB FOR DIRECTORS
 app.get('/class-hub/:className', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     let className = decodeURIComponent(req.params.className);
     
-    db.all(`SELECT s.* FROM students s WHERE s.class_level = ?`, [className], (err, students) => {
-        db.all(`SELECT * FROM course_assessments WHERE student_id IN (SELECT student_id FROM students WHERE class_level = ?)`, [className], (err, assessments) => {
+    db.all(`SELECT * FROM students`, [], (err, allStudents) => {
+        let students = allStudents.filter(s => isClassMatch(s.class_level, className));
+        db.all(`SELECT * FROM course_assessments`, [], (err, assessments) => {
             
             students.forEach(st => {
                 let st_ass = assessments.filter(a => a.student_id === st.student_id);
@@ -638,8 +671,10 @@ app.get('/class-hub/:className', (req, res) => {
             });
             students.sort((a, b) => b.cumulative_total - a.cumulative_total);
 
-            db.get(`SELECT * FROM sections WHERE name = ?`, [className], (err, section) => {
-                db.all(`SELECT * FROM courses WHERE class_level = ?`, [className], (err, courses) => {
+            db.all(`SELECT * FROM sections`, [], (err, allSections) => {
+                let section = allSections.find(sec => isClassMatch(sec.name, className));
+                db.all(`SELECT * FROM courses`, [], (err, allCourses) => {
+                    let courses = allCourses.filter(c => isClassMatch(c.class_level, className));
                     
                     let sRows = students.map((s, idx) => `<tr>
                         <td><b>${idx + 1}</b></td>
@@ -677,7 +712,13 @@ app.get('/class-hub/:className', (req, res) => {
     });
 });
 
-// TEACHER DASHBOARD - Automatically fetches students and courses accurately
+app.post('/admin/send-notification', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at) VALUES (?,?,?,?,?)`,
+        ['Admin', 'School Admin', 'ALL', req.body.message, new Date().toLocaleString()], () => res.redirect('/admin'));
+});
+
+// TEACHER DASHBOARD
 app.get('/teacher-dashboard', (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
     
@@ -690,7 +731,6 @@ app.get('/teacher-dashboard', (req, res) => {
             
             db.all(`SELECT * FROM course_assessments WHERE teacher_id = ?`, [req.session.teacherId], (err, assessments) => {
                 db.all(`SELECT * FROM courses WHERE teacher_id = ?`, [req.session.teacherId], (err, courses) => {
-                    
                     let classCourses = courses.filter(c => isClassMatch(c.class_level, selectedClass));
                     
                     db.all(`SELECT * FROM absence_requests ORDER BY id DESC`, [], (err, allAbsences) => {
@@ -729,7 +769,7 @@ app.get('/teacher-dashboard', (req, res) => {
                             <h2><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 10px;">👨‍🏫 Teacher Portal: ${teacher.name}</h2>
                             
                             <div style="margin:15px 0; background:#eef2f5; padding:10px; border-radius:5px;">
-                                <strong>Select Class to Manage (መምህር የትኛውን ክፍል ማስተዳደር ይፈልጋሉ):</strong><br><br>
+                                <strong>Select Class to Manage:</strong><br><br>
                                 ${classTabs || '<p style="color:red;">No classes assigned to you yet.</p>'}
                             </div>
 
@@ -761,7 +801,7 @@ app.get('/teacher-dashboard', (req, res) => {
                             </div>
 
                             <div style="overflow-x:auto;">
-                            <h3 style="background:#1f4e79; color:white; padding:10px; margin:0; border-top-left-radius:5px; border-top-right-radius:5px;">📝 የውጤት መሙያ (Grades Assessment) - ${selectedClass}</h3>
+                            <h3 style="background:#1f4e79; color:white; padding:10px; margin:0; border-top-left-radius:5px; border-top-right-radius:5px;">📝 Grades Assessment - ${selectedClass}</h3>
                             <table border="1" width="100%" style="border-collapse:collapse; text-align:center; min-width:600px; background:white;">
                                 <tr style="background:#eef2f5;"><th>No</th><th>ID</th><th>Name</th><th>Quiz(20)</th><th>Mid(30)</th><th>Final(50)</th><th>Total</th><th>Action</th></tr>
                                 ${studentRows||'<tr><td colspan="8">No students in this class</td></tr>'}
@@ -799,11 +839,12 @@ app.post('/teacher/save-grade', (req, res) => {
     let total = (parseFloat(quiz)||0) + (parseFloat(mid)||0) + (parseFloat(final)||0);
     let remark = total >= 50 ? 'Pass' : 'Fail';
 
-    db.get(`SELECT * FROM courses WHERE teacher_id = ? AND (class_level = ? OR class_level LIKE ?)`, [req.session.teacherId, targetClass, `%${targetClass.replace("Grade ", "").replace(" - Section ", "")}%`], (err, course) => {
+    db.all(`SELECT * FROM courses WHERE teacher_id = ?`, [req.session.teacherId], (err, courses) => {
+        let course = courses.find(c => isClassMatch(c.class_level, targetClass));
         let courseCode = course ? course.code : 'N/A';
         let courseTitle = course ? course.title : 'N/A';
 
-        db.get(`SELECT id FROM course_assessments WHERE student_id = ? AND teacher_id = ?`, [student_id, req.session.teacherId], (err, row) => {
+        db.get(`SELECT id FROM course_assessments WHERE student_id = ? AND teacher_id = ? AND course_code = ?`, [student_id, req.session.teacherId, courseCode], (err, row) => {
             if (row) {
                 db.run(`UPDATE course_assessments SET quiz=?, mid=?, final=?, total=?, remark=? WHERE id=?`, 
                 [quiz, mid, final, total, remark, row.id], () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}`));
@@ -820,11 +861,14 @@ app.get('/student-dashboard', (req, res) => {
     if (!req.session.studentId) return res.redirect('/');
     
     db.get(`SELECT s.* FROM students s WHERE s.student_id = ?`, [req.session.studentId], (err, student) => {
+        
         db.all(`SELECT * FROM courses ORDER BY id`, [], (err, allCourses) => {
             let myCourses = allCourses.filter(c => isClassMatch(c.class_level, student.class_level));
             
             db.all(`SELECT * FROM course_assessments WHERE student_id = ?`, [student.student_id], (err, myGrades) => {
-                db.get(`SELECT * FROM sections WHERE name = ? OR name LIKE ?`, [student.class_level, `%${student.class_level.replace("Grade ", "").replace(" - Section ", "")}%`], (err, section) => {
+                db.all(`SELECT * FROM sections`, [], (err, allSections) => {
+                    let section = allSections.find(sec => isClassMatch(sec.name, student.class_level));
+                    
                     db.all(`SELECT * FROM notifications ORDER BY id DESC`, [], (err, allNotifs) => {
                         db.all(`SELECT * FROM absence_requests WHERE student_id = ? ORDER BY id DESC`, [student.student_id], (err, myAbsences) => {
 
@@ -842,6 +886,7 @@ app.get('/student-dashboard', (req, res) => {
                                 ${ab.teacher_feedback ? `<span style="color:green; font-weight:bold;">💬 Teacher Reply: ${ab.teacher_feedback}</span>` : `<span style="color:orange;">⏳ Pending teacher response...</span>`}
                             </div>`).join('');
 
+                            // Grades Table mapping over the 10 courses
                             let gradesHtml = myCourses.map(c => {
                                 let asm = myGrades.find(a => a.teacher_id === c.teacher_id) || {};
                                 return `<tr>
@@ -854,6 +899,7 @@ app.get('/student-dashboard', (req, res) => {
                                 </tr>`;
                             }).join('');
 
+                            // Teacher selection for absence/requests
                             let teacherOptions = myCourses.map(c => `<option value="${c.teacher_name}">ወደ: መምህር ${c.teacher_name} (${c.title})</option>`).join('');
 
                             res.send(`
@@ -885,11 +931,11 @@ app.get('/student-dashboard', (req, res) => {
                                     <div class="card">
                                         <h3>📊 የትምህርት ውጤቶች (Assessment & Grades)</h3>
                                         <table><tr><th>Subject & Teacher</th><th>Quiz(20)</th><th>Mid(30)</th><th>Final(50)</th><th>Total(100)</th><th>Remark</th></tr>
-                                        ${gradesHtml||'<tr><td colspan="6">No grades posted yet.</td></tr>'}</table>
+                                        ${gradesHtml||'<tr><td colspan="6">No courses posted yet.</td></tr>'}</table>
                                     </div>
 
                                     <div class="card" style="background:#fdf2e9; border: 1px solid #e67e22;">
-                                        <h3 style="color:#d35400;">⚠️ መልዕክት / ፈቃድ (Message Teacher)</h3>
+                                        <h3 style="color:#d35400;">⚠️ መልዕክት / ፈቃድ ላክ</h3>
                                         <p style="font-size:13px; color:#555;">መልዕክት መላክ የሚፈልጉለትን መምህር ይምረጡ:</p>
                                         <form action="/student/absence" method="POST">
                                             <select name="target_teacher" required style="width:100%; padding:10px; margin-bottom:10px; border-radius:5px;">
@@ -1116,6 +1162,58 @@ app.get('/director-report', (req, res) => {
                     </div>
                 </body></html>`);
             });
+        });
+    });
+});
+
+app.get('/view-excel/:secName', (req, res) => {
+    if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
+    let sec = decodeURIComponent(req.params.secName);
+    
+    db.all(`SELECT * FROM students`, [], (err, allStudents) => {
+        let students = allStudents.filter(s => isClassMatch(s.class_level, sec));
+        
+        db.all(`SELECT * FROM course_assessments`, [], (err, assessments) => {
+            
+            students.forEach(st => {
+                let st_ass = assessments.filter(a => a.student_id === st.student_id);
+                st.cumulative_total = st_ass.reduce((sum, a) => sum + (a.total || 0), 0);
+            });
+            students.sort((a, b) => b.cumulative_total - a.cumulative_total);
+
+            let sRows = students.map((s, index) => `
+                <tr>
+                    <td><b>${index + 1}</b></td>
+                    <td>${s.student_id}</td>
+                    <td style="text-align:left;">${s.name}</td>
+                    <td>${s.gender}</td>
+                    <td>${s.age}</td>
+                    <td>${s.phone}</td>
+                    <td><b>${s.cumulative_total}</b></td>
+                </tr>
+            `).join('');
+
+            res.send(`
+            <!DOCTYPE html><html><head><meta charset="UTF-8"><title>Excel View - ${sec}</title>
+            <style>
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background: #f9f9f9; }
+                .excel-table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.2); font-size:14px; }
+                .excel-table th, .excel-table td { border: 1px solid #d4d4d4; padding: 6px 10px; text-align: center; }
+                .excel-table th { background: #107c41; color: white; position: sticky; top: 0; }
+                .excel-table tr:nth-child(even) { background: #f3f2f1; }
+                .header-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; }
+                button { background: #107c41; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight:bold; }
+            </style>
+            </head><body>
+                <div class="header-bar">
+                    <h2>📊 Class Grades & Ranking: ${sec} (Total: ${students.length})</h2>
+                    <div><button onclick="window.print()">🖨️ Print / Save PDF</button> <button onclick="window.close()">❌ Close</button></div>
+                </div>
+                <table class="excel-table">
+                    <tr><th>Rank</th><th>Student ID</th><th>Full Name</th><th>Gender</th><th>Age</th><th>Phone Number</th><th>Cumulative Total Score</th></tr>
+                    ${sRows||'<tr><td colspan="7">No students found in this class.</td></tr>'}
+                </table>
+            </body></html>`);
         });
     });
 });
