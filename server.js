@@ -42,12 +42,10 @@ db.serialize(() => {
         id TEXT PRIMARY KEY, name TEXT, password TEXT, phone TEXT, assigned_sections TEXT, assigned_grades TEXT, is_proctor INTEGER DEFAULT 0
     )`);
 
-    // Old assessments table (kept for fallback)
     db.run(`CREATE TABLE IF NOT EXISTS assessments (
         student_id TEXT PRIMARY KEY, quiz REAL, mid REAL, final REAL, total REAL, remark TEXT
     )`);
 
-    // NEW TABLE: To handle multiple courses/teachers grading the same student
     db.run(`CREATE TABLE IF NOT EXISTS course_assessments (
         id INTEGER PRIMARY KEY AUTOINCREMENT, student_id TEXT, teacher_id TEXT, course_code TEXT, course_title TEXT, 
         quiz REAL, mid REAL, final REAL, total REAL, remark TEXT
@@ -119,7 +117,6 @@ function ensureSectionExists(secName) {
     db.run(`INSERT OR IGNORE INTO sections (name, proctor_name, proctor_phone) VALUES (?, '', '')`, [secName]);
 }
 
-// HELPER: To accurately match "1A" with "Grade 1 - Section A" and avoid "No students" error
 function isClassMatch(c1, c2) {
     if (!c1 || !c2) return false;
     let s1 = c1.toString().replace(/\s+/g, '').toLowerCase();
@@ -161,8 +158,10 @@ function csvCell(v) {
     if (s.search(/("|,|\n)/g) >= 0) s = `"${s}"`;
     return s;
 }
+
 function esc(v) { return v === null || v === undefined ? '' : String(v).replace(/"/g, '&quot;'); }
 
+// ================= PUBLIC ROUTES =================
 app.get('/', (req, res) => {
     const lang = req.query.lang === 'en' ? 'en' : 'am';
     const t = lang === 'en' ? {
@@ -196,7 +195,7 @@ app.get('/', (req, res) => {
 });
 
 app.get('/forgot-password', (req, res) => {
-    const lang = req.query.lang || 'am';
+    const lang = req.query.lang === 'en' ? 'en' : 'am';
     res.send(`
     <!DOCTYPE html><html lang="${lang}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Reset Password</title>
     <style>body{font-family:sans-serif; background:#f4f7f6; padding:20px;} .box{max-width:400px; margin:auto; background:white; padding:30px; border-radius:10px; box-shadow:0 4px 10px rgba(0,0,0,0.1); text-align:center;} input,button{width:100%; padding:12px; margin-bottom:15px; border-radius:5px; border:1px solid #ccc; font-size:16px;} button{background:#8e44ad; color:white; font-weight:bold; cursor:pointer; border:none;}</style>
@@ -485,16 +484,154 @@ app.get('/admin/approve/:id', (req, res) => {
     });
 });
 
+// ================= ADMIN ADD / EDIT / DELETE ACTIONS =================
+
+app.post('/admin/add-teacher', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    let { name, phone, assigned_sections } = req.body;
+    let gradesArr = req.body.grades ? (Array.isArray(req.body.grades) ? req.body.grades.join(', ') : req.body.grades) : '';
+    db.run(`INSERT INTO teachers (id, name, password, phone, assigned_sections, assigned_grades, is_proctor) VALUES (?,?,?,?,?,?,?)`,
+    [generateTeacherID(), name, generate4DigitPIN(), phone, assigned_sections || '', gradesArr, 0], () => res.redirect('/admin'));
+});
+
+app.get('/admin/edit-teacher/:id', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.get(`SELECT * FROM teachers WHERE id = ?`, [req.params.id], (err, t) => {
+        if (!t) return res.send('Not found');
+        
+        let gradeCheckboxes = '';
+        for(let i=1; i<=12; i++) {
+            let gName = `Grade ${i}`;
+            let isChecked = t.assigned_grades && t.assigned_grades.includes(gName) ? 'checked' : '';
+            gradeCheckboxes += `<label style="margin-right:8px;"><input type="checkbox" name="grades" value="${gName}" ${isChecked}> ${gName}</label>`;
+        }
+
+        res.send(`
+        <div style="font-family:sans-serif; padding:20px; max-width:500px; margin:auto; background:white; border-radius:10px;">
+            <h2>✏️ Edit Teacher: ${t.id}</h2>
+            <form action="/admin/edit-teacher/${t.id}" method="POST">
+                <label>Password</label><input type="text" name="password" value="${esc(t.password)}" style="width:100%; padding:8px; margin-bottom:10px;">
+                <label>Full Name</label><input type="text" name="name" value="${esc(t.name)}" style="width:100%; padding:8px; margin-bottom:10px;">
+                <label>Phone</label><input type="text" name="phone" value="${esc(t.phone)}" style="width:100%; padding:8px; margin-bottom:10px;">
+                <label>Assigned Classes (Comma separated)</label><input type="text" name="assigned_sections" value="${esc(t.assigned_sections)}" style="width:100%; padding:8px; margin-bottom:10px;">
+                <label style="font-weight:bold; font-size:13px;">Assigned Grades (1-12):</label><br>
+                <div style="margin:8px 0; display:flex; flex-wrap:wrap; gap:10px;">${gradeCheckboxes}</div><br>
+                <button type="submit" style="width:100%; padding:12px; background:#27ae60; color:white; border:none; border-radius:5px; font-weight:bold;">💾 Save Changes</button>
+            </form>
+        </div>`);
+    });
+});
+
+app.post('/admin/edit-teacher/:id', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    let gradesArr = req.body.grades ? (Array.isArray(req.body.grades) ? req.body.grades.join(', ') : req.body.grades) : '';
+    db.run(`UPDATE teachers SET name=?, phone=?, assigned_sections=?, assigned_grades=?, password=? WHERE id=?`,
+    [req.body.name, req.body.phone, req.body.assigned_sections, gradesArr, req.body.password, req.params.id], () => res.redirect('/admin'));
+});
+
+app.get('/admin/delete-teacher/:id', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.run(`DELETE FROM teachers WHERE id = ?`, [req.params.id], () => res.redirect('/admin'));
+});
+
+app.post('/admin/add-section', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.run(`INSERT OR IGNORE INTO sections (name, proctor_name, proctor_phone) VALUES (?,?,?)`,
+    [req.body.name, req.body.proctor_name || '', ''], () => res.redirect('/admin'));
+});
+
+app.post('/admin/edit-section/:id', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.run(`UPDATE sections SET proctor_name=? WHERE id=?`, [req.body.proctor_name, req.params.id], () => res.redirect('/admin'));
+});
+
+app.get('/admin/delete-section/:id', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.run(`DELETE FROM sections WHERE id = ?`, [req.params.id], () => res.redirect('/admin'));
+});
+
+app.post('/admin/add-course', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    let { code, title, credit_hours, class_level, teacher_id } = req.body;
+    db.get(`SELECT name FROM teachers WHERE id = ?`, [teacher_id], (err, t) => {
+        db.run(`INSERT INTO courses (code, title, credit_hours, teacher_id, teacher_name, class_level) VALUES (?,?,?,?,?,?)`,
+        [code, title, credit_hours, teacher_id || '', t ? t.name : '', class_level], () => res.redirect('/admin'));
+    });
+});
+
+app.get('/admin/delete-course/:id', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.run(`DELETE FROM courses WHERE id = ?`, [req.params.id], () => res.redirect('/admin'));
+});
+
+app.post('/admin/update-pass', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    let { type, id, new_pass } = req.body;
+    let table = type === 'student' ? 'students' : 'teachers';
+    let idCol = type === 'student' ? 'student_id' : 'id';
+    db.run(`UPDATE ${table} SET password = ? WHERE ${idCol} = ?`, [new_pass, id], () => res.redirect('/admin'));
+});
+
+app.get('/admin/edit-student/:id', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.get(`SELECT * FROM students WHERE student_id = ?`, [req.params.id], (err, s) => {
+        if (!s) return res.send('Not found');
+        db.all(`SELECT * FROM sections ORDER BY name`, [], (err, sections) => {
+            let sectionOptions = sections.map(sec => `<option value="${esc(sec.name)}" ${sec.name===s.class_level?'selected':''}>${sec.name}</option>`).join('');
+            const field = (label, name, val, type='text') => `<label>${label}</label><input type="${type}" name="${name}" value="${esc(val)}" style="width:100%; padding:8px; margin-bottom:10px;">`;
+            res.send(`
+            <div style="font-family:sans-serif; padding:20px; max-width:600px; margin:auto; background:white; border-radius:10px;">
+                <h2>✏️ Edit Student: ${s.student_id}</h2>
+                <form action="/admin/edit-student/${s.student_id}" method="POST">
+                    ${field('Password (PIN)','password',s.password)}
+                    ${field('Full Name','name',s.name)}
+                    ${field("Mother's Name",'mother_name',s.mother_name)}
+                    <label>Gender</label><select name="gender" style="width:100%; padding:8px; margin-bottom:10px;"><option ${s.gender==='Male'?'selected':''}>Male</option><option ${s.gender==='Female'?'selected':''}>Female</option></select>
+                    ${field('Age','age',s.age,'number')}
+                    ${field('Phone','phone',s.phone)}
+                    ${field('Emergency Phone','emergency_phone',s.emergency_phone)}
+                    ${field('Region','region',s.region)}
+                    ${field('Zone','zone',s.zone)}
+                    ${field('Woreda','woreda',s.woreda)}
+                    ${field('Kebele','kebele',s.kebele)}
+                    <label>Grade / Section</label><select name="class_level" style="width:100%; padding:8px; margin-bottom:10px;">${sectionOptions}</select>
+                    ${field('Status','status',s.status)}
+                    ${field('Admin Message','admin_message',s.admin_message)}
+                    <button type="submit" style="width:100%; padding:12px; background:#27ae60; color:white; border:none; border-radius:5px; font-weight:bold;">💾 Save Changes</button>
+                </form><br><a href="/admin">⬅️ Back to Admin</a>
+            </div>`);
+        });
+    });
+});
+
+app.post('/admin/edit-student/:id', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    let { name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, status, admin_message, password } = req.body;
+    db.run(`UPDATE students SET name=?, father_name='', mother_name=?, gender=?, age=?, phone=?, emergency_phone=?, region=?, zone=?, woreda=?, kebele=?, class_level=?, status=?, admin_message=?, password=? WHERE student_id=?`,
+    [name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, status, admin_message, password, req.params.id], () => res.redirect('/admin'));
+});
+
+app.get('/admin/delete-student/:id', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.run(`DELETE FROM students WHERE student_id = ?`, [req.params.id], () => {
+        db.run(`DELETE FROM course_assessments WHERE student_id = ?`, [req.params.id], () => res.redirect('/admin'));
+    });
+});
+
+app.post('/admin/send-notification', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at) VALUES (?,?,?,?,?)`,
+        ['Admin', 'School Admin', 'ALL', req.body.message, new Date().toLocaleString()], () => res.redirect('/admin'));
+});
+
 // SINGLE CLICK CLASS HUB FOR DIRECTORS & ADMINS WITH RANKING
 app.get('/class-hub/:className', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     let className = decodeURIComponent(req.params.className);
     
-    // We compute total dynamically from multiple teachers assessments if needed.
     db.all(`SELECT s.* FROM students s WHERE s.class_level = ?`, [className], (err, students) => {
-        db.all(`SELECT * FROM course_assessments WHERE class_level = ? OR student_id IN (SELECT student_id FROM students WHERE class_level = ?)`, [className, className], (err, assessments) => {
+        db.all(`SELECT * FROM course_assessments WHERE student_id IN (SELECT student_id FROM students WHERE class_level = ?)`, [className], (err, assessments) => {
             
-            // Calculate total ranking score for each student from all courses
             students.forEach(st => {
                 let st_ass = assessments.filter(a => a.student_id === st.student_id);
                 st.cumulative_total = st_ass.reduce((sum, a) => sum + (a.total || 0), 0);
@@ -540,12 +677,6 @@ app.get('/class-hub/:className', (req, res) => {
     });
 });
 
-app.post('/admin/send-notification', (req, res) => {
-    if (!req.session.isAdmin) return res.redirect('/');
-    db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at) VALUES (?,?,?,?,?)`,
-        ['Admin', 'School Admin', 'ALL', req.body.message, new Date().toLocaleString()], () => res.redirect('/admin'));
-});
-
 // TEACHER DASHBOARD - Automatically fetches students and courses accurately
 app.get('/teacher-dashboard', (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
@@ -554,10 +685,7 @@ app.get('/teacher-dashboard', (req, res) => {
         let assignedClasses = teacher.assigned_sections ? teacher.assigned_sections.split(',').map(s => s.trim()) : [];
         let selectedClass = req.query.cls || assignedClasses[0] || '';
 
-        // 1. Fetch ALL students
         db.all(`SELECT * FROM students ORDER BY name ASC`, [], (err, allStudents) => {
-            
-            // Filter students for the specific selected class using flexible match
             let studentsInClass = allStudents.filter(s => isClassMatch(s.class_level, selectedClass));
             
             db.all(`SELECT * FROM course_assessments WHERE teacher_id = ?`, [req.session.teacherId], (err, assessments) => {
@@ -687,12 +815,11 @@ app.post('/teacher/save-grade', (req, res) => {
     });
 });
 
-// STUDENT DASHBOARD - Maps all courses to display 10 teachers grades properly
+// STUDENT DASHBOARD
 app.get('/student-dashboard', (req, res) => {
     if (!req.session.studentId) return res.redirect('/');
     
     db.get(`SELECT s.* FROM students s WHERE s.student_id = ?`, [req.session.studentId], (err, student) => {
-        
         db.all(`SELECT * FROM courses ORDER BY id`, [], (err, allCourses) => {
             let myCourses = allCourses.filter(c => isClassMatch(c.class_level, student.class_level));
             
@@ -715,7 +842,6 @@ app.get('/student-dashboard', (req, res) => {
                                 ${ab.teacher_feedback ? `<span style="color:green; font-weight:bold;">💬 Teacher Reply: ${ab.teacher_feedback}</span>` : `<span style="color:orange;">⏳ Pending teacher response...</span>`}
                             </div>`).join('');
 
-                            // Grades Table specifically mapping over the 10 courses
                             let gradesHtml = myCourses.map(c => {
                                 let asm = myGrades.find(a => a.teacher_id === c.teacher_id) || {};
                                 return `<tr>
@@ -728,7 +854,6 @@ app.get('/student-dashboard', (req, res) => {
                                 </tr>`;
                             }).join('');
 
-                            // Teacher selection for absence/requests
                             let teacherOptions = myCourses.map(c => `<option value="${c.teacher_name}">ወደ: መምህር ${c.teacher_name} (${c.title})</option>`).join('');
 
                             res.send(`
@@ -931,6 +1056,65 @@ app.post('/save-attendance', (req, res) => {
             });
             stmt.finalize(() => {
                 res.send(`<script>alert('Attendance saved successfully!'); window.location.href='/teacher-dashboard';</script>`);
+            });
+        });
+    });
+});
+
+app.get('/director-report', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.all(`SELECT * FROM sections ORDER BY name`, [], (err, sections) => {
+        db.all(`SELECT * FROM students ORDER BY class_level`, [], (err, students) => {
+            db.all(`SELECT * FROM daily_attendance ORDER BY date DESC`, [], (err, attendanceRecords) => {
+                
+                const months = ["September", "October", "November", "December", "January", "February", "March", "April", "May"];
+                
+                let monthSections = months.map(m => {
+                    let sectionContent = sections.map(sec => {
+                        let classStudents = students.filter(s => isClassMatch(s.class_level, sec.name));
+                        let studentList = classStudents.map((s, idx) => {
+                            let rec = attendanceRecords.find(r => r.student_id === s.student_id);
+                            let statusBadge = rec ? (rec.status === 'Present' ? '✅ Present' : '❌ Absent') : 'Not Recorded';
+                            return `<tr><td>${idx+1}</td><td>${s.student_id}</td><td style="text-align:left;">${s.name}</td><td><b>${statusBadge}</b></td></tr>`;
+                        }).join('');
+                        
+                        return `<div style="margin-bottom:20px;">
+                            <h4 style="background:#34495e; color:white; padding:6px; margin:0;">Class: ${sec.name}</h4>
+                            <table border="1" width="100%" style="border-collapse:collapse; text-align:center; font-size:12px;">
+                                <tr style="background:#f2f2f2;"><th>No</th><th>ID</th><th>Full Name</th><th>Attendance Status</th></tr>
+                                ${studentList || '<tr><td colspan="4">No students</td></tr>'}
+                            </table>
+                        </div>`;
+                    }).join('');
+
+                    return `<div style="margin-bottom:40px; page-break-after: always;">
+                        <h2 style="background:#2c3e50; color:white; padding:10px; text-align:center;">📅 Academic Period / Month: ${m} (September - May)</h2>
+                        ${sectionContent}
+                    </div>`;
+                }).join('');
+
+                res.send(`
+                <!DOCTYPE html><html><head><meta charset="UTF-8"><title>Director Academic Year Report (Sept-May)</title>
+                <style>
+                    body { font-family: sans-serif; padding: 20px; background: white; }
+                    table th, table td { border: 1px solid #ccc; padding: 5px; }
+                    .header { text-align: center; margin-bottom: 20px; }
+                    button { background: #8e44ad; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; cursor: pointer; }
+                    @media print { button { display: none; } }
+                </style>
+                </head><body>
+                    <div class="header">
+                        <h2>AMANUEL LIGHT AND LIFE SCHOOL</h2>
+                        <h3>📁 Director Comprehensive Attendance Report (September to May)</h3>
+                        <button onclick="window.print()">🖨️ Print Full Report for Director</button>
+                    </div>
+                    ${monthSections}
+                    <br><br>
+                    <div style="display:flex; justify-content:space-between; font-weight:bold; margin-top:40px;">
+                        <p>Prepared by Registrar / Admin: ___________________</p>
+                        <p>Approved & Signed by Director: ___________________</p>
+                    </div>
+                </body></html>`);
             });
         });
     });
