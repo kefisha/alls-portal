@@ -577,6 +577,21 @@ app.get('/admin', (req, res) => {
     });
 });
 
+app.get('/admin/approve/:id', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.get(`SELECT * FROM pending_students WHERE id = ?`, [req.params.id], (err, st) => {
+        if (!st) return res.redirect('/admin');
+
+        db.run(`INSERT INTO students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo, status, admin_message) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [st.student_id, st.password, st.name, st.mother_name, st.gender, st.age, st.phone, st.emergency_phone, st.region, st.zone, st.woreda, st.kebele, st.class_level, st.payment_type, st.bank_slip_val, st.photo, 'Approved', '🎉 Your registration is approved! Download your Digital ID.'], () => {
+            
+            db.run(`DELETE FROM pending_students WHERE id = ?`, [req.params.id], () => {
+                res.redirect('/admin');
+            });
+        });
+    });
+});
+
 // SINGLE CLICK CLASS HUB FOR DIRECTORS & ADMINS WITH RANKING
 app.get('/class-hub/:className', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
@@ -847,9 +862,14 @@ app.get('/view-excel/:secName', (req, res) => {
 app.get('/admin/approve/:id', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     db.get(`SELECT * FROM pending_students WHERE id = ?`, [req.params.id], (err, st) => {
-        db.run(`INSERT INTO students (student_id, password, name, father_name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo, status, admin_message) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [st.student_id, st.password, st.name, '', st.mother_name, st.gender, st.age, st.phone, st.emergency_phone, st.region, st.zone, st.woreda, st.kebele, st.class_level, st.payment_type, st.bank_slip_val, st.photo, 'Approved', '🎉 Your registration is approved! Download your Digital ID.'], () => {
-            db.run(`DELETE FROM pending_students WHERE id = ?`, [req.params.id], () => res.redirect('/admin'));
+        if (!st) return res.redirect('/admin');
+
+        db.run(`INSERT INTO students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo, status, admin_message) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [st.student_id, st.password, st.name, st.mother_name, st.gender, st.age, st.phone, st.emergency_phone, st.region, st.zone, st.woreda, st.kebele, st.class_level, st.payment_type, st.bank_slip_val, st.photo, 'Approved', '🎉 Your registration is approved! Download your Digital ID.'], () => {
+            
+            db.run(`DELETE FROM pending_students WHERE id = ?`, [req.params.id], () => {
+                res.redirect('/admin');
+            });
         });
     });
 });
