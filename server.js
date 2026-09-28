@@ -453,12 +453,52 @@ app.get('/admin', (req, res) => {
                         let cRows = courses.map(c => `<tr><td>${c.code}</td><td>${c.title}</td><td>${c.credit_hours}</td><td>${c.class_level}</td><td>${c.teacher_name||'-'}</td>
                             <td><a href="/admin/delete-course/${c.id}?lang=${lang}" onclick="return confirm('Delete this course?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td></tr>`).join('');
 
+                        // Group sections by Grade categories for Director Weekly Period Hub
+                        let filterCategory = req.query.cat || '1-4';
+                        let filteredSections = sections.filter(sec => {
+                            let match = sec.name.match(/Grade\s+(\d+)/i);
+                            if (!match) return false;
+                            let gNum = parseInt(match[1]);
+                            if (filterCategory === '1-4') return gNum >= 1 && gNum <= 4;
+                            if (filterCategory === '5-8') return gNum >= 5 && gNum <= 8;
+                            if (filterCategory === '9-12') return gNum >= 9 && gNum <= 12;
+                            return false;
+                        });
+
+                        let periodHubRows = filteredSections.map(sec => {
+                            let classCourses = courses.filter(c => c.class_level === sec.name);
+                            let courseList = classCourses.map(cc => `<span style="display:inline-block; background:#e2e8f0; padding:3px 6px; border-radius:3px; margin:2px; font-size:11px;">${cc.title} (${cc.teacher_name || 'No Teacher'})</span>`).join('');
+                            return `<tr>
+                                <td><b>${sec.name}</b></td>
+                                <td>${sec.proctor_name || 'Not Assigned'}</td>
+                                <td style="text-align:left;">${courseList || 'No courses assigned yet'}</td>
+                                <td>
+                                    <a href="/attendance-sheet/${encodeURIComponent(sec.name)}" target="_blank" style="background:#2980b9; color:white; padding:5px 10px; text-decoration:none; border-radius:3px; font-weight:bold; font-size:12px; margin-right:5px;">Attendance</a>
+                                    <a href="/view-excel/${encodeURIComponent(sec.name)}" target="_blank" style="background:#107c41; color:white; padding:5px 10px; text-decoration:none; border-radius:3px; font-weight:bold; font-size:12px;">Grades</a>
+                                </td>
+                            </tr>`;
+                        }).join('');
+
                         res.send(`
                         <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Director Hub - Amanuel School</title>
                         <style>body{font-family:sans-serif; background:#eef2f5; padding:20px;} .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px; overflow-x:auto;} table{width:100%; border-collapse:collapse; min-width:600px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#2c3e50; color:white;} .btn{display:inline-block; padding:10px 14px; background:#16a085; color:white; text-decoration:none; border-radius:5px; font-weight:bold; margin-right:10px;} input,select{padding:6px;} textarea{width:100%; padding:10px; border-radius:5px; border:1px solid #ccc; margin-bottom:10px;}</style></head>
                         <body>
                             <div style="text-align:right;"><a href="/admin?lang=am">አማርኛ</a> | <a href="/admin?lang=en">English</a></div>
                             <h2><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 10px;"> 🔐 ${t.title}</h2>
+
+                            <div class="card" style="background:#fff3cd; border:1px solid #ffeeba;">
+                                <h3>📅 Director Weekly Class Period Hub (የክፍል ጊዜ ሰሌዳ እና መርሃ-ግብር ማዕከል)</h3>
+                                <p style="font-size:13px; color:#555;">የደረጃዎችን ክፍሎች በመምረጥ መርሃ-ግብራቸውን እና መምህራኖቻቸውን ይከታተሉ:</p>
+                                <div style="margin-bottom:15px;">
+                                    <a href="/admin?cat=1-4" style="padding:8px 15px; background:${filterCategory==='1-4'?'#1f4e79':'#ccc'}; color:white; text-decoration:none; border-radius:4px; font-weight:bold; margin-right:5px;">Grade 1 - 4</a>
+                                    <a href="/admin?cat=5-8" style="padding:8px 15px; background:${filterCategory==='5-8'?'#1f4e79':'#ccc'}; color:white; text-decoration:none; border-radius:4px; font-weight:bold; margin-right:5px;">Grade 5 - 8</a>
+                                    <a href="/admin?cat=9-12" style="padding:8px 15px; background:${filterCategory==='9-12'?'#1f4e79':'#ccc'}; color:white; text-decoration:none; border-radius:4px; font-weight:bold;">Grade 9 - 12</a>
+                                </div>
+                                <table>
+                                    <tr><th>Class Section</th><th>Proctor / Monitor</th><th>Assigned Courses & Teachers</th><th>Quick Actions</th></tr>
+                                    ${periodHubRows || '<tr><td colspan="4">No sections found in this category.</td></tr>'}
+                                </table>
+                            </div>
 
                             <div class="card" style="background:#e8f4fd;">
                                 <h3>📢 ${t.noti}</h3>
@@ -869,7 +909,6 @@ app.get('/admin/delete-student/:id', (req, res) => {
     });
 });
 
-// Teachers Management by Director (Add, Remove, Assign Grades/Classes)
 app.post('/admin/add-teacher', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     let { name, phone, assigned_sections } = req.body;
@@ -1030,7 +1069,7 @@ app.get('/teacher-dashboard', (req, res) => {
                         ${selectedClass ? `
                         <div style="margin-bottom:15px;">
                             <a href="/attendance-sheet/${encodeURIComponent(selectedClass)}" target="_blank" style="background:#2980b9; color:white; padding:10px; display:inline-block; border-radius:5px; text-decoration:none; margin-right:10px; font-weight:bold;">📋 Daily Attendance Sheet (${selectedClass})</a>
-                            <a href="/view-excel/${encodeURIComponent(selectedClass)}" target="_blank" style="background:#107c41; color:white; padding:10px; display:inline-block; border-radius:5px; text-decoration:none; font-weight:bold;">📊 View Grades & Ranking (${selectedClass})</a>
+                            <a href="/view-excel/${encodeURIComponent(selectedClass)}" target="_blank" style="background:#107c41; color:white; padding:10px; display:inline-block; border-radius:5px; text-decoration:none; font-weight:bold;">📊 View Grades (${selectedClass})</a>
                         </div>
 
                         <div style="display:flex; gap:20px; flex-wrap:wrap;">
