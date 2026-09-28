@@ -291,12 +291,12 @@ app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 },
             let photoPath = (req.files && req.files['student_photo']) ? req.files['student_photo'][0].filename : '';
             let slipPath = payment_type === 'slip_file' && (req.files && req.files['bank_slip_file']) ? req.files['bank_slip_file'][0].filename : txn_id;
 
-            db.run(`INSERT INTO pending_students (student_id, password, name, father_name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-            [autoID, autoPIN, name, '', mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, assignedSection, payment_type, slipPath, photoPath], function(err) {
+            db.run(`INSERT INTO pending_students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            [autoID, autoPIN, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, assignedSection, payment_type, slipPath, photoPath], function(err) {
                 
                 if (err) {
                     console.error("Database Insert Error:", err);
-                    return res.send(`<div style="text-align:center; padding:40px; font-family:sans-serif;"><h3 style="color:red;">❌ የዳታቤዝ ስህተት አጋጥሟል። እባክዎ እንደገና ይሞክሩ!</h3><br><a href="/student-register?lang=${lang}">ወደ ኋላ ተመለስ (Back)</a></div>`);
+                    return res.send(`<div style="text-align:center; padding:40px; font-family:sans-serif;"><h3 style="color:red;">❌ የዳታቤዝ ስህተት አጋጥሟል: ${err.message}</h3><br><a href="/student-register?lang=${lang}">ወደ ኋላ ተመለስ (Back)</a></div>`);
                 }
 
                 const t = lang === 'en' ? {
@@ -453,7 +453,6 @@ app.get('/admin', (req, res) => {
                         let cRows = courses.map(c => `<tr><td>${c.code}</td><td>${c.title}</td><td>${c.credit_hours}</td><td>${c.class_level}</td><td>${c.teacher_name||'-'}</td>
                             <td><a href="/admin/delete-course/${c.id}?lang=${lang}" onclick="return confirm('Delete this course?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td></tr>`).join('');
 
-                        // Group sections by Grade categories for Director Weekly Period Hub
                         let filterCategory = req.query.cat || '1-4';
                         let filteredSections = sections.filter(sec => {
                             let match = sec.name.match(/Grade\s+(\d+)/i);
