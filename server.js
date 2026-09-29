@@ -17,13 +17,13 @@ if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
     fs.mkdirSync(path.join(__dirname, 'uploads'));
 }
 
-// አዲሱ የ Neon Database ማገናኛ
+// የ Neon Database ማገናኛ
 const pool = new Pool({
     connectionString: 'postgresql://neondb_owner:npg_x2bqlnw8jFaK@ep-hidden-math-zaduj97x-pooler.c-2.eu-west-2.aws.neon.tech/neondb?sslmode=require',
     ssl: { rejectUnauthorized: false }
 });
 
-// የድሮው የ SQLite ኮዶች ሳይበላሹ ከ PostgreSQL ጋር እንዲሰሩ የሚያደርግ (Database Wrapper)
+// የድሮው የ SQLite ኮዶች ሳይበላሹ ከ PostgreSQL ጋር እንዲሰሩ የሚያደርግ 
 const db = {
     run: (sql, params, callback) => {
         if (typeof params === 'function') { callback = params; params = []; }
@@ -222,21 +222,29 @@ app.get('/', (req, res) => {
 });
 
 app.get('/forgot-password', (req, res) => {
-    const lang = req.query.lang || 'am';
+    const lang = req.query.lang === 'en' ? 'en' : 'am';
+    const t = lang === 'en' ? {
+        title: "🔑 Reset My Password", desc: "Enter your phone number and your mother's name exactly as you registered them.",
+        ph: "Phone Number", mom: "Mother's Name", btn: "Reset Password", back: "Back to Login"
+    } : {
+        title: "🔑 የይለፍ ቃል ዳግም አስጀምር", desc: "በምዝገባ ጊዜ የተጠቀሙበትን ስልክ ቁጥር እና የእናትዎን ስም በትክክል ያስገቡ።",
+        ph: "ስልክ ቁጥር", mom: "የእናት ስም", btn: "የይለፍ ቃል ዳግም አስጀምር", back: "ወደ መግቢያ ተመለስ"
+    };
+
     res.send(`
     <!DOCTYPE html><html lang="${lang}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Reset Password</title>
     <style>body{font-family:sans-serif; background:#f4f7f6; padding:20px;} .box{max-width:400px; margin:auto; background:white; padding:30px; border-radius:10px; box-shadow:0 4px 10px rgba(0,0,0,0.1); text-align:center;} input,button{width:100%; padding:12px; margin-bottom:15px; border-radius:5px; border:1px solid #ccc; font-size:16px;} button{background:#8e44ad; color:white; font-weight:bold; cursor:pointer; border:none;}</style>
     </head><body>
         <div class="box">
             <img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="width: 80px; height: 80px; display: block; margin: 0 auto 10px; border-radius: 50%;">
-            <h2>🔑 የይለፍ ቃል ዳግም አስጀምር</h2>
-            <p style="color:#666; font-size:14px;">በምዝገባ ጊዜ የተጠቀሙበትን ስልክ ቁጥር እና የእናትዎን ስም ያስገቡ።</p>
+            <h2>${t.title}</h2>
+            <p style="color:#666; font-size:14px;">${t.desc}</p>
             <form action="/api/forgot-password?lang=${lang}" method="POST">
-                <input type="text" name="phone" placeholder="ስልክ ቁጥር (Phone Number)" required>
-                <input type="text" name="mother_name" placeholder="የእናት ስም (Mother's Name)" required>
-                <button type="submit">የይለፍ ቃል ዳግም አስጀምር</button>
+                <input type="text" name="phone" placeholder="${t.ph}" required>
+                <input type="text" name="mother_name" placeholder="${t.mom}" required>
+                <button type="submit">${t.btn}</button>
             </form>
-            <a href="/?lang=${lang}">ወደ መግቢያ ተመለስ</a>
+            <a href="/?lang=${lang}">${t.back}</a>
         </div>
     </body></html>`);
 });
@@ -256,7 +264,21 @@ app.post('/api/forgot-password', (req, res) => {
 });
 
 app.get('/student-register', (req, res) => {
-    const lang = req.query.lang || 'am';
+    const lang = req.query.lang === 'en' ? 'en' : 'am';
+    const t = lang === 'en' ? {
+        title: "📝 Student Registration Form", name: "Full Name:", mot: "Mother's Name:",
+        gen: "Gender:", m: "Male", f: "Female", age: "Age:", ph: "Phone:", eph: "Emergency Phone:", reg: "Region:",
+        zon: "Zone:", wor: "Woreda:", keb: "Kebele:", yr: "Grade Level:",
+        pic: "Passport Photo:", pay: "Payment Type:", t1: "Transaction ID", t2: "Upload Slip", btn: "Submit Registration", back: "Back to Login",
+        loading: "⏳ Loading... Please wait", amharic: "አማርኛ", english: "English"
+    } : {
+        title: "📝 የተማሪዎች ምዝገባ ፎርም", name: "ሙሉ ስም:", mot: "የእናት ስም:",
+        gen: "ጾታ:", m: "ወንድ", f: "ሴት", age: "ዕድሜ:", ph: "ስልክ:", eph: "የአደጋ ጊዜ ተጠሪ:", reg: "ክልል:",
+        zon: "ዞን:", wor: "ወረዳ:", keb: "ቀበሌ:", yr: "የክፍል ደረጃ (Grade):",
+        pic: "ጉርድ ፎቶ:", pay: "የክፍያ ማረጋገጫ:", t1: "የትራንዛክሽን ቁጥር", t2: "የደረሰኝ ፎቶ ያያይዙ", btn: "ምዝገባ ላክ (Submit)", back: "ወደ ኋላ (Back)",
+        loading: "⏳ እባክዎ ይጠብቁ... (Loading)", amharic: "አማርኛ", english: "English"
+    };
+
     let gradeOptions = '';
     for(let i=1; i<=12; i++) gradeOptions += `<option value="Grade ${i}">Grade ${i}</option>`;
 
@@ -265,24 +287,24 @@ app.get('/student-register', (req, res) => {
     <style>body{font-family:sans-serif; background:#eef2f5; padding:15px;} .box{max-width:600px; margin:auto; background:white; padding:25px; border-radius:10px;} input,select{width:100%; padding:10px; margin:5px 0 15px; border:1px solid #ccc; border-radius:5px;} .row{display:flex; gap:10px;} .col{flex:1;} button{width:100%; padding:12px; background:#27ae60; color:white; font-weight:bold; border:none; border-radius:5px; cursor:pointer;} button:disabled {background:#95a5a6;}</style>
     </head><body>
         <div class="box">
-            <div style="text-align:right;"><a href="/student-register?lang=am">አማርኛ</a> | <a href="/student-register?lang=en">English</a></div>
+            <div style="text-align:right;"><a href="/student-register?lang=am">${t.amharic}</a> | <a href="/student-register?lang=en">${t.english}</a></div>
             <img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="width: 80px; height: 80px; display: block; margin: 0 auto 10px; border-radius: 50%;">
-            <h2>📝 የተማሪዎች ምዝገባ ፎርም</h2>
-            <form action="/api/register?lang=${lang}" method="POST" enctype="multipart/form-data" onsubmit="document.getElementById('subBtn').disabled=true; document.getElementById('subBtn').innerText='⏳ እባክዎ ይጠብቁ... (Loading)';">
-                <div class="row"><div class="col"><label>ሙሉ ስም:</label><input type="text" name="name" required></div><div class="col"><label>የእናት ስም:</label><input type="text" name="mother_name" required></div></div>
-                <div class="row"><div class="col"><label>ጾታ:</label><select name="gender"><option value="Male">ወንድ</option><option value="Female">ሴት</option></select></div><div class="col"><label>ዕድሜ:</label><input type="number" name="age" required></div></div>
-                <div class="row"><div class="col"><label>ስልክ:</label><input type="text" name="phone" required></div><div class="col"><label>የአደጋ ጊዜ ተጠሪ:</label><input type="text" name="emergency_phone" required></div></div>
-                <div class="row"><div class="col"><label>ክልል:</label><input type="text" name="region" required></div><div class="col"><label>ዞን:</label><input type="text" name="zone" required></div></div>
-                <div class="row"><div class="col"><label>ወረዳ:</label><input type="text" name="woreda" required></div><div class="col"><label>ቀበሌ:</label><input type="text" name="kebele" required></div></div>
-                <label>የክፍል ደረጃ (Grade):</label><select name="year_level">${gradeOptions}</select>
-                <label>ጉርድ ፎቶ:</label><input type="file" name="student_photo" accept="image/*" required>
-                <label>የክፍያ ማረጋገጫ:</label><select name="payment_type" id="payType" onchange="document.getElementById('slipBox').style.display = this.value=='slip_file'?'block':'none'; document.getElementById('txnBox').style.display = this.value=='txn_id'?'block':'none';">
-                    <option value="txn_id">የትራንዛክሽን ቁጥር</option><option value="slip_file">የደረሰኝ ፎቶ ያያይዙ</option>
+            <h2>${t.title}</h2>
+            <form action="/api/register?lang=${lang}" method="POST" enctype="multipart/form-data" onsubmit="document.getElementById('subBtn').disabled=true; document.getElementById('subBtn').innerText='${t.loading}';">
+                <div class="row"><div class="col"><label>${t.name}</label><input type="text" name="name" required></div><div class="col"><label>${t.mot}</label><input type="text" name="mother_name" required></div></div>
+                <div class="row"><div class="col"><label>${t.gen}</label><select name="gender"><option value="Male">${t.m}</option><option value="Female">${t.f}</option></select></div><div class="col"><label>${t.age}</label><input type="number" name="age" required></div></div>
+                <div class="row"><div class="col"><label>${t.ph}</label><input type="text" name="phone" required></div><div class="col"><label>${t.eph}</label><input type="text" name="emergency_phone" required></div></div>
+                <div class="row"><div class="col"><label>${t.reg}</label><input type="text" name="region" required></div><div class="col"><label>${t.zon}</label><input type="text" name="zone" required></div></div>
+                <div class="row"><div class="col"><label>${t.wor}</label><input type="text" name="woreda" required></div><div class="col"><label>${t.keb}</label><input type="text" name="kebele" required></div></div>
+                <label>${t.yr}</label><select name="year_level">${gradeOptions}</select>
+                <label>${t.pic}</label><input type="file" name="student_photo" accept="image/*" required>
+                <label>${t.pay}</label><select name="payment_type" id="payType" onchange="document.getElementById('slipBox').style.display = this.value=='slip_file'?'block':'none'; document.getElementById('txnBox').style.display = this.value=='txn_id'?'block':'none';">
+                    <option value="txn_id">${t.t1}</option><option value="slip_file">${t.t2}</option>
                 </select>
                 <div id="txnBox"><input type="text" name="txn_id" placeholder="Transaction ID"></div>
                 <div id="slipBox" style="display:none;"><input type="file" name="bank_slip_file" accept="image/*,.pdf"></div>
-                <button type="submit" id="subBtn">ምዝገባ ላክ (Submit)</button>
-            </form><br><a href="/?lang=${lang}">ወደ ኋላ (Back)</a>
+                <button type="submit" id="subBtn">${t.btn}</button>
+            </form><br><a href="/?lang=${lang}">⬅️ ${t.back}</a>
         </div>
     </body></html>`);
 });
@@ -389,6 +411,7 @@ app.get('/admin', (req, res) => {
     const lang = req.query.lang || 'am';
 
     db.all(`SELECT * FROM pending_students`, [], (err, pending) => {
+        // Optimized: only select what's needed for admin list to speed up load time
         db.all(`SELECT student_id, name, class_level, phone, password, status FROM students ORDER BY class_level`, [], (err, students) => {
             db.all(`SELECT * FROM teachers`, [], (err, teachers) => {
                 db.all(`SELECT * FROM sections ORDER BY name`, [], (err, sections) => {
@@ -916,6 +939,7 @@ app.get('/student-dashboard', (req, res) => {
     if (!req.session.studentId) return res.redirect('/');
     
     db.get(`SELECT s.* FROM students s WHERE s.student_id = ?`, [req.session.studentId], (err, student) => {
+        
         db.all(`SELECT * FROM courses ORDER BY id`, [], (err, allCourses) => {
             let myCourses = allCourses.filter(c => isClassMatch(c.class_level, student.class_level));
             
@@ -940,7 +964,7 @@ app.get('/student-dashboard', (req, res) => {
                                 ${ab.teacher_feedback ? `<span style="color:green; font-weight:bold;">💬 Teacher Reply: ${ab.teacher_feedback}</span>` : `<span style="color:orange;">⏳ Pending teacher response...</span>`}
                             </div>`).join('');
 
-                            // Grades Table mapping over the 10 courses
+                            // Grades Table specifically mapping over the courses
                             let gradesHtml = myCourses.map(c => {
                                 let asm = myGrades.find(a => a.course_code === c.code) || {};
                                 return `<tr>
@@ -1268,6 +1292,54 @@ app.get('/view-excel/:secName', (req, res) => {
                     ${sRows||'<tr><td colspan="7">No students found in this class.</td></tr>'}
                 </table>
             </body></html>`);
+        });
+    });
+});
+
+app.get('/download-id-pdf/:id', (req, res) => {
+    db.get(`SELECT * FROM students WHERE student_id = ?`, [req.params.id], (err, student) => {
+        if (!student) return res.send('Student not found');
+
+        const doc = new PDFDocument({ size: [400, 260], margin: 0 });
+        res.setHeader('Content-Type', 'application/pdf'); 
+        res.setHeader('Content-Disposition', `attachment; filename=ID-${student.student_id}.pdf`);
+        doc.pipe(res);
+
+        doc.rect(0, 0, 400, 260).fill('#fdfefe');
+        doc.rect(4, 4, 392, 252).lineWidth(1.5).strokeColor('#1f4e79').stroke();
+        doc.rect(4, 4, 392, 46).fill('#1f4e79');
+        
+        let schoolLogo = path.join(__dirname, 'uploads', 'logo.jpg');
+        if (fs.existsSync(schoolLogo)) {
+            doc.image(schoolLogo, 10, 8, { width: 38, height: 38 });
+        } else {
+            doc.circle(30, 27, 16).fill('#ffffff');
+            doc.fontSize(12).fillColor('#1f4e79').text('ALLS', 14, 20);
+        }
+
+        doc.fontSize(12).fillColor('#ffffff').text('AMANUEL LIGHT AND LIFE SCHOOL', 55, 12, { width: 300 });
+        doc.fontSize(8.5).fillColor('#f4d03f').text('OFFICIAL DIGITAL STUDENT ID CARD', 55, 30, { width: 300 });
+
+        let photoFile = path.join(__dirname, 'uploads', student.photo || '');
+        doc.rect(18, 60, 84, 100).lineWidth(1).strokeColor('#1f4e79').stroke();
+        if (student.photo && fs.existsSync(photoFile)) doc.image(photoFile, 20, 62, { width: 80, height: 96 });
+
+        doc.fontSize(10).fillColor('#000');
+        doc.font('Helvetica-Bold').text(`${student.name}`, 115, 62, { width: 260 });
+        doc.font('Helvetica').fontSize(9);
+        doc.text(`ID No: ${student.student_id}`, 115, 80);
+        doc.text(`Class: ${student.class_level}`, 115, 96);
+        doc.text(`Phone: ${student.phone}`, 115, 112);
+        doc.fillColor('#27ae60').font('Helvetica-Bold').text(`Status: ${student.status || 'Approved'}`, 115, 128);
+
+        doc.rect(4, 170, 392, 20).fill('#eef2f5');
+        doc.fontSize(7.5).fillColor('#555').text('This card is property of Amanuel Light and Life School. If found, please return to the office.', 12, 176, { width: 376, align: 'center' });
+
+        let qrData = `Name: ${student.name}\nID: ${student.student_id}\nGender: ${student.gender}\nClass: ${student.class_level}\nPhone: ${student.phone}`;
+
+        bwipjs.toBuffer({ bcid: 'qrcode', text: qrData, scale: 3 }, function (err, png) {
+            if (!err) doc.image(png, 172.5, 195, { width: 55, height: 55 });
+            doc.end();
         });
     });
 });
