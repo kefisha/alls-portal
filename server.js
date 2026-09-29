@@ -42,6 +42,10 @@ db.serialize(() => {
         id TEXT PRIMARY KEY, name TEXT, password TEXT, phone TEXT, assigned_sections TEXT, assigned_grades TEXT, is_proctor INTEGER DEFAULT 0
     )`);
 
+    db.run(`CREATE TABLE IF NOT EXISTS assessments (
+        student_id TEXT PRIMARY KEY, quiz REAL, mid REAL, final REAL, total REAL, remark TEXT
+    )`);
+
     db.run(`CREATE TABLE IF NOT EXISTS course_assessments (
         id INTEGER PRIMARY KEY AUTOINCREMENT, student_id TEXT, teacher_id TEXT, course_code TEXT, course_title TEXT, 
         quiz REAL, mid REAL, final REAL, total REAL, remark TEXT
@@ -113,7 +117,6 @@ function ensureSectionExists(secName) {
     db.run(`INSERT OR IGNORE INTO sections (name, proctor_name, proctor_phone) VALUES (?, '', '')`, [secName]);
 }
 
-// አዲስ ማሻሻያ፡- አድሚኑ "1A" ብሎ ቢመዘግብ እና ተማሪው "Grade 1 - Section A" ቢባል ሁለቱንም አንድ መሆናቸውን አውቆ የሚያገናኝ (Smart Matcher)
 function isClassMatch(c1, c2) {
     if (!c1 || !c2) return false;
     let s1 = c1.toString().toLowerCase().trim();
@@ -718,44 +721,46 @@ app.post('/admin/send-notification', (req, res) => {
         ['Admin', 'School Admin', 'ALL', req.body.message, new Date().toLocaleString()], () => res.redirect('/admin'));
 });
 
-// TEACHER DASHBOARD
+// TEACHER DASHBOARD - Advanced Dropdown Class & Course Selection
 app.get('/teacher-dashboard', (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
     
     db.get(`SELECT * FROM teachers WHERE id = ?`, [req.session.teacherId], (err, teacher) => {
         let assignedClasses = teacher.assigned_sections ? teacher.assigned_sections.split(',').map(s => s.trim()) : [];
-        let selectedClass = req.query.cls || assignedClasses[0] || '';
+        let selectedClass = (req.query.cls || assignedClasses[0] || '').trim();
 
         db.all(`SELECT * FROM students ORDER BY name ASC`, [], (err, allStudents) => {
             let studentsInClass = allStudents.filter(s => isClassMatch(s.class_level, selectedClass));
             
-            db.all(`SELECT * FROM course_assessments WHERE teacher_id = ?`, [req.session.teacherId], (err, assessments) => {
-                db.all(`SELECT * FROM courses WHERE teacher_id = ?`, [req.session.teacherId], (err, courses) => {
-                    let classCourses = courses.filter(c => isClassMatch(c.class_level, selectedClass));
-                    
+            db.all(`SELECT * FROM courses WHERE teacher_id = ?`, [req.session.teacherId], (err, courses) => {
+                let classCourses = courses.filter(c => isClassMatch(c.class_level, selectedClass));
+                let selectedCourseId = req.query.course_id || (classCourses.length > 0 ? classCourses[0].id : '');
+                let selectedCourse = classCourses.find(c => c.id.toString() === selectedCourseId.toString());
+
+                db.all(`SELECT * FROM course_assessments WHERE teacher_id = ? AND course_code = ?`, [req.session.teacherId, selectedCourse ? selectedCourse.code : ''], (err, assessments) => {
                     db.all(`SELECT * FROM absence_requests ORDER BY id DESC`, [], (err, allAbsences) => {
                         let classAbsences = allAbsences.filter(ab => isClassMatch(ab.class_level, selectedClass));
 
-                        let classTabs = assignedClasses.map(c => `<a href="/teacher-dashboard?cls=${encodeURIComponent(c)}" style="padding:8px 15px; background:${c===selectedClass?'#1f4e79':'#ccc'}; color:white; text-decoration:none; border-radius:4px; font-weight:bold; margin-right:5px; display:inline-block; margin-bottom:5px;">${c}</a>`).join('');
+                        let classOptions = assignedClasses.map(c => `<option value="${esc(c)}" ${c === selectedClass ? 'selected' : ''}>${c}</option>`).join('');
+                        let courseOptions = classCourses.map(c => `<option value="${c.id}" ${c.id.toString() === selectedCourseId.toString() ? 'selected' : ''}>${c.title} (${c.code})</option>`).join('');
 
                         let studentRows = studentsInClass.map((st, idx) => {
-                            let asm = assessments.find(a => a.student_id === st.student_id) || {};
+                            let asm = assessments ? assessments.find(a => a.student_id === st.student_id) || {} : {};
                             return `<tr>
                             <td><b>${idx + 1}</b></td>
                             <td>${st.student_id}</td><td>${st.name}</td>
-                            <form action="/teacher/save-grade?cls=${encodeURIComponent(selectedClass)}" method="POST"><input type="hidden" name="student_id" value="${st.student_id}">
-                            <td><input type="number" name="quiz" value="${asm.quiz||0}" min="0" max="20" style="width:50px;"></td>
-                            <td><input type="number" name="mid" value="${asm.mid||0}" min="0" max="30" style="width:50px;"></td>
-                            <td><input type="number" name="final" value="${asm.final||0}" min="0" max="50" style="width:50px;"></td>
+                            <form action="/teacher/save-grade?cls=${encodeURIComponent(selectedClass)}&course_id=${selectedCourseId}" method="POST">
+                            <input type="hidden" name="student_id" value="${st.student_id}">
+                            <td><input type="number" name="quiz" value="${asm.quiz!==undefined?asm.quiz:''}" min="0" max="20" style="width:50px;"></td>
+                            <td><input type="number" name="mid" value="${asm.mid!==undefined?asm.mid:''}" min="0" max="30" style="width:50px;"></td>
+                            <td><input type="number" name="final" value="${asm.final!==undefined?asm.final:''}" min="0" max="50" style="width:50px;"></td>
                             <td><strong>${asm.total||0}</strong></td>
-                            <td><button type="submit" style="background:#27ae60;color:white;border:none;padding:5px 10px; border-radius:3px; cursor:pointer;">💾 Save/Update</button></td></form></tr>`;
+                            <td><button type="submit" style="background:#27ae60;color:white;border:none;padding:5px 10px; border-radius:3px; cursor:pointer;">💾 Save / Update</button></td></form></tr>`;
                         }).join('');
 
-                        let courseRows = classCourses.map(c => `<tr><td>${c.code}</td><td>${c.title}</td><td>${c.credit_hours}</td></tr>`).join('');
-                        
                         let absRows = classAbsences.map(ab => `<div style="background:#fdf2e9; padding:10px; border-left:4px solid #e67e22; margin-bottom:10px;">
                             <strong>${ab.student_name} (${ab.student_id})</strong> - <em>${ab.created_at}</em><br>
-                            📝 <strong>Reason/መልዕክት:</strong> ${ab.reason}<br>
+                            📝 <strong>መልዕክት:</strong> ${ab.reason}<br>
                             ${ab.teacher_feedback ? `<span style="color:green; font-weight:bold;">💬 Your Feedback: ${ab.teacher_feedback}</span>` : `
                             <form action="/teacher/give-feedback?cls=${encodeURIComponent(selectedClass)}" method="POST" style="margin-top:5px; display:flex; gap:5px;">
                                 <input type="hidden" name="req_id" value="${ab.id}">
@@ -765,13 +770,26 @@ app.get('/teacher-dashboard', (req, res) => {
                         </div>`).join('');
 
                         res.send(`
-                        <div style="font-family:sans-serif; padding:20px; max-width:900px; margin:auto;">
+                        <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Teacher Dashboard</title>
+                        <style>body{font-family:sans-serif; background:#f4f7f6; padding:20px;} .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px; box-shadow:0 2px 5px rgba(0,0,0,0.1); overflow-x:auto;} table{width:100%; border-collapse:collapse; margin-top:10px; min-width:400px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#1f4e79; color:white;}</style></head>
+                        <body>
+                        <div style="max-width:900px; margin:auto;">
                             <h2><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 10px;">👨‍🏫 Teacher Portal: ${teacher.name}</h2>
                             
-                            <div style="margin:15px 0; background:#eef2f5; padding:10px; border-radius:5px;">
-                                <strong>Select Class to Manage:</strong><br><br>
-                                ${classTabs || '<p style="color:red;">No classes assigned to you yet.</p>'}
-                            </div>
+                            <form method="GET" action="/teacher-dashboard" style="background:#eef2f5; padding:15px; border-radius:5px; margin-bottom:15px; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+                                <div style="flex:1; min-width:200px;">
+                                    <label style="font-weight:bold;">1. ክፍል ምረጥ (Select Class):</label><br>
+                                    <select name="cls" onchange="this.form.submit()" style="width:100%; padding:8px; border-radius:4px; margin-top:5px;">
+                                        ${classOptions || '<option>No Classes Assigned</option>'}
+                                    </select>
+                                </div>
+                                <div style="flex:1; min-width:200px;">
+                                    <label style="font-weight:bold;">2. ትምህርት ምረጥ (Select Course):</label><br>
+                                    <select name="course_id" onchange="this.form.submit()" style="width:100%; padding:8px; border-radius:4px; margin-top:5px;">
+                                        ${courseOptions || '<option value="">No Courses Assigned for this Class</option>'}
+                                    </select>
+                                </div>
+                            </form>
 
                             ${selectedClass ? `
                             <div style="margin-bottom:15px;">
@@ -779,7 +797,7 @@ app.get('/teacher-dashboard', (req, res) => {
                             </div>
 
                             <div style="display:flex; gap:20px; flex-wrap:wrap;">
-                                <div style="background:#e8f4fd; padding:15px; border-radius:8px; margin-bottom:20px; flex:1; min-width:300px;">
+                                <div class="card" style="flex:1; min-width:300px;">
                                     <h3>📢 Send Notification to ${selectedClass}</h3>
                                     <form action="/teacher/send-notification?cls=${encodeURIComponent(selectedClass)}" method="POST">
                                         <textarea name="message" rows="3" placeholder="Write class notification here..." required style="width:100%; padding:10px; border-radius:5px; border:1px solid #ccc; margin-bottom:10px;"></textarea>
@@ -787,28 +805,20 @@ app.get('/teacher-dashboard', (req, res) => {
                                     </form>
                                 </div>
                                 
-                                <div style="background:white; padding:15px; border-radius:8px; margin-bottom:20px; flex:1; min-width:300px; max-height: 250px; overflow-y:auto; border:1px solid #ccc;">
+                                <div class="card" style="flex:1; min-width:300px; max-height: 250px; overflow-y:auto; border:1px solid #ccc;">
                                     <h3>📩 Student Requests & Absences (${selectedClass})</h3>${absRows || '<p style="color:#777;">No requests.</p>'}
                                 </div>
                             </div>
 
-                            <div style="background:white; padding:15px; border-radius:8px; margin-bottom:20px;">
-                                <h3>📚 Your Courses for ${selectedClass}</h3>
-                                <table border="1" style="border-collapse:collapse; width:100%; text-align:center; margin-bottom:15px;">
-                                    <tr style="background:#1f4e79; color:white;"><th>Code</th><th>Title</th><th>Credit Hours</th></tr>
-                                    ${courseRows || '<tr><td colspan="3">No courses added yet</td></tr>'}
-                                </table>
-                            </div>
-
                             <div style="overflow-x:auto;">
-                            <h3 style="background:#1f4e79; color:white; padding:10px; margin:0; border-top-left-radius:5px; border-top-right-radius:5px;">📝 Grades Assessment - ${selectedClass}</h3>
+                            <h3 style="background:#1f4e79; color:white; padding:10px; margin:0; border-top-left-radius:5px; border-top-right-radius:5px;">📝 የውጤት መሙያ (Grades) - ${selectedCourse ? selectedCourse.title : 'No Course Selected'}</h3>
                             <table border="1" width="100%" style="border-collapse:collapse; text-align:center; min-width:600px; background:white;">
                                 <tr style="background:#eef2f5;"><th>No</th><th>ID</th><th>Name</th><th>Quiz(20)</th><th>Mid(30)</th><th>Final(50)</th><th>Total</th><th>Action</th></tr>
-                                ${studentRows||'<tr><td colspan="8">No students in this class</td></tr>'}
+                                ${selectedCourse ? (studentRows || '<tr><td colspan="8">No students in this class</td></tr>') : '<tr><td colspan="8">Please select a course to enter grades.</td></tr>'}
                             </table></div>` : ''}
                             
-                            <br><a href="/logout" style="color:red; font-weight:bold; font-size:18px;">🔒 Logout</a>
-                        </div>`);
+                            <br><br><a href="/logout" style="color:red; font-weight:bold; font-size:18px;">🔒 Logout</a>
+                        </div></body></html>`);
                     });
                 });
             });
@@ -835,22 +845,28 @@ app.post('/teacher/give-feedback', (req, res) => {
 app.post('/teacher/save-grade', (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
     let targetClass = req.query.cls || '';
+    let courseId = req.query.course_id || '';
     let { student_id, quiz, mid, final } = req.body;
-    let total = (parseFloat(quiz)||0) + (parseFloat(mid)||0) + (parseFloat(final)||0);
+    
+    let q = parseFloat(quiz) || 0;
+    let m = parseFloat(mid) || 0;
+    let f = parseFloat(final) || 0;
+    let total = q + m + f;
     let remark = total >= 50 ? 'Pass' : 'Fail';
 
-    db.all(`SELECT * FROM courses WHERE teacher_id = ?`, [req.session.teacherId], (err, courses) => {
-        let course = courses.find(c => isClassMatch(c.class_level, targetClass));
-        let courseCode = course ? course.code : 'N/A';
-        let courseTitle = course ? course.title : 'N/A';
+    db.get(`SELECT * FROM courses WHERE id = ?`, [courseId], (err, course) => {
+        if(!course) return res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}`);
+        
+        let courseCode = course.code;
+        let courseTitle = course.title;
 
         db.get(`SELECT id FROM course_assessments WHERE student_id = ? AND teacher_id = ? AND course_code = ?`, [student_id, req.session.teacherId, courseCode], (err, row) => {
             if (row) {
                 db.run(`UPDATE course_assessments SET quiz=?, mid=?, final=?, total=?, remark=? WHERE id=?`, 
-                [quiz, mid, final, total, remark, row.id], () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}`));
+                [quiz, mid, final, total, remark, row.id], () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}&course_id=${courseId}`));
             } else {
                 db.run(`INSERT INTO course_assessments (student_id, teacher_id, course_code, course_title, quiz, mid, final, total, remark) VALUES (?,?,?,?,?,?,?,?,?)`,
-                [student_id, req.session.teacherId, courseCode, courseTitle, quiz, mid, final, total, remark], () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}`));
+                [student_id, req.session.teacherId, courseCode, courseTitle, quiz, mid, final, total, remark], () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}&course_id=${courseId}`));
             }
         });
     });
@@ -861,7 +877,6 @@ app.get('/student-dashboard', (req, res) => {
     if (!req.session.studentId) return res.redirect('/');
     
     db.get(`SELECT s.* FROM students s WHERE s.student_id = ?`, [req.session.studentId], (err, student) => {
-        
         db.all(`SELECT * FROM courses ORDER BY id`, [], (err, allCourses) => {
             let myCourses = allCourses.filter(c => isClassMatch(c.class_level, student.class_level));
             
@@ -888,13 +903,13 @@ app.get('/student-dashboard', (req, res) => {
 
                             // Grades Table mapping over the 10 courses
                             let gradesHtml = myCourses.map(c => {
-                                let asm = myGrades.find(a => a.teacher_id === c.teacher_id) || {};
+                                let asm = myGrades.find(a => a.course_code === c.code) || {};
                                 return `<tr>
                                     <td style="text-align:left;"><b>${c.title}</b><br><small style="color:#777;">Inst: ${c.teacher_name}</small></td>
-                                    <td>${asm.quiz || '-'}</td>
-                                    <td>${asm.mid || '-'}</td>
-                                    <td>${asm.final || '-'}</td>
-                                    <td><strong style="color:#27ae60;">${asm.total || '-'}</strong></td>
+                                    <td>${asm.quiz !== undefined ? asm.quiz : '-'}</td>
+                                    <td>${asm.mid !== undefined ? asm.mid : '-'}</td>
+                                    <td>${asm.final !== undefined ? asm.final : '-'}</td>
+                                    <td><strong style="color:#27ae60;">${asm.total !== undefined ? asm.total : '-'}</strong></td>
                                     <td>${asm.remark || '-'}</td>
                                 </tr>`;
                             }).join('');
@@ -1103,117 +1118,6 @@ app.post('/save-attendance', (req, res) => {
             stmt.finalize(() => {
                 res.send(`<script>alert('Attendance saved successfully!'); window.location.href='/teacher-dashboard';</script>`);
             });
-        });
-    });
-});
-
-app.get('/director-report', (req, res) => {
-    if (!req.session.isAdmin) return res.redirect('/');
-    db.all(`SELECT * FROM sections ORDER BY name`, [], (err, sections) => {
-        db.all(`SELECT * FROM students ORDER BY class_level`, [], (err, students) => {
-            db.all(`SELECT * FROM daily_attendance ORDER BY date DESC`, [], (err, attendanceRecords) => {
-                
-                const months = ["September", "October", "November", "December", "January", "February", "March", "April", "May"];
-                
-                let monthSections = months.map(m => {
-                    let sectionContent = sections.map(sec => {
-                        let classStudents = students.filter(s => isClassMatch(s.class_level, sec.name));
-                        let studentList = classStudents.map((s, idx) => {
-                            let rec = attendanceRecords.find(r => r.student_id === s.student_id);
-                            let statusBadge = rec ? (rec.status === 'Present' ? '✅ Present' : '❌ Absent') : 'Not Recorded';
-                            return `<tr><td>${idx+1}</td><td>${s.student_id}</td><td style="text-align:left;">${s.name}</td><td><b>${statusBadge}</b></td></tr>`;
-                        }).join('');
-                        
-                        return `<div style="margin-bottom:20px;">
-                            <h4 style="background:#34495e; color:white; padding:6px; margin:0;">Class: ${sec.name}</h4>
-                            <table border="1" width="100%" style="border-collapse:collapse; text-align:center; font-size:12px;">
-                                <tr style="background:#f2f2f2;"><th>No</th><th>ID</th><th>Full Name</th><th>Attendance Status</th></tr>
-                                ${studentList || '<tr><td colspan="4">No students</td></tr>'}
-                            </table>
-                        </div>`;
-                    }).join('');
-
-                    return `<div style="margin-bottom:40px; page-break-after: always;">
-                        <h2 style="background:#2c3e50; color:white; padding:10px; text-align:center;">📅 Academic Period / Month: ${m} (September - May)</h2>
-                        ${sectionContent}
-                    </div>`;
-                }).join('');
-
-                res.send(`
-                <!DOCTYPE html><html><head><meta charset="UTF-8"><title>Director Academic Year Report (Sept-May)</title>
-                <style>
-                    body { font-family: sans-serif; padding: 20px; background: white; }
-                    table th, table td { border: 1px solid #ccc; padding: 5px; }
-                    .header { text-align: center; margin-bottom: 20px; }
-                    button { background: #8e44ad; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; cursor: pointer; }
-                    @media print { button { display: none; } }
-                </style>
-                </head><body>
-                    <div class="header">
-                        <h2>AMANUEL LIGHT AND LIFE SCHOOL</h2>
-                        <h3>📁 Director Comprehensive Attendance Report (September to May)</h3>
-                        <button onclick="window.print()">🖨️ Print Full Report for Director</button>
-                    </div>
-                    ${monthSections}
-                    <br><br>
-                    <div style="display:flex; justify-content:space-between; font-weight:bold; margin-top:40px;">
-                        <p>Prepared by Registrar / Admin: ___________________</p>
-                        <p>Approved & Signed by Director: ___________________</p>
-                    </div>
-                </body></html>`);
-            });
-        });
-    });
-});
-
-app.get('/view-excel/:secName', (req, res) => {
-    if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
-    let sec = decodeURIComponent(req.params.secName);
-    
-    db.all(`SELECT * FROM students`, [], (err, allStudents) => {
-        let students = allStudents.filter(s => isClassMatch(s.class_level, sec));
-        
-        db.all(`SELECT * FROM course_assessments`, [], (err, assessments) => {
-            
-            students.forEach(st => {
-                let st_ass = assessments.filter(a => a.student_id === st.student_id);
-                st.cumulative_total = st_ass.reduce((sum, a) => sum + (a.total || 0), 0);
-            });
-            students.sort((a, b) => b.cumulative_total - a.cumulative_total);
-
-            let sRows = students.map((s, index) => `
-                <tr>
-                    <td><b>${index + 1}</b></td>
-                    <td>${s.student_id}</td>
-                    <td style="text-align:left;">${s.name}</td>
-                    <td>${s.gender}</td>
-                    <td>${s.age}</td>
-                    <td>${s.phone}</td>
-                    <td><b>${s.cumulative_total}</b></td>
-                </tr>
-            `).join('');
-
-            res.send(`
-            <!DOCTYPE html><html><head><meta charset="UTF-8"><title>Excel View - ${sec}</title>
-            <style>
-                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background: #f9f9f9; }
-                .excel-table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.2); font-size:14px; }
-                .excel-table th, .excel-table td { border: 1px solid #d4d4d4; padding: 6px 10px; text-align: center; }
-                .excel-table th { background: #107c41; color: white; position: sticky; top: 0; }
-                .excel-table tr:nth-child(even) { background: #f3f2f1; }
-                .header-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; }
-                button { background: #107c41; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight:bold; }
-            </style>
-            </head><body>
-                <div class="header-bar">
-                    <h2>📊 Class Grades & Ranking: ${sec} (Total: ${students.length})</h2>
-                    <div><button onclick="window.print()">🖨️ Print / Save PDF</button> <button onclick="window.close()">❌ Close</button></div>
-                </div>
-                <table class="excel-table">
-                    <tr><th>Rank</th><th>Student ID</th><th>Full Name</th><th>Gender</th><th>Age</th><th>Phone Number</th><th>Cumulative Total Score</th></tr>
-                    ${sRows||'<tr><td colspan="7">No students found in this class.</td></tr>'}
-                </table>
-            </body></html>`);
         });
     });
 });
