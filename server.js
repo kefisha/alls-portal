@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const PDFDocument = require('pdfkit');
 const bwipjs = require('bwip-js'); 
-const { Pool } = require('pg'); // አዲሱ የክላውድ ዳታቤዝ (PostgreSQL) ሞጁል
+const { Pool } = require('pg'); 
 
 process.on('uncaughtException', (err) => { console.error('CRITICAL ERROR:', err); });
 process.on('unhandledRejection', (reason, p) => { console.error('UNHANDLED REJECTION:', reason); });
@@ -23,7 +23,6 @@ const pool = new Pool({
     ssl: { rejectUnauthorized: false }
 });
 
-// የድሮው የ SQLite ኮዶች ሳይበላሹ ከ PostgreSQL ጋር እንዲሰሩ የሚያደርግ 
 const db = {
     run: (sql, params, callback) => {
         if (typeof params === 'function') { callback = params; params = []; }
@@ -48,7 +47,6 @@ const db = {
     }
 };
 
-// ሰንጠረዦችን (Tables) በ Cloud Database ላይ መፍጠር
 async function initDB() {
     try {
         await pool.query(`CREATE TABLE IF NOT EXISTS students (
@@ -270,13 +268,17 @@ app.get('/student-register', (req, res) => {
         gen: "Gender:", m: "Male", f: "Female", age: "Age:", ph: "Phone:", eph: "Emergency Phone:", reg: "Region:",
         zon: "Zone:", wor: "Woreda:", keb: "Kebele:", yr: "Grade Level:",
         pic: "Passport Photo:", pay: "Payment Type:", t1: "Transaction ID", t2: "Upload Slip", btn: "Submit Registration", back: "Back to Login",
-        loading: "⏳ Loading... Please wait", amharic: "አማርኛ", english: "English"
+        loading: "⏳ Loading... Please wait", amharic: "አማርኛ", english: "English",
+        accTitle: "💳 Payment Accounts", accDesc: "Please pay using the accounts below and enter the TXN ID or upload the slip.", 
+        accCbe: "CBE Bank:", accTele: "Telebirr:"
     } : {
         title: "📝 የተማሪዎች ምዝገባ ፎርም", name: "ሙሉ ስም:", mot: "የእናት ስም:",
         gen: "ጾታ:", m: "ወንድ", f: "ሴት", age: "ዕድሜ:", ph: "ስልክ:", eph: "የአደጋ ጊዜ ተጠሪ:", reg: "ክልል:",
         zon: "ዞን:", wor: "ወረዳ:", keb: "ቀበሌ:", yr: "የክፍል ደረጃ (Grade):",
-        pic: "ጉርድ ፎቶ:", pay: "የክፍያ ማረጋገጫ:", t1: "የትራንዛክሽን ቁጥር", t2: "የደረሰኝ ፎቶ ያያይዙ", btn: "ምዝገባ ላክ (Submit)", back: "ወደ ኋላ (Back)",
-        loading: "⏳ እባክዎ ይጠብቁ... (Loading)", amharic: "አማርኛ", english: "English"
+        pic: "ጉርድ ፎቶ:", pay: "የክፍያ ማረጋገጫ:", t1: "የትራንዛክሽን ቁጥር (TXN ID)", t2: "የደረሰኝ ፎቶ ያያይዙ", btn: "ምዝገባ ላክ (Submit)", back: "ወደ ኋላ (Back)",
+        loading: "⏳ እባክዎ ይጠብቁ... (Loading)", amharic: "አማርኛ", english: "English",
+        accTitle: "💳 የክፍያ አካውንቶች", accDesc: "ክፍያዎን ከታች ባሉት አካውንቶች ከፈጸሙ በኋላ የትራንዛክሽን ቁጥሩን ወይም ደረሰኙን ከታች ያስገቡ።", 
+        accCbe: "CBE (ንግድ ባንክ):", accTele: "Telebirr (ቴሌብር):"
     };
 
     let gradeOptions = '';
@@ -290,6 +292,14 @@ app.get('/student-register', (req, res) => {
             <div style="text-align:right;"><a href="/student-register?lang=am">${t.amharic}</a> | <a href="/student-register?lang=en">${t.english}</a></div>
             <img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="width: 80px; height: 80px; display: block; margin: 0 auto 10px; border-radius: 50%;">
             <h2>${t.title}</h2>
+            
+            <div style="background:#d4edda; padding:15px; border-radius:5px; margin-bottom:20px; border:1px solid #c3e6cb; color:#155724;">
+                <h4 style="margin-top:0; margin-bottom:10px;">${t.accTitle}</h4>
+                <p style="margin:5px 0; font-size:16px;"><strong>${t.accCbe}</strong> 1000185928498</p>
+                <p style="margin:5px 0; font-size:16px;"><strong>${t.accTele}</strong> 0916529382</p>
+                <p style="margin:8px 0 0 0; font-size:13px; color:#555;">${t.accDesc}</p>
+            </div>
+
             <form action="/api/register?lang=${lang}" method="POST" enctype="multipart/form-data" onsubmit="document.getElementById('subBtn').disabled=true; document.getElementById('subBtn').innerText='${t.loading}';">
                 <div class="row"><div class="col"><label>${t.name}</label><input type="text" name="name" required></div><div class="col"><label>${t.mot}</label><input type="text" name="mother_name" required></div></div>
                 <div class="row"><div class="col"><label>${t.gen}</label><select name="gender"><option value="Male">${t.m}</option><option value="Female">${t.f}</option></select></div><div class="col"><label>${t.age}</label><input type="number" name="age" required></div></div>
@@ -301,7 +311,7 @@ app.get('/student-register', (req, res) => {
                 <label>${t.pay}</label><select name="payment_type" id="payType" onchange="document.getElementById('slipBox').style.display = this.value=='slip_file'?'block':'none'; document.getElementById('txnBox').style.display = this.value=='txn_id'?'block':'none';">
                     <option value="txn_id">${t.t1}</option><option value="slip_file">${t.t2}</option>
                 </select>
-                <div id="txnBox"><input type="text" name="txn_id" placeholder="Transaction ID"></div>
+                <div id="txnBox"><input type="text" name="txn_id" placeholder="Transaction ID (የትራንዛክሽን ቁጥር)"></div>
                 <div id="slipBox" style="display:none;"><input type="file" name="bank_slip_file" accept="image/*,.pdf"></div>
                 <button type="submit" id="subBtn">${t.btn}</button>
             </form><br><a href="/?lang=${lang}">⬅️ ${t.back}</a>
@@ -313,30 +323,40 @@ app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 },
     const lang = req.query.lang || 'am';
     try {
         let { name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, year_level, payment_type, txn_id } = req.body;
-        let autoID = generateStudentID(); 
-        let autoPIN = generate4DigitPIN();
+        
+        // Prevent Duplicate Registration
+        db.get(`SELECT student_id FROM students WHERE name = ? AND mother_name = ? UNION SELECT student_id FROM pending_students WHERE name = ? AND mother_name = ?`, 
+        [name, mother_name, name, mother_name], (err, existingUser) => {
+            if (existingUser) {
+                const errMsg = lang === 'en' ? "❌ You are already registered!" : "❌ አስቀድመው ተመዝግበዋል! (ተደጋጋሚ ምዝገባ አይቻልም)";
+                return res.send(`<div style="text-align:center; padding:40px; font-family:sans-serif;"><h3 style="color:red;">${errMsg}</h3><a href="/student-register?lang=${lang}">⬅️ Back / ተመለስ</a></div>`);
+            }
 
-        assignClassSection(year_level, (assignedSection) => {
-            let photoPath = (req.files && req.files['student_photo']) ? req.files['student_photo'][0].filename : '';
-            let slipPath = payment_type === 'slip_file' && (req.files && req.files['bank_slip_file']) ? req.files['bank_slip_file'][0].filename : txn_id;
+            let autoID = generateStudentID(); 
+            let autoPIN = generate4DigitPIN();
 
-            db.get(`INSERT INTO pending_students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING student_id`,
-            [autoID, autoPIN, name, mother_name || '', gender || '', age || null, phone || '', emergency_phone || '', region || '', zone || '', woreda || '', kebele || '', assignedSection, payment_type, slipPath, photoPath], function(err, row) {
-                if (err) return res.send(`<div style="text-align:center; padding:40px;"><h3 style="color:red;">❌ የዳታቤዝ ስህተት አጋጥሟል!</h3><p>${err.message}</p><a href="/student-register">Back</a></div>`);
-                
-                let insertedId = row ? row.student_id : autoID;
-                const msg = lang === 'en' ? "Request Sent! Sent to Admin for review." : "ጥያቄዎ ለአድሚን ገምጋሚ ተልኳል።";
-                res.send(`
-                <div style="text-align:center; padding:40px; font-family:sans-serif;">
-                    <h2 style="color:green;">✅ ${lang === 'en' ? 'Success!' : 'ተሳክቷል!'}</h2>
-                    <div style="background:#eef2f5; display:inline-block; padding:20px; border-radius:8px; text-align:left;">
-                        <p><strong>Class:</strong> ${assignedSection}</p>
-                        <p><strong>ID Number:</strong> <span style="color:red; font-size:20px;">${autoID}</span></p>
-                        <p><strong>Password PIN:</strong> <span style="color:red; font-size:20px;">${autoPIN}</span></p>
-                        <p style="color:#e67e22; font-size:13px;">⏳ ${msg}</p>
-                        <p><a href="/download-pending-slip/${insertedId}" style="background:#e67e22; color:white; padding:10px; text-decoration:none; border-radius:5px;">📥 Download PDF</a></p>
-                    </div><br><br><a href="/?lang=${lang}">Home</a>
-                </div>`);
+            assignClassSection(year_level, (assignedSection) => {
+                let photoPath = (req.files && req.files['student_photo']) ? req.files['student_photo'][0].filename : '';
+                let slipPath = payment_type === 'slip_file' && (req.files && req.files['bank_slip_file']) ? req.files['bank_slip_file'][0].filename : txn_id;
+
+                db.get(`INSERT INTO pending_students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING student_id`,
+                [autoID, autoPIN, name, mother_name || '', gender || '', age || null, phone || '', emergency_phone || '', region || '', zone || '', woreda || '', kebele || '', assignedSection, payment_type, slipPath, photoPath], function(err, row) {
+                    if (err) return res.send(`<div style="text-align:center; padding:40px;"><h3 style="color:red;">❌ የዳታቤዝ ስህተት አጋጥሟል!</h3><p>${err.message}</p><a href="/student-register">Back</a></div>`);
+                    
+                    let insertedId = row ? row.student_id : autoID;
+                    const msg = lang === 'en' ? "Request Sent! Sent to Admin for review." : "ጥያቄዎ ለአድሚን ገምጋሚ ተልኳል።";
+                    res.send(`
+                    <div style="text-align:center; padding:40px; font-family:sans-serif;">
+                        <h2 style="color:green;">✅ ${lang === 'en' ? 'Success!' : 'ተሳክቷል!'}</h2>
+                        <div style="background:#eef2f5; display:inline-block; padding:20px; border-radius:8px; text-align:left;">
+                            <p><strong>Class:</strong> ${assignedSection}</p>
+                            <p><strong>ID Number:</strong> <span style="color:red; font-size:20px;">${autoID}</span></p>
+                            <p><strong>Password PIN:</strong> <span style="color:red; font-size:20px;">${autoPIN}</span></p>
+                            <p style="color:#e67e22; font-size:13px;">⏳ ${msg}</p>
+                            <p><a href="/download-pending-slip/${insertedId}" style="background:#e67e22; color:white; padding:10px; text-decoration:none; border-radius:5px;">📥 Download PDF</a></p>
+                        </div><br><br><a href="/?lang=${lang}">Home</a>
+                    </div>`);
+                });
             });
         });
     } catch (error) {
@@ -411,13 +431,16 @@ app.get('/admin', (req, res) => {
     const lang = req.query.lang || 'am';
 
     db.all(`SELECT * FROM pending_students`, [], (err, pending) => {
-        // Optimized: only select what's needed for admin list to speed up load time
         db.all(`SELECT student_id, name, class_level, phone, password, status FROM students ORDER BY class_level`, [], (err, students) => {
             db.all(`SELECT * FROM teachers`, [], (err, teachers) => {
                 db.all(`SELECT * FROM sections ORDER BY name`, [], (err, sections) => {
                     db.all(`SELECT * FROM courses ORDER BY class_level, code`, [], (err, courses) => {
 
-                        let pRows = pending.map(s => `<tr><td>-</td><td>${s.student_id}</td><td>${s.name}</td><td>${s.payment_type}</td><td><a href="/admin/approve/${s.id}?lang=${lang}" style="color:green; font-weight:bold;">✅ Approve</a></td></tr>`).join('');
+                        // Payment Details correctly displayed to Admin
+                        let pRows = pending.map(s => {
+                            let paymentDisplay = s.payment_type === 'slip_file' ? `<a href="/uploads/${s.bank_slip_val}" target="_blank" style="color:#2980b9; text-decoration:underline;">📄 ደረሰኝ እይ</a>` : `<b>TXN:</b> ${s.bank_slip_val}`;
+                            return `<tr><td>-</td><td>${s.student_id}</td><td>${s.name}</td><td>${paymentDisplay}</td><td><a href="/admin/approve/${s.id}?lang=${lang}" style="color:green; font-weight:bold;">✅ Approve</a></td></tr>`;
+                        }).join('');
 
                         let sRows = students.map(s => `<tr>
                             <td>${s.student_id}</td><td>${s.name}</td><td><a href="/class-hub/${encodeURIComponent(s.class_level)}" style="color:#2980b9; font-weight:bold;" target="_blank">📂 ${s.class_level}</a></td><td>${s.phone}</td>
@@ -783,14 +806,12 @@ app.get('/teacher-dashboard', (req, res) => {
         let assignedClasses = teacher.assigned_sections ? teacher.assigned_sections.split(',').map(s => s.trim()) : [];
         let selectedClass = (req.query.cls || assignedClasses[0] || '').trim();
 
-        // Optimized to fetch less blob data (speed improvement)
         db.all(`SELECT student_id, name, class_level FROM students ORDER BY name ASC`, [], (err, allStudents) => {
             let studentsInClass = allStudents.filter(s => isClassMatch(s.class_level, selectedClass));
             
             db.all(`SELECT * FROM courses WHERE teacher_id = ?`, [req.session.teacherId], (err, courses) => {
                 let classCourses = courses.filter(c => isClassMatch(c.class_level, selectedClass));
                 
-                // Smart fallback if the selected course does not belong to the selected class
                 let selectedCourseId = req.query.course_id;
                 let selectedCourse = classCourses.find(c => c.id.toString() === (selectedCourseId || '').toString());
                 
@@ -964,7 +985,6 @@ app.get('/student-dashboard', (req, res) => {
                                 ${ab.teacher_feedback ? `<span style="color:green; font-weight:bold;">💬 Teacher Reply: ${ab.teacher_feedback}</span>` : `<span style="color:orange;">⏳ Pending teacher response...</span>`}
                             </div>`).join('');
 
-                            // Grades Table specifically mapping over the courses
                             let gradesHtml = myCourses.map(c => {
                                 let asm = myGrades.find(a => a.course_code === c.code) || {};
                                 return `<tr>
@@ -977,7 +997,6 @@ app.get('/student-dashboard', (req, res) => {
                                 </tr>`;
                             }).join('');
 
-                            // Teacher selection for absence/requests
                             let teacherOptions = myCourses.map(c => `<option value="${c.teacher_name}">ወደ: መምህር ${c.teacher_name} (${c.title})</option>`).join('');
 
                             res.send(`
