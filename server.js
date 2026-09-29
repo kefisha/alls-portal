@@ -4,8 +4,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const PDFDocument = require('pdfkit');
-const sqlite3 = require('sqlite3').verbose();
 const bwipjs = require('bwip-js'); 
+const { Pool } = require('pg'); // አዲሱ የክላውድ ዳታቤዝ (PostgreSQL) ሞጁል
 
 process.on('uncaughtException', (err) => { console.error('CRITICAL ERROR:', err); });
 process.on('unhandledRejection', (reason, p) => { console.error('UNHANDLED REJECTION:', reason); });
@@ -17,75 +17,96 @@ if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
     fs.mkdirSync(path.join(__dirname, 'uploads'));
 }
 
-const dbFile = './school_portal.db';
-const db = new sqlite3.Database(dbFile, (err) => {
-    if (err) console.error('Database opening error: ', err.message);
-    else console.log('Connected to SQLite Database.');
+// አዲሱ የ Neon Database ማገናኛ
+const pool = new Pool({
+    connectionString: 'postgresql://neondb_owner:npg_x2bqlnw8jFaK@ep-hidden-math-zaduj97x-pooler.c-2.eu-west-2.aws.neon.tech/neondb?sslmode=require',
+    ssl: { rejectUnauthorized: false }
 });
 
-db.serialize(() => {
-    db.run(`CREATE TABLE IF NOT EXISTS students (
-        student_id TEXT PRIMARY KEY, password TEXT, name TEXT, mother_name TEXT,
-        gender TEXT, age INTEGER, phone TEXT, emergency_phone TEXT, region TEXT, zone TEXT,
-        woreda TEXT, kebele TEXT, class_level TEXT, payment_type TEXT,
-        bank_slip_val TEXT, photo TEXT, status TEXT, admin_message TEXT
-    )`);
+// የድሮው የ SQLite ኮዶች ሳይበላሹ ከ PostgreSQL ጋር እንዲሰሩ የሚያደርግ (Database Wrapper)
+const db = {
+    run: (sql, params, callback) => {
+        if (typeof params === 'function') { callback = params; params = []; }
+        let i = 1; let pgSql = sql.replace(/\?/g, () => `$${i++}`);
+        pool.query(pgSql, params || [])
+            .then(res => { if(callback) callback(null); })
+            .catch(err => { console.error(err); if(callback) callback(err); });
+    },
+    get: (sql, params, callback) => {
+        if (typeof params === 'function') { callback = params; params = []; }
+        let i = 1; let pgSql = sql.replace(/\?/g, () => `$${i++}`);
+        pool.query(pgSql, params || [])
+            .then(res => { if(callback) callback(null, res.rows[0]); })
+            .catch(err => { console.error(err); if(callback) callback(err, null); });
+    },
+    all: (sql, params, callback) => {
+        if (typeof params === 'function') { callback = params; params = []; }
+        let i = 1; let pgSql = sql.replace(/\?/g, () => `$${i++}`);
+        pool.query(pgSql, params || [])
+            .then(res => { if(callback) callback(null, res.rows); })
+            .catch(err => { console.error(err); if(callback) callback(err, []); });
+    }
+};
 
-    db.run(`CREATE TABLE IF NOT EXISTS pending_students (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, student_id TEXT, password TEXT, name TEXT, mother_name TEXT,
-        gender TEXT, age INTEGER, phone TEXT, emergency_phone TEXT, region TEXT,
-        zone TEXT, woreda TEXT, kebele TEXT, class_level TEXT, payment_type TEXT,
-        bank_slip_val TEXT, photo TEXT
-    )`);
+// ሰንጠረዦችን (Tables) በ Cloud Database ላይ መፍጠር
+async function initDB() {
+    try {
+        await pool.query(`CREATE TABLE IF NOT EXISTS students (
+            student_id TEXT PRIMARY KEY, password TEXT, name TEXT, mother_name TEXT,
+            gender TEXT, age INTEGER, phone TEXT, emergency_phone TEXT, region TEXT, zone TEXT,
+            woreda TEXT, kebele TEXT, class_level TEXT, payment_type TEXT,
+            bank_slip_val TEXT, photo TEXT, status TEXT, admin_message TEXT
+        )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS pending_students (
+            id SERIAL PRIMARY KEY, student_id TEXT, password TEXT, name TEXT, mother_name TEXT,
+            gender TEXT, age INTEGER, phone TEXT, emergency_phone TEXT, region TEXT,
+            zone TEXT, woreda TEXT, kebele TEXT, class_level TEXT, payment_type TEXT,
+            bank_slip_val TEXT, photo TEXT
+        )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS teachers (
+            id TEXT PRIMARY KEY, name TEXT, password TEXT, phone TEXT, assigned_sections TEXT, assigned_grades TEXT, is_proctor INTEGER DEFAULT 0
+        )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS course_assessments (
+            id SERIAL PRIMARY KEY, student_id TEXT, teacher_id TEXT, course_code TEXT, course_title TEXT, 
+            quiz REAL, mid REAL, final REAL, total REAL, remark TEXT
+        )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS withdrawals (
+            id SERIAL PRIMARY KEY, student_id TEXT, reason TEXT, details TEXT, status TEXT, admin_reply TEXT
+        )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS courses (
+            id SERIAL PRIMARY KEY, code TEXT, title TEXT, credit_hours INTEGER,
+            teacher_id TEXT, teacher_name TEXT, class_level TEXT
+        )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS sections (
+            id SERIAL PRIMARY KEY, name TEXT UNIQUE, proctor_name TEXT, proctor_phone TEXT
+        )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS notifications (
+            id SERIAL PRIMARY KEY, sender_role TEXT, sender_name TEXT, target_audience TEXT, message TEXT, created_at TEXT
+        )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS absence_requests (
+            id SERIAL PRIMARY KEY, student_id TEXT, student_name TEXT, class_level TEXT, reason TEXT, teacher_feedback TEXT, status TEXT, created_at TEXT
+        )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS daily_attendance (
+            id SERIAL PRIMARY KEY, student_id TEXT, student_name TEXT, class_level TEXT, date TEXT, status TEXT
+        )`);
 
-    db.run(`CREATE TABLE IF NOT EXISTS teachers (
-        id TEXT PRIMARY KEY, name TEXT, password TEXT, phone TEXT, assigned_sections TEXT, assigned_grades TEXT, is_proctor INTEGER DEFAULT 0
-    )`);
-
-    db.run(`CREATE TABLE IF NOT EXISTS course_assessments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, student_id TEXT, teacher_id TEXT, course_code TEXT, course_title TEXT, 
-        quiz REAL, mid REAL, final REAL, total REAL, remark TEXT
-    )`);
-
-    db.run(`CREATE TABLE IF NOT EXISTS withdrawals (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, student_id TEXT, reason TEXT, details TEXT, status TEXT, admin_reply TEXT
-    )`);
-
-    db.run(`CREATE TABLE IF NOT EXISTS courses (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT, title TEXT, credit_hours INTEGER,
-        teacher_id TEXT, teacher_name TEXT, class_level TEXT
-    )`);
-
-    db.run(`CREATE TABLE IF NOT EXISTS sections (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, proctor_name TEXT, proctor_phone TEXT
-    )`);
-
-    db.run(`CREATE TABLE IF NOT EXISTS notifications (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, sender_role TEXT, sender_name TEXT, target_audience TEXT, message TEXT, created_at TEXT
-    )`);
-
-    db.run(`CREATE TABLE IF NOT EXISTS absence_requests (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, student_id TEXT, student_name TEXT, class_level TEXT, reason TEXT, teacher_feedback TEXT, status TEXT, created_at TEXT
-    )`);
-
-    db.run(`CREATE TABLE IF NOT EXISTS daily_attendance (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, student_id TEXT, student_name TEXT, class_level TEXT, date TEXT, status TEXT
-    )`);
-
-    db.get("SELECT COUNT(*) as count FROM teachers", (err, row) => {
-        if (row && row.count === 0) {
-            db.run(`INSERT INTO teachers (id, name, password, phone, assigned_sections, assigned_grades, is_proctor) VALUES 
+        let tRes = await pool.query("SELECT COUNT(*) as count FROM teachers");
+        if (tRes.rows[0].count == 0) {
+            await pool.query(`INSERT INTO teachers (id, name, password, phone, assigned_sections, assigned_grades, is_proctor) VALUES 
             ('T-101', 'Dr. Teshale Kebede', '123456', '0911001122', 'Grade 1 - Section A', 'Grade 1', 1)`);
         }
-    });
 
-    db.get("SELECT COUNT(*) as count FROM sections", (err, row) => {
-        if (row && row.count === 0) {
-            db.run(`INSERT INTO sections (name, proctor_name, proctor_phone) VALUES 
-            ('Grade 1 - Section A', 'Dr. Teshale Kebede', '0912345678')`);
+        let sRes = await pool.query("SELECT COUNT(*) as count FROM sections");
+        if (sRes.rows[0].count == 0) {
+            await pool.query(`INSERT INTO sections (name, proctor_name, proctor_phone) VALUES 
+            ('Grade 1 - Section A', 'Dr. Teshale Kebede', '0912345678') ON CONFLICT (name) DO NOTHING`);
         }
-    });
-});
+        console.log('✅ አዲሱ የ Neon Cloud Database በተሳካ ሁኔታ ተገናኝቷል! ዳታዎ አይጠፋም!');
+    } catch (err) {
+        console.error('Database initialization error:', err);
+    }
+}
+initDB();
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, path.join(__dirname, 'uploads/')),
@@ -110,7 +131,7 @@ function generateTeacherID() { return `T-${Math.floor(100 + Math.random() * 900)
 function generate4DigitPIN() { return Math.floor(1000 + Math.random() * 9000).toString(); }
 
 function ensureSectionExists(secName) {
-    db.run(`INSERT OR IGNORE INTO sections (name, proctor_name, proctor_phone) VALUES (?, '', '')`, [secName]);
+    db.run(`INSERT INTO sections (name, proctor_name, proctor_phone) VALUES (?, '', '') ON CONFLICT (name) DO NOTHING`, [secName]);
 }
 
 function isClassMatch(c1, c2) {
@@ -149,7 +170,7 @@ function assignClassSection(requestedYearLevel, callback) {
         let secName = `${requestedYearLevel} - Section ${letters[index]}`;
         db.get(`SELECT COUNT(*) as c FROM students WHERE class_level = ?`, [secName], (err, r1) => {
             db.get(`SELECT COUNT(*) as c FROM pending_students WHERE class_level = ?`, [secName], (err, r2) => {
-                let total = (r1 && r1.c ? r1.c : 0) + (r2 && r2.c ? r2.c : 0);
+                let total = (r1 && r1.c ? parseInt(r1.c) : 0) + (r2 && r2.c ? parseInt(r2.c) : 0);
                 if (total < 50) { ensureSectionExists(secName); callback(secName); }
                 else checkNext(index + 1);
             });
@@ -201,29 +222,21 @@ app.get('/', (req, res) => {
 });
 
 app.get('/forgot-password', (req, res) => {
-    const lang = req.query.lang === 'en' ? 'en' : 'am';
-    const t = lang === 'en' ? {
-        title: "🔑 Reset My Password", desc: "Enter your phone number and your mother's name exactly as you registered them.",
-        ph: "Phone Number", mom: "Mother's Name", btn: "Reset Password", back: "Back to Login"
-    } : {
-        title: "🔑 የይለፍ ቃል ዳግም አስጀምር", desc: "በምዝገባ ጊዜ የተጠቀሙበትን ስልክ ቁጥር እና የእናትዎን ስም በትክክል ያስገቡ።",
-        ph: "ስልክ ቁጥር", mom: "የእናት ስም", btn: "የይለፍ ቃል ዳግም አስጀምር", back: "ወደ መግቢያ ተመለስ"
-    };
-
+    const lang = req.query.lang || 'am';
     res.send(`
     <!DOCTYPE html><html lang="${lang}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Reset Password</title>
     <style>body{font-family:sans-serif; background:#f4f7f6; padding:20px;} .box{max-width:400px; margin:auto; background:white; padding:30px; border-radius:10px; box-shadow:0 4px 10px rgba(0,0,0,0.1); text-align:center;} input,button{width:100%; padding:12px; margin-bottom:15px; border-radius:5px; border:1px solid #ccc; font-size:16px;} button{background:#8e44ad; color:white; font-weight:bold; cursor:pointer; border:none;}</style>
     </head><body>
         <div class="box">
             <img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="width: 80px; height: 80px; display: block; margin: 0 auto 10px; border-radius: 50%;">
-            <h2>${t.title}</h2>
-            <p style="color:#666; font-size:14px;">${t.desc}</p>
+            <h2>🔑 የይለፍ ቃል ዳግም አስጀምር</h2>
+            <p style="color:#666; font-size:14px;">በምዝገባ ጊዜ የተጠቀሙበትን ስልክ ቁጥር እና የእናትዎን ስም ያስገቡ።</p>
             <form action="/api/forgot-password?lang=${lang}" method="POST">
-                <input type="text" name="phone" placeholder="${t.ph}" required>
-                <input type="text" name="mother_name" placeholder="${t.mom}" required>
-                <button type="submit">${t.btn}</button>
+                <input type="text" name="phone" placeholder="ስልክ ቁጥር (Phone Number)" required>
+                <input type="text" name="mother_name" placeholder="የእናት ስም (Mother's Name)" required>
+                <button type="submit">የይለፍ ቃል ዳግም አስጀምር</button>
             </form>
-            <a href="/?lang=${lang}">${t.back}</a>
+            <a href="/?lang=${lang}">ወደ መግቢያ ተመለስ</a>
         </div>
     </body></html>`);
 });
@@ -243,21 +256,7 @@ app.post('/api/forgot-password', (req, res) => {
 });
 
 app.get('/student-register', (req, res) => {
-    const lang = req.query.lang === 'en' ? 'en' : 'am';
-    const t = lang === 'en' ? {
-        title: "📝 Student Registration Form", name: "Full Name:", mot: "Mother's Name:",
-        gen: "Gender:", m: "Male", f: "Female", age: "Age:", ph: "Phone:", eph: "Emergency:", reg: "Region:",
-        zon: "Zone:", wor: "Woreda:", keb: "Kebele:", yr: "Grade Level:",
-        pic: "Passport Photo:", pay: "Payment Type:", t1: "Transaction ID", t2: "Upload Slip", btn: "Submit", back: "Back",
-        loading: "⏳ Loading... Please wait"
-    } : {
-        title: "📝 የተማሪዎች ምዝገባ ፎርም", name: "ሙሉ ስም:", mot: "የእናት ስም:",
-        gen: "ጾታ:", m: "ወንድ", f: "ሴት", age: "ዕድሜ:", ph: "ስልክ:", eph: "የአደጋ ጊዜ ተጠሪ:", reg: "ክልል:",
-        zon: "ዞን:", wor: "ወረዳ:", keb: "ቀበሌ:", yr: "የክፍል ደረጃ (Grade):",
-        pic: "ጉርድ ፎቶ:", pay: "የክፍያ ማረጋገጫ:", t1: "የትራንዛክሽን ቁጥር", t2: "የደረሰኝ ፎቶ ያያይዙ", btn: "ምዝገባ ላክ", back: "ተመለስ",
-        loading: "⏳ እባክዎ ይጠብቁ... (Loading)"
-    };
-
+    const lang = req.query.lang || 'am';
     let gradeOptions = '';
     for(let i=1; i<=12; i++) gradeOptions += `<option value="Grade ${i}">Grade ${i}</option>`;
 
@@ -268,22 +267,22 @@ app.get('/student-register', (req, res) => {
         <div class="box">
             <div style="text-align:right;"><a href="/student-register?lang=am">አማርኛ</a> | <a href="/student-register?lang=en">English</a></div>
             <img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="width: 80px; height: 80px; display: block; margin: 0 auto 10px; border-radius: 50%;">
-            <h2>${t.title}</h2>
-            <form action="/api/register?lang=${lang}" method="POST" enctype="multipart/form-data" onsubmit="document.getElementById('subBtn').disabled=true; document.getElementById('subBtn').innerText='${t.loading}';">
-                <div class="row"><div class="col"><label>${t.name}</label><input type="text" name="name" required></div><div class="col"><label>${t.mot}</label><input type="text" name="mother_name" required></div></div>
-                <div class="row"><div class="col"><label>${t.gen}</label><select name="gender"><option value="Male">${t.m}</option><option value="Female">${t.f}</option></select></div><div class="col"><label>${t.age}</label><input type="number" name="age" required></div></div>
-                <div class="row"><div class="col"><label>${t.ph}</label><input type="text" name="phone" required></div><div class="col"><label>${t.eph}</label><input type="text" name="emergency_phone" required></div></div>
-                <div class="row"><div class="col"><label>${t.reg}</label><input type="text" name="region" required></div><div class="col"><label>${t.zon}</label><input type="text" name="zone" required></div></div>
-                <div class="row"><div class="col"><label>${t.wor}</label><input type="text" name="woreda" required></div><div class="col"><label>${t.keb}</label><input type="text" name="kebele" required></div></div>
-                <label>${t.yr}</label><select name="year_level">${gradeOptions}</select>
-                <label>${t.pic}</label><input type="file" name="student_photo" accept="image/*" required>
-                <label>${t.pay}</label><select name="payment_type" id="payType" onchange="document.getElementById('slipBox').style.display = this.value=='slip_file'?'block':'none'; document.getElementById('txnBox').style.display = this.value=='txn_id'?'block':'none';">
-                    <option value="txn_id">${t.t1}</option><option value="slip_file">${t.t2}</option>
+            <h2>📝 የተማሪዎች ምዝገባ ፎርም</h2>
+            <form action="/api/register?lang=${lang}" method="POST" enctype="multipart/form-data" onsubmit="document.getElementById('subBtn').disabled=true; document.getElementById('subBtn').innerText='⏳ እባክዎ ይጠብቁ... (Loading)';">
+                <div class="row"><div class="col"><label>ሙሉ ስም:</label><input type="text" name="name" required></div><div class="col"><label>የእናት ስም:</label><input type="text" name="mother_name" required></div></div>
+                <div class="row"><div class="col"><label>ጾታ:</label><select name="gender"><option value="Male">ወንድ</option><option value="Female">ሴት</option></select></div><div class="col"><label>ዕድሜ:</label><input type="number" name="age" required></div></div>
+                <div class="row"><div class="col"><label>ስልክ:</label><input type="text" name="phone" required></div><div class="col"><label>የአደጋ ጊዜ ተጠሪ:</label><input type="text" name="emergency_phone" required></div></div>
+                <div class="row"><div class="col"><label>ክልል:</label><input type="text" name="region" required></div><div class="col"><label>ዞን:</label><input type="text" name="zone" required></div></div>
+                <div class="row"><div class="col"><label>ወረዳ:</label><input type="text" name="woreda" required></div><div class="col"><label>ቀበሌ:</label><input type="text" name="kebele" required></div></div>
+                <label>የክፍል ደረጃ (Grade):</label><select name="year_level">${gradeOptions}</select>
+                <label>ጉርድ ፎቶ:</label><input type="file" name="student_photo" accept="image/*" required>
+                <label>የክፍያ ማረጋገጫ:</label><select name="payment_type" id="payType" onchange="document.getElementById('slipBox').style.display = this.value=='slip_file'?'block':'none'; document.getElementById('txnBox').style.display = this.value=='txn_id'?'block':'none';">
+                    <option value="txn_id">የትራንዛክሽን ቁጥር</option><option value="slip_file">የደረሰኝ ፎቶ ያያይዙ</option>
                 </select>
                 <div id="txnBox"><input type="text" name="txn_id" placeholder="Transaction ID"></div>
                 <div id="slipBox" style="display:none;"><input type="file" name="bank_slip_file" accept="image/*,.pdf"></div>
-                <button type="submit" id="subBtn">${t.btn}</button>
-            </form><br><a href="/?lang=${lang}">${t.back}</a>
+                <button type="submit" id="subBtn">ምዝገባ ላክ (Submit)</button>
+            </form><br><a href="/?lang=${lang}">ወደ ኋላ (Back)</a>
         </div>
     </body></html>`);
 });
@@ -299,10 +298,11 @@ app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 },
             let photoPath = (req.files && req.files['student_photo']) ? req.files['student_photo'][0].filename : '';
             let slipPath = payment_type === 'slip_file' && (req.files && req.files['bank_slip_file']) ? req.files['bank_slip_file'][0].filename : txn_id;
 
-            db.run(`INSERT INTO pending_students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-            [autoID, autoPIN, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, assignedSection, payment_type, slipPath, photoPath], function(err) {
-                if (err) return res.send(`<div style="text-align:center; padding:40px;"><h3 style="color:red;">❌ የዳታቤዝ ስህተት አጋጥሟል!</h3><a href="/student-register">Back</a></div>`);
+            db.get(`INSERT INTO pending_students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING student_id`,
+            [autoID, autoPIN, name, mother_name || '', gender || '', age || null, phone || '', emergency_phone || '', region || '', zone || '', woreda || '', kebele || '', assignedSection, payment_type, slipPath, photoPath], function(err, row) {
+                if (err) return res.send(`<div style="text-align:center; padding:40px;"><h3 style="color:red;">❌ የዳታቤዝ ስህተት አጋጥሟል!</h3><p>${err.message}</p><a href="/student-register">Back</a></div>`);
                 
+                let insertedId = row ? row.student_id : autoID;
                 const msg = lang === 'en' ? "Request Sent! Sent to Admin for review." : "ጥያቄዎ ለአድሚን ገምጋሚ ተልኳል።";
                 res.send(`
                 <div style="text-align:center; padding:40px; font-family:sans-serif;">
@@ -312,7 +312,7 @@ app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 },
                         <p><strong>ID Number:</strong> <span style="color:red; font-size:20px;">${autoID}</span></p>
                         <p><strong>Password PIN:</strong> <span style="color:red; font-size:20px;">${autoPIN}</span></p>
                         <p style="color:#e67e22; font-size:13px;">⏳ ${msg}</p>
-                        <p><a href="/download-pending-slip/${this.lastID}" style="background:#e67e22; color:white; padding:10px; text-decoration:none; border-radius:5px;">📥 Download PDF</a></p>
+                        <p><a href="/download-pending-slip/${insertedId}" style="background:#e67e22; color:white; padding:10px; text-decoration:none; border-radius:5px;">📥 Download PDF</a></p>
                     </div><br><br><a href="/?lang=${lang}">Home</a>
                 </div>`);
             });
@@ -323,8 +323,7 @@ app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 },
 });
 
 app.get('/download-pending-slip/:id', (req, res) => {
-    db.get(`SELECT * FROM pending_students WHERE id = ? UNION SELECT * FROM students WHERE student_id = ?`, [req.params.id, req.params.id], (err, st) => {
-        if (!st) return res.send('Not found');
+    function generatePDF(st, res) {
         const doc = new PDFDocument({ margin: 40 });
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename=Registration-${st.student_id}.pdf`);
@@ -350,6 +349,17 @@ app.get('/download-pending-slip/:id', (req, res) => {
         line('Grade / Section', st.class_level);
         line('Status', st.status || 'Pending Admin Approval');
         doc.end();
+    }
+
+    db.get(`SELECT * FROM pending_students WHERE student_id = ?`, [req.params.id], (err, st) => {
+        if (!st) {
+            db.get(`SELECT * FROM students WHERE student_id = ?`, [req.params.id], (err2, st2) => {
+                if (!st2) return res.send('Not found');
+                generatePDF(st2, res);
+            });
+        } else {
+            generatePDF(st, res);
+        }
     });
 });
 
@@ -379,13 +389,12 @@ app.get('/admin', (req, res) => {
     const lang = req.query.lang || 'am';
 
     db.all(`SELECT * FROM pending_students`, [], (err, pending) => {
-        // Optimized: only select what's needed for admin list to speed up load time
         db.all(`SELECT student_id, name, class_level, phone, password, status FROM students ORDER BY class_level`, [], (err, students) => {
             db.all(`SELECT * FROM teachers`, [], (err, teachers) => {
                 db.all(`SELECT * FROM sections ORDER BY name`, [], (err, sections) => {
                     db.all(`SELECT * FROM courses ORDER BY class_level, code`, [], (err, courses) => {
 
-                        let pRows = pending.map(s => `<tr><td><img src="/uploads/${s.photo}" width="30"></td><td>${s.student_id}</td><td>${s.name}</td><td>${s.payment_type}</td><td><a href="/admin/approve/${s.id}?lang=${lang}" style="color:green; font-weight:bold;">✅ Approve</a></td></tr>`).join('');
+                        let pRows = pending.map(s => `<tr><td>-</td><td>${s.student_id}</td><td>${s.name}</td><td>${s.payment_type}</td><td><a href="/admin/approve/${s.id}?lang=${lang}" style="color:green; font-weight:bold;">✅ Approve</a></td></tr>`).join('');
 
                         let sRows = students.map(s => `<tr>
                             <td>${s.student_id}</td><td>${s.name}</td><td><a href="/class-hub/${encodeURIComponent(s.class_level)}" style="color:#2980b9; font-weight:bold;" target="_blank">📂 ${s.class_level}</a></td><td>${s.phone}</td>
@@ -514,6 +523,8 @@ app.get('/admin/approve/:id', (req, res) => {
     });
 });
 
+// ================= ADMIN ADD / EDIT / DELETE ACTIONS =================
+
 app.post('/admin/add-teacher', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     let { name, phone, assigned_sections } = req.body;
@@ -564,7 +575,7 @@ app.get('/admin/delete-teacher/:id', (req, res) => {
 
 app.post('/admin/add-section', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
-    db.run(`INSERT OR IGNORE INTO sections (name, proctor_name, proctor_phone) VALUES (?,?,?)`,
+    db.run(`INSERT INTO sections (name, proctor_name, proctor_phone) VALUES (?,?,?) ON CONFLICT(name) DO NOTHING`,
     [req.body.name, req.body.proctor_name || '', ''], () => res.redirect('/admin'));
 });
 
@@ -905,7 +916,6 @@ app.get('/student-dashboard', (req, res) => {
     if (!req.session.studentId) return res.redirect('/');
     
     db.get(`SELECT s.* FROM students s WHERE s.student_id = ?`, [req.session.studentId], (err, student) => {
-        
         db.all(`SELECT * FROM courses ORDER BY id`, [], (err, allCourses) => {
             let myCourses = allCourses.filter(c => isClassMatch(c.class_level, student.class_level));
             
@@ -930,7 +940,7 @@ app.get('/student-dashboard', (req, res) => {
                                 ${ab.teacher_feedback ? `<span style="color:green; font-weight:bold;">💬 Teacher Reply: ${ab.teacher_feedback}</span>` : `<span style="color:orange;">⏳ Pending teacher response...</span>`}
                             </div>`).join('');
 
-                            // Grades Table specifically mapping over the 10 courses
+                            // Grades Table mapping over the 10 courses
                             let gradesHtml = myCourses.map(c => {
                                 let asm = myGrades.find(a => a.course_code === c.code) || {};
                                 return `<tr>
@@ -975,11 +985,11 @@ app.get('/student-dashboard', (req, res) => {
                                     <div class="card">
                                         <h3>📊 የትምህርት ውጤቶች (Assessment & Grades)</h3>
                                         <table><tr><th>Subject & Teacher</th><th>Quiz(20)</th><th>Mid(30)</th><th>Final(50)</th><th>Total(100)</th><th>Remark</th></tr>
-                                        ${gradesHtml||'<tr><td colspan="6">No grades posted yet.</td></tr>'}</table>
+                                        ${gradesHtml||'<tr><td colspan="6">No courses posted yet.</td></tr>'}</table>
                                     </div>
 
                                     <div class="card" style="background:#fdf2e9; border: 1px solid #e67e22;">
-                                        <h3 style="color:#d35400;">⚠️ መልዕክት / ፈቃድ (Message Teacher)</h3>
+                                        <h3 style="color:#d35400;">⚠️ መልዕክት / ፈቃድ ላክ</h3>
                                         <p style="font-size:13px; color:#555;">መልዕክት መላክ የሚፈልጉለትን መምህር ይምረጡ:</p>
                                         <form action="/student/absence" method="POST">
                                             <select name="target_teacher" required style="width:100%; padding:10px; margin-bottom:10px; border-radius:5px;">
@@ -1129,72 +1139,135 @@ app.get('/attendance-sheet/:secName', (req, res) => {
     });
 });
 
-app.post('/save-attendance', (req, res) => {
+app.post('/save-attendance', async (req, res) => {
     if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
     let { class_level, date } = req.body;
 
-    db.all(`SELECT student_id, name, class_level FROM students`, [], (err, allStudents) => {
+    db.all(`SELECT student_id, name, class_level FROM students`, [], async (err, allStudents) => {
         if(err) return res.redirect('/teacher-dashboard');
-        
         let studentsInClass = allStudents.filter(s => isClassMatch(s.class_level, class_level));
 
-        db.run(`DELETE FROM daily_attendance WHERE class_level = ? AND date = ?`, [class_level, date], () => {
-            let stmt = db.prepare(`INSERT INTO daily_attendance (student_id, student_name, class_level, date, status) VALUES (?, ?, ?, ?, ?)`);
-            studentsInClass.forEach(st => {
-                let status = req.body[`status_${st.student_id}`] || 'Absent';
-                stmt.run(st.student_id, st.name, class_level, date, status);
-            });
-            stmt.finalize(() => {
+        db.run(`DELETE FROM daily_attendance WHERE class_level = ? AND date = ?`, [class_level, date], async () => {
+            try {
+                for(let st of studentsInClass) {
+                    let status = req.body[`status_${st.student_id}`] || 'Absent';
+                    await pool.query(`INSERT INTO daily_attendance (student_id, student_name, class_level, date, status) VALUES ($1, $2, $3, $4, $5)`, [st.student_id, st.name, class_level, date, status]);
+                }
                 res.send(`<script>alert('Attendance saved successfully!'); window.location.href='/teacher-dashboard';</script>`);
+            } catch(e) {
+                res.redirect('/teacher-dashboard');
+            }
+        });
+    });
+});
+
+app.get('/director-report', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.all(`SELECT * FROM sections ORDER BY name`, [], (err, sections) => {
+        db.all(`SELECT * FROM students ORDER BY class_level`, [], (err, students) => {
+            db.all(`SELECT * FROM daily_attendance ORDER BY date DESC`, [], (err, attendanceRecords) => {
+                
+                const months = ["September", "October", "November", "December", "January", "February", "March", "April", "May"];
+                
+                let monthSections = months.map(m => {
+                    let sectionContent = sections.map(sec => {
+                        let classStudents = students.filter(s => isClassMatch(s.class_level, sec.name));
+                        let studentList = classStudents.map((s, idx) => {
+                            let rec = attendanceRecords.find(r => r.student_id === s.student_id);
+                            let statusBadge = rec ? (rec.status === 'Present' ? '✅ Present' : '❌ Absent') : 'Not Recorded';
+                            return `<tr><td>${idx+1}</td><td>${s.student_id}</td><td style="text-align:left;">${s.name}</td><td><b>${statusBadge}</b></td></tr>`;
+                        }).join('');
+                        
+                        return `<div style="margin-bottom:20px;">
+                            <h4 style="background:#34495e; color:white; padding:6px; margin:0;">Class: ${sec.name}</h4>
+                            <table border="1" width="100%" style="border-collapse:collapse; text-align:center; font-size:12px;">
+                                <tr style="background:#f2f2f2;"><th>No</th><th>ID</th><th>Full Name</th><th>Attendance Status</th></tr>
+                                ${studentList || '<tr><td colspan="4">No students</td></tr>'}
+                            </table>
+                        </div>`;
+                    }).join('');
+
+                    return `<div style="margin-bottom:40px; page-break-after: always;">
+                        <h2 style="background:#2c3e50; color:white; padding:10px; text-align:center;">📅 Academic Period / Month: ${m} (September - May)</h2>
+                        ${sectionContent}
+                    </div>`;
+                }).join('');
+
+                res.send(`
+                <!DOCTYPE html><html><head><meta charset="UTF-8"><title>Director Academic Year Report (Sept-May)</title>
+                <style>
+                    body { font-family: sans-serif; padding: 20px; background: white; }
+                    table th, table td { border: 1px solid #ccc; padding: 5px; }
+                    .header { text-align: center; margin-bottom: 20px; }
+                    button { background: #8e44ad; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; cursor: pointer; }
+                    @media print { button { display: none; } }
+                </style>
+                </head><body>
+                    <div class="header">
+                        <h2>AMANUEL LIGHT AND LIFE SCHOOL</h2>
+                        <h3>📁 Director Comprehensive Attendance Report (September to May)</h3>
+                        <button onclick="window.print()">🖨️ Print Full Report for Director</button>
+                    </div>
+                    ${monthSections}
+                    <br><br>
+                    <div style="display:flex; justify-content:space-between; font-weight:bold; margin-top:40px;">
+                        <p>Prepared by Registrar / Admin: ___________________</p>
+                        <p>Approved & Signed by Director: ___________________</p>
+                    </div>
+                </body></html>`);
             });
         });
     });
 });
 
-app.get('/download-id-pdf/:id', (req, res) => {
-    db.get(`SELECT * FROM students WHERE student_id = ?`, [req.params.id], (err, student) => {
-        if (!student) return res.send('Student not found');
-
-        const doc = new PDFDocument({ size: [400, 260], margin: 0 });
-        res.setHeader('Content-Type', 'application/pdf'); 
-        res.setHeader('Content-Disposition', `attachment; filename=ID-${student.student_id}.pdf`);
-        doc.pipe(res);
-
-        doc.rect(0, 0, 400, 260).fill('#fdfefe');
-        doc.rect(4, 4, 392, 252).lineWidth(1.5).strokeColor('#1f4e79').stroke();
-        doc.rect(4, 4, 392, 46).fill('#1f4e79');
+app.get('/view-excel/:secName', (req, res) => {
+    if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
+    let sec = decodeURIComponent(req.params.secName);
+    
+    db.all(`SELECT * FROM students`, [], (err, allStudents) => {
+        let students = allStudents.filter(s => isClassMatch(s.class_level, sec));
         
-        let schoolLogo = path.join(__dirname, 'uploads', 'logo.jpg');
-        if (fs.existsSync(schoolLogo)) {
-            doc.image(schoolLogo, 10, 8, { width: 38, height: 38 });
-        } else {
-            doc.circle(30, 27, 16).fill('#ffffff');
-            doc.fontSize(12).fillColor('#1f4e79').text('ALLS', 14, 20);
-        }
+        db.all(`SELECT * FROM course_assessments`, [], (err, assessments) => {
+            
+            students.forEach(st => {
+                let st_ass = assessments.filter(a => a.student_id === st.student_id);
+                st.cumulative_total = st_ass.reduce((sum, a) => sum + (a.total || 0), 0);
+            });
+            students.sort((a, b) => b.cumulative_total - a.cumulative_total);
 
-        doc.fontSize(12).fillColor('#ffffff').text('AMANUEL LIGHT AND LIFE SCHOOL', 55, 12, { width: 300 });
-        doc.fontSize(8.5).fillColor('#f4d03f').text('OFFICIAL DIGITAL STUDENT ID CARD', 55, 30, { width: 300 });
+            let sRows = students.map((s, index) => `
+                <tr>
+                    <td><b>${index + 1}</b></td>
+                    <td>${s.student_id}</td>
+                    <td style="text-align:left;">${s.name}</td>
+                    <td>${s.gender}</td>
+                    <td>${s.age}</td>
+                    <td>${s.phone}</td>
+                    <td><b>${s.cumulative_total}</b></td>
+                </tr>
+            `).join('');
 
-        let photoFile = path.join(__dirname, 'uploads', student.photo || '');
-        doc.rect(18, 60, 84, 100).lineWidth(1).strokeColor('#1f4e79').stroke();
-        if (student.photo && fs.existsSync(photoFile)) doc.image(photoFile, 20, 62, { width: 80, height: 96 });
-
-        doc.fontSize(10).fillColor('#000');
-        doc.font('Helvetica-Bold').text(`${student.name}`, 115, 62, { width: 260 });
-        doc.font('Helvetica').fontSize(9);
-        doc.text(`ID No: ${student.student_id}`, 115, 80);
-        doc.text(`Class: ${student.class_level}`, 115, 96);
-        doc.text(`Phone: ${student.phone}`, 115, 112);
-        doc.fillColor('#27ae60').font('Helvetica-Bold').text(`Status: ${student.status || 'Approved'}`, 115, 128);
-
-        doc.rect(4, 170, 392, 20).fill('#eef2f5');
-        doc.fontSize(7.5).fillColor('#555').text('This card is property of Amanuel Light and Life School. If found, please return to the office.', 12, 176, { width: 376, align: 'center' });
-
-        let qrData = `Name: ${student.name}\nID: ${student.student_id}\nGender: ${student.gender}\nClass: ${student.class_level}\nPhone: ${student.phone}`;
-
-        bwipjs.toBuffer({ bcid: 'qrcode', text: qrData, scale: 3 }, function (err, png) {
-            if (!err) doc.image(png, 172.5, 195, { width: 55, height: 55 });
-            doc.end();
+            res.send(`
+            <!DOCTYPE html><html><head><meta charset="UTF-8"><title>Excel View - ${sec}</title>
+            <style>
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background: #f9f9f9; }
+                .excel-table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.2); font-size:14px; }
+                .excel-table th, .excel-table td { border: 1px solid #d4d4d4; padding: 6px 10px; text-align: center; }
+                .excel-table th { background: #107c41; color: white; position: sticky; top: 0; }
+                .excel-table tr:nth-child(even) { background: #f3f2f1; }
+                .header-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; }
+                button { background: #107c41; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight:bold; }
+            </style>
+            </head><body>
+                <div class="header-bar">
+                    <h2>📊 Class Grades & Ranking: ${sec} (Total: ${students.length})</h2>
+                    <div><button onclick="window.print()">🖨️ Print / Save PDF</button> <button onclick="window.close()">❌ Close</button></div>
+                </div>
+                <table class="excel-table">
+                    <tr><th>Rank</th><th>Student ID</th><th>Full Name</th><th>Gender</th><th>Age</th><th>Phone Number</th><th>Cumulative Total Score</th></tr>
+                    ${sRows||'<tr><td colspan="7">No students found in this class.</td></tr>'}
+                </table>
+            </body></html>`);
         });
     });
 });
