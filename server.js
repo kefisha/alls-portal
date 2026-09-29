@@ -42,10 +42,6 @@ db.serialize(() => {
         id TEXT PRIMARY KEY, name TEXT, password TEXT, phone TEXT, assigned_sections TEXT, assigned_grades TEXT, is_proctor INTEGER DEFAULT 0
     )`);
 
-    db.run(`CREATE TABLE IF NOT EXISTS assessments (
-        student_id TEXT PRIMARY KEY, quiz REAL, mid REAL, final REAL, total REAL, remark TEXT
-    )`);
-
     db.run(`CREATE TABLE IF NOT EXISTS course_assessments (
         id INTEGER PRIMARY KEY AUTOINCREMENT, student_id TEXT, teacher_id TEXT, course_code TEXT, course_title TEXT, 
         quiz REAL, mid REAL, final REAL, total REAL, remark TEXT
@@ -205,21 +201,29 @@ app.get('/', (req, res) => {
 });
 
 app.get('/forgot-password', (req, res) => {
-    const lang = req.query.lang || 'am';
+    const lang = req.query.lang === 'en' ? 'en' : 'am';
+    const t = lang === 'en' ? {
+        title: "🔑 Reset My Password", desc: "Enter your phone number and your mother's name exactly as you registered them.",
+        ph: "Phone Number", mom: "Mother's Name", btn: "Reset Password", back: "Back to Login"
+    } : {
+        title: "🔑 የይለፍ ቃል ዳግም አስጀምር", desc: "በምዝገባ ጊዜ የተጠቀሙበትን ስልክ ቁጥር እና የእናትዎን ስም በትክክል ያስገቡ።",
+        ph: "ስልክ ቁጥር", mom: "የእናት ስም", btn: "የይለፍ ቃል ዳግም አስጀምር", back: "ወደ መግቢያ ተመለስ"
+    };
+
     res.send(`
     <!DOCTYPE html><html lang="${lang}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Reset Password</title>
     <style>body{font-family:sans-serif; background:#f4f7f6; padding:20px;} .box{max-width:400px; margin:auto; background:white; padding:30px; border-radius:10px; box-shadow:0 4px 10px rgba(0,0,0,0.1); text-align:center;} input,button{width:100%; padding:12px; margin-bottom:15px; border-radius:5px; border:1px solid #ccc; font-size:16px;} button{background:#8e44ad; color:white; font-weight:bold; cursor:pointer; border:none;}</style>
     </head><body>
         <div class="box">
             <img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="width: 80px; height: 80px; display: block; margin: 0 auto 10px; border-radius: 50%;">
-            <h2>🔑 የይለፍ ቃል ዳግም አስጀምር</h2>
-            <p style="color:#666; font-size:14px;">በምዝገባ ጊዜ የተጠቀሙበትን ስልክ ቁጥር እና የእናትዎን ስም ያስገቡ።</p>
+            <h2>${t.title}</h2>
+            <p style="color:#666; font-size:14px;">${t.desc}</p>
             <form action="/api/forgot-password?lang=${lang}" method="POST">
-                <input type="text" name="phone" placeholder="ስልክ ቁጥር (Phone Number)" required>
-                <input type="text" name="mother_name" placeholder="የእናት ስም (Mother's Name)" required>
-                <button type="submit">የይለፍ ቃል ዳግም አስጀምር</button>
+                <input type="text" name="phone" placeholder="${t.ph}" required>
+                <input type="text" name="mother_name" placeholder="${t.mom}" required>
+                <button type="submit">${t.btn}</button>
             </form>
-            <a href="/?lang=${lang}">ወደ መግቢያ ተመለስ</a>
+            <a href="/?lang=${lang}">${t.back}</a>
         </div>
     </body></html>`);
 });
@@ -231,15 +235,29 @@ app.post('/api/forgot-password', (req, res) => {
     db.get(`SELECT student_id FROM students WHERE phone = ? AND mother_name = ?`, [phone, mother_name], (err, s) => {
         if (s) {
             return db.run(`UPDATE students SET password = ? WHERE student_id = ?`, [newPin, s.student_id], () => {
-                res.send(`<div style="text-align:center; padding:40px; font-family:sans-serif;"><h2 style="color:green;">✅ የይለፍ ቃል ተቀይሯል!</h2><p>አዲሱ የይለፍ ቁጥርዎ: <span style="color:red; font-size:24px; font-weight:bold;">${newPin}</span></p><a href="/?lang=${lang}">Back</a></div>`);
+                res.send(`<div style="text-align:center; padding:40px; font-family:sans-serif;"><h2 style="color:green;">✅ Password Reset / የይለፍ ቃል ተቀይሯል!</h2><p>New PIN / አዲሱ የይለፍ ቁጥርዎ: <span style="color:red; font-size:24px; font-weight:bold;">${newPin}</span></p><a href="/?lang=${lang}">Back</a></div>`);
             });
         }
-        res.send(`<div style="text-align:center; padding:40px; font-family:sans-serif;"><h3 style="color:red;">❌ ተመሳሳይ አካውንት አልተገኘም!</h3><a href="/forgot-password?lang=${lang}">Back</a></div>`);
+        res.send(`<div style="text-align:center; padding:40px; font-family:sans-serif;"><h3 style="color:red;">❌ Account Not Found / ተመሳሳይ አካውንት አልተገኘም!</h3><a href="/forgot-password?lang=${lang}">Back</a></div>`);
     });
 });
 
 app.get('/student-register', (req, res) => {
-    const lang = req.query.lang || 'am';
+    const lang = req.query.lang === 'en' ? 'en' : 'am';
+    const t = lang === 'en' ? {
+        title: "📝 Student Registration Form", name: "Full Name:", mot: "Mother's Name:",
+        gen: "Gender:", m: "Male", f: "Female", age: "Age:", ph: "Phone:", eph: "Emergency:", reg: "Region:",
+        zon: "Zone:", wor: "Woreda:", keb: "Kebele:", yr: "Grade Level:",
+        pic: "Passport Photo:", pay: "Payment Type:", t1: "Transaction ID", t2: "Upload Slip", btn: "Submit", back: "Back",
+        loading: "⏳ Loading... Please wait"
+    } : {
+        title: "📝 የተማሪዎች ምዝገባ ፎርም", name: "ሙሉ ስም:", mot: "የእናት ስም:",
+        gen: "ጾታ:", m: "ወንድ", f: "ሴት", age: "ዕድሜ:", ph: "ስልክ:", eph: "የአደጋ ጊዜ ተጠሪ:", reg: "ክልል:",
+        zon: "ዞን:", wor: "ወረዳ:", keb: "ቀበሌ:", yr: "የክፍል ደረጃ (Grade):",
+        pic: "ጉርድ ፎቶ:", pay: "የክፍያ ማረጋገጫ:", t1: "የትራንዛክሽን ቁጥር", t2: "የደረሰኝ ፎቶ ያያይዙ", btn: "ምዝገባ ላክ", back: "ተመለስ",
+        loading: "⏳ እባክዎ ይጠብቁ... (Loading)"
+    };
+
     let gradeOptions = '';
     for(let i=1; i<=12; i++) gradeOptions += `<option value="Grade ${i}">Grade ${i}</option>`;
 
@@ -250,22 +268,22 @@ app.get('/student-register', (req, res) => {
         <div class="box">
             <div style="text-align:right;"><a href="/student-register?lang=am">አማርኛ</a> | <a href="/student-register?lang=en">English</a></div>
             <img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="width: 80px; height: 80px; display: block; margin: 0 auto 10px; border-radius: 50%;">
-            <h2>📝 የተማሪዎች ምዝገባ ፎርም</h2>
-            <form action="/api/register?lang=${lang}" method="POST" enctype="multipart/form-data" onsubmit="document.getElementById('subBtn').disabled=true; document.getElementById('subBtn').innerText='⏳ እባክዎ ይጠብቁ... (Loading)';">
-                <div class="row"><div class="col"><label>ሙሉ ስም:</label><input type="text" name="name" required></div><div class="col"><label>የእናት ስም:</label><input type="text" name="mother_name" required></div></div>
-                <div class="row"><div class="col"><label>ጾታ:</label><select name="gender"><option value="Male">ወንድ</option><option value="Female">ሴት</option></select></div><div class="col"><label>ዕድሜ:</label><input type="number" name="age" required></div></div>
-                <div class="row"><div class="col"><label>ስልክ:</label><input type="text" name="phone" required></div><div class="col"><label>የአደጋ ጊዜ ተጠሪ:</label><input type="text" name="emergency_phone" required></div></div>
-                <div class="row"><div class="col"><label>ክልል:</label><input type="text" name="region" required></div><div class="col"><label>ዞን:</label><input type="text" name="zone" required></div></div>
-                <div class="row"><div class="col"><label>ወረዳ:</label><input type="text" name="woreda" required></div><div class="col"><label>ቀበሌ:</label><input type="text" name="kebele" required></div></div>
-                <label>የክፍል ደረጃ (Grade):</label><select name="year_level">${gradeOptions}</select>
-                <label>ጉርድ ፎቶ:</label><input type="file" name="student_photo" accept="image/*" required>
-                <label>የክፍያ ማረጋገጫ:</label><select name="payment_type" id="payType" onchange="document.getElementById('slipBox').style.display = this.value=='slip_file'?'block':'none'; document.getElementById('txnBox').style.display = this.value=='txn_id'?'block':'none';">
-                    <option value="txn_id">የትራንዛክሽን ቁጥር</option><option value="slip_file">የደረሰኝ ፎቶ ያያይዙ</option>
+            <h2>${t.title}</h2>
+            <form action="/api/register?lang=${lang}" method="POST" enctype="multipart/form-data" onsubmit="document.getElementById('subBtn').disabled=true; document.getElementById('subBtn').innerText='${t.loading}';">
+                <div class="row"><div class="col"><label>${t.name}</label><input type="text" name="name" required></div><div class="col"><label>${t.mot}</label><input type="text" name="mother_name" required></div></div>
+                <div class="row"><div class="col"><label>${t.gen}</label><select name="gender"><option value="Male">${t.m}</option><option value="Female">${t.f}</option></select></div><div class="col"><label>${t.age}</label><input type="number" name="age" required></div></div>
+                <div class="row"><div class="col"><label>${t.ph}</label><input type="text" name="phone" required></div><div class="col"><label>${t.eph}</label><input type="text" name="emergency_phone" required></div></div>
+                <div class="row"><div class="col"><label>${t.reg}</label><input type="text" name="region" required></div><div class="col"><label>${t.zon}</label><input type="text" name="zone" required></div></div>
+                <div class="row"><div class="col"><label>${t.wor}</label><input type="text" name="woreda" required></div><div class="col"><label>${t.keb}</label><input type="text" name="kebele" required></div></div>
+                <label>${t.yr}</label><select name="year_level">${gradeOptions}</select>
+                <label>${t.pic}</label><input type="file" name="student_photo" accept="image/*" required>
+                <label>${t.pay}</label><select name="payment_type" id="payType" onchange="document.getElementById('slipBox').style.display = this.value=='slip_file'?'block':'none'; document.getElementById('txnBox').style.display = this.value=='txn_id'?'block':'none';">
+                    <option value="txn_id">${t.t1}</option><option value="slip_file">${t.t2}</option>
                 </select>
                 <div id="txnBox"><input type="text" name="txn_id" placeholder="Transaction ID"></div>
                 <div id="slipBox" style="display:none;"><input type="file" name="bank_slip_file" accept="image/*,.pdf"></div>
-                <button type="submit" id="subBtn">ምዝገባ ላክ (Submit)</button>
-            </form><br><a href="/?lang=${lang}">ወደ ኋላ (Back)</a>
+                <button type="submit" id="subBtn">${t.btn}</button>
+            </form><br><a href="/?lang=${lang}">${t.back}</a>
         </div>
     </body></html>`);
 });
@@ -285,14 +303,15 @@ app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 },
             [autoID, autoPIN, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, assignedSection, payment_type, slipPath, photoPath], function(err) {
                 if (err) return res.send(`<div style="text-align:center; padding:40px;"><h3 style="color:red;">❌ የዳታቤዝ ስህተት አጋጥሟል!</h3><a href="/student-register">Back</a></div>`);
                 
+                const msg = lang === 'en' ? "Request Sent! Sent to Admin for review." : "ጥያቄዎ ለአድሚን ገምጋሚ ተልኳል።";
                 res.send(`
                 <div style="text-align:center; padding:40px; font-family:sans-serif;">
-                    <h2 style="color:green;">✅ ጥያቄዎ ተልኳል!</h2>
+                    <h2 style="color:green;">✅ ${lang === 'en' ? 'Success!' : 'ተሳክቷል!'}</h2>
                     <div style="background:#eef2f5; display:inline-block; padding:20px; border-radius:8px; text-align:left;">
-                        <p><strong>ክፍል:</strong> ${assignedSection}</p>
-                        <p><strong>መታወቂያ ቁጥር (ID):</strong> <span style="color:red; font-size:20px;">${autoID}</span></p>
-                        <p><strong>የሚስጥር ቁጥር (PIN):</strong> <span style="color:red; font-size:20px;">${autoPIN}</span></p>
-                        <p style="color:#e67e22; font-size:13px;">⏳ ምዝገባዎ ለአድሚን ገምጋሚ ተልኳል። ሲፈቀድ መግባት ይችላሉ።</p>
+                        <p><strong>Class:</strong> ${assignedSection}</p>
+                        <p><strong>ID Number:</strong> <span style="color:red; font-size:20px;">${autoID}</span></p>
+                        <p><strong>Password PIN:</strong> <span style="color:red; font-size:20px;">${autoPIN}</span></p>
+                        <p style="color:#e67e22; font-size:13px;">⏳ ${msg}</p>
                         <p><a href="/download-pending-slip/${this.lastID}" style="background:#e67e22; color:white; padding:10px; text-decoration:none; border-radius:5px;">📥 Download PDF</a></p>
                     </div><br><br><a href="/?lang=${lang}">Home</a>
                 </div>`);
@@ -360,7 +379,8 @@ app.get('/admin', (req, res) => {
     const lang = req.query.lang || 'am';
 
     db.all(`SELECT * FROM pending_students`, [], (err, pending) => {
-        db.all(`SELECT * FROM students ORDER BY class_level`, [], (err, students) => {
+        // Optimized: only select what's needed for admin list to speed up load time
+        db.all(`SELECT student_id, name, class_level, phone, password, status FROM students ORDER BY class_level`, [], (err, students) => {
             db.all(`SELECT * FROM teachers`, [], (err, teachers) => {
                 db.all(`SELECT * FROM sections ORDER BY name`, [], (err, sections) => {
                     db.all(`SELECT * FROM courses ORDER BY class_level, code`, [], (err, courses) => {
@@ -628,7 +648,7 @@ app.get('/admin/delete-student/:id', (req, res) => {
 
 app.get('/admin/export-students', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
-    db.all(`SELECT * FROM students ORDER BY class_level, name`, [], (err, students) => {
+    db.all(`SELECT student_id, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, status FROM students ORDER BY class_level, name`, [], (err, students) => {
         let header = ['student_id','name','mother_name','gender','age','phone','emergency_phone','region','zone','woreda','kebele','class_level','payment_type','status'];
         let rows = [header.join(',')];
         students.forEach(s => rows.push(header.map(col => csvCell(s[col])).join(',')));
@@ -664,7 +684,7 @@ app.get('/class-hub/:className', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     let className = decodeURIComponent(req.params.className);
     
-    db.all(`SELECT * FROM students`, [], (err, allStudents) => {
+    db.all(`SELECT student_id, name, gender, class_level FROM students`, [], (err, allStudents) => {
         let students = allStudents.filter(s => isClassMatch(s.class_level, className));
         db.all(`SELECT * FROM course_assessments`, [], (err, assessments) => {
             
@@ -729,20 +749,28 @@ app.get('/teacher-dashboard', (req, res) => {
         let assignedClasses = teacher.assigned_sections ? teacher.assigned_sections.split(',').map(s => s.trim()) : [];
         let selectedClass = (req.query.cls || assignedClasses[0] || '').trim();
 
-        db.all(`SELECT * FROM students ORDER BY name ASC`, [], (err, allStudents) => {
+        // Optimized to fetch less blob data (speed improvement)
+        db.all(`SELECT student_id, name, class_level FROM students ORDER BY name ASC`, [], (err, allStudents) => {
             let studentsInClass = allStudents.filter(s => isClassMatch(s.class_level, selectedClass));
             
             db.all(`SELECT * FROM courses WHERE teacher_id = ?`, [req.session.teacherId], (err, courses) => {
                 let classCourses = courses.filter(c => isClassMatch(c.class_level, selectedClass));
-                let selectedCourseId = req.query.course_id || (classCourses.length > 0 ? classCourses[0].id : '');
-                let selectedCourse = classCourses.find(c => c.id.toString() === selectedCourseId.toString());
+                
+                // Smart fallback if the selected course does not belong to the selected class
+                let selectedCourseId = req.query.course_id;
+                let selectedCourse = classCourses.find(c => c.id.toString() === (selectedCourseId || '').toString());
+                
+                if (!selectedCourse && classCourses.length > 0) {
+                    selectedCourse = classCourses[0];
+                    selectedCourseId = selectedCourse.id;
+                }
 
                 db.all(`SELECT * FROM course_assessments WHERE teacher_id = ? AND course_code = ?`, [req.session.teacherId, selectedCourse ? selectedCourse.code : ''], (err, assessments) => {
                     db.all(`SELECT * FROM absence_requests ORDER BY id DESC`, [], (err, allAbsences) => {
                         let classAbsences = allAbsences.filter(ab => isClassMatch(ab.class_level, selectedClass));
 
                         let classOptions = assignedClasses.map(c => `<option value="${esc(c)}" ${c === selectedClass ? 'selected' : ''}>${c}</option>`).join('');
-                        let courseOptions = classCourses.map(c => `<option value="${c.id}" ${c.id.toString() === selectedCourseId.toString() ? 'selected' : ''}>${c.title} (${c.code})</option>`).join('');
+                        let courseOptions = classCourses.map(c => `<option value="${c.id}" ${c.id.toString() === (selectedCourseId||'').toString() ? 'selected' : ''}>${c.title} (${c.code})</option>`).join('');
 
                         let studentRows = studentsInClass.map((st, idx) => {
                             let asm = assessments ? assessments.find(a => a.student_id === st.student_id) || {} : {};
@@ -877,6 +905,7 @@ app.get('/student-dashboard', (req, res) => {
     if (!req.session.studentId) return res.redirect('/');
     
     db.get(`SELECT s.* FROM students s WHERE s.student_id = ?`, [req.session.studentId], (err, student) => {
+        
         db.all(`SELECT * FROM courses ORDER BY id`, [], (err, allCourses) => {
             let myCourses = allCourses.filter(c => isClassMatch(c.class_level, student.class_level));
             
@@ -901,7 +930,7 @@ app.get('/student-dashboard', (req, res) => {
                                 ${ab.teacher_feedback ? `<span style="color:green; font-weight:bold;">💬 Teacher Reply: ${ab.teacher_feedback}</span>` : `<span style="color:orange;">⏳ Pending teacher response...</span>`}
                             </div>`).join('');
 
-                            // Grades Table mapping over the 10 courses
+                            // Grades Table specifically mapping over the 10 courses
                             let gradesHtml = myCourses.map(c => {
                                 let asm = myGrades.find(a => a.course_code === c.code) || {};
                                 return `<tr>
@@ -946,11 +975,11 @@ app.get('/student-dashboard', (req, res) => {
                                     <div class="card">
                                         <h3>📊 የትምህርት ውጤቶች (Assessment & Grades)</h3>
                                         <table><tr><th>Subject & Teacher</th><th>Quiz(20)</th><th>Mid(30)</th><th>Final(50)</th><th>Total(100)</th><th>Remark</th></tr>
-                                        ${gradesHtml||'<tr><td colspan="6">No courses posted yet.</td></tr>'}</table>
+                                        ${gradesHtml||'<tr><td colspan="6">No grades posted yet.</td></tr>'}</table>
                                     </div>
 
                                     <div class="card" style="background:#fdf2e9; border: 1px solid #e67e22;">
-                                        <h3 style="color:#d35400;">⚠️ መልዕክት / ፈቃድ ላክ</h3>
+                                        <h3 style="color:#d35400;">⚠️ መልዕክት / ፈቃድ (Message Teacher)</h3>
                                         <p style="font-size:13px; color:#555;">መልዕክት መላክ የሚፈልጉለትን መምህር ይምረጡ:</p>
                                         <form action="/student/absence" method="POST">
                                             <select name="target_teacher" required style="width:100%; padding:10px; margin-bottom:10px; border-radius:5px;">
@@ -1007,7 +1036,7 @@ app.get('/attendance-sheet/:secName', (req, res) => {
     let sec = decodeURIComponent(req.params.secName);
     let selectedDate = req.query.date || new Date().toISOString().split('T')[0];
 
-    db.all(`SELECT * FROM students ORDER BY name ASC`, [], (err, allStudents) => {
+    db.all(`SELECT student_id, name, gender, class_level FROM students ORDER BY name ASC`, [], (err, allStudents) => {
         let studentsInClass = allStudents.filter(s => isClassMatch(s.class_level, sec));
         
         db.all(`SELECT * FROM daily_attendance WHERE class_level = ? AND date = ?`, [sec, selectedDate], (err, records) => {
@@ -1104,7 +1133,7 @@ app.post('/save-attendance', (req, res) => {
     if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
     let { class_level, date } = req.body;
 
-    db.all(`SELECT * FROM students`, [], (err, allStudents) => {
+    db.all(`SELECT student_id, name, class_level FROM students`, [], (err, allStudents) => {
         if(err) return res.redirect('/teacher-dashboard');
         
         let studentsInClass = allStudents.filter(s => isClassMatch(s.class_level, class_level));
