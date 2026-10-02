@@ -89,6 +89,9 @@ async function initDB() {
         )`);
 
         try { await pool.query(`ALTER TABLE sections ADD COLUMN class_monitor TEXT`); } catch(e) {}
+        // አዲሱ ፋይል/ፎቶ መላኪያ ኮለሞች
+        try { await pool.query(`ALTER TABLE notifications ADD COLUMN attachment TEXT`); } catch(e) {}
+        try { await pool.query(`ALTER TABLE absence_requests ADD COLUMN attachment TEXT`); } catch(e) {}
 
         let tRes = await pool.query("SELECT COUNT(*) as count FROM teachers");
         if (tRes.rows[0].count == 0) {
@@ -436,6 +439,7 @@ app.get('/admin', (req, res) => {
             db.all(`SELECT * FROM teachers`, [], (err, teachers) => {
                 db.all(`SELECT * FROM sections ORDER BY name`, [], (err, sections) => {
                     db.all(`SELECT * FROM courses ORDER BY class_level, code`, [], (err, courses) => {
+                        db.all(`SELECT * FROM notifications WHERE sender_role = 'Admin' ORDER BY id DESC`, [], (err, adminNotifs) => {
 
                         let pRows = pending.map(s => {
                             let paymentDisplay = s.payment_type === 'slip_file' ? `<a href="/uploads/${s.bank_slip_val}" target="_blank" style="color:#2980b9; text-decoration:underline;">📄 ደረሰኝ እይ</a>` : `<b>TXN:</b> ${s.bank_slip_val}`;
@@ -475,6 +479,26 @@ app.get('/admin', (req, res) => {
                             <td><a href="/admin/edit-teacher/${tc.id}?lang=${lang}" style="color:#2980b9; font-weight:bold;">✏️ Edit</a></td>
                             <td><a href="/admin/delete-teacher/${tc.id}?lang=${lang}" onclick="return confirm('Remove this teacher permanently?')" style="color:red; font-weight:bold;">🗑️ Remove</a></td>
                             </tr>`).join('');
+
+                        // ======= የተላኩ መልዕክቶች መደርደሪያ =======
+                        let adminNotiRows = adminNotifs.map(n => {
+                            let attachHtml = n.attachment ? `<br><a href="/uploads/${n.attachment}" target="_blank" style="color:blue; font-weight:bold;">📎 የተያያዘ ፋይል ክፈት</a>` : '';
+                            return `<div style="background:#fdf2e9; padding:10px; margin-bottom:10px; border-radius:5px;">
+                                <strong>🔔 ${n.sender_name} (${n.created_at})</strong><br>
+                                <div>${n.message}</div>
+                                ${attachHtml}
+                                <div style="margin-top:10px; border-top:1px solid #ccc; padding-top:5px;">
+                                    <button onclick="document.getElementById('editNotif_${n.id}').style.display='block'" style="background:orange; color:white; border:none; padding:3px 8px; border-radius:3px; cursor:pointer;">✏️ Edit</button>
+                                    <a href="/delete-notification/${n.id}" onclick="return confirm('እርግጠኛ ነዎት ይጠፋ?')" style="background:red; color:white; padding:4px 8px; border-radius:3px; text-decoration:none; font-size:13px;">🗑️ Delete</a>
+                                    
+                                    <form id="editNotif_${n.id}" action="/edit-notification/${n.id}" method="POST" enctype="multipart/form-data" style="display:none; margin-top:10px;">
+                                        <textarea name="message" rows="3" style="width:100%;">${n.message.replace(/<[^>]+>/g, '')}</textarea>
+                                        <input type="file" name="attachment" style="margin-top:5px;">
+                                        <button type="submit" style="background:green; color:white; border:none; padding:4px 8px; margin-top:5px;">💾 Save Edit</button>
+                                    </form>
+                                </div>
+                            </div>`;
+                        }).join('');
 
                         // ======= ተማሪዎችን በየክፍሉ መደርደሪያ =======
                         let groupedStudentsHtml = '';
@@ -520,6 +544,7 @@ app.get('/admin', (req, res) => {
                             .toggle-btn { background:#2c3e50; color:white; padding:15px 30px; font-size:16px; border:none; border-radius:8px; cursor:pointer; font-weight:bold; width:100%; max-width:400px; margin: 10px auto; display:block;}
                             .toggle-btn:hover { background:#1a252f; }
                         </style>
+                        <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
                         <script>
                             function toggleSection(id) {
                                 var el = document.getElementById(id);
@@ -532,11 +557,19 @@ app.get('/admin', (req, res) => {
                             <h2><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 10px;"> 🔐 የዳይሬክተር / አድሚን መቆጣጠሪያ</h2>
 
                             <div class="card" style="background:#e8f4fd;">
-                                <h3>📢 ማስታወቂያ ላክ</h3>
-                                <form action="/admin/send-notification" method="POST">
-                                    <textarea name="message" rows="3" placeholder="Write your notification here..." required></textarea>
+                                <h3 style="color:#2980b9;">📢 አዲስ ማስታወቂያ ላክ</h3>
+                                <form action="/admin/send-notification" method="POST" enctype="multipart/form-data" id="notifForm">
+                                    <div id="editor" style="height: 120px; background: white; margin-bottom: 10px;"></div>
+                                    <input type="hidden" name="message" id="hiddenMessage" required>
+                                    
+                                    <label style="font-size: 13px; font-weight:bold; display:block; margin: 10px 0;">📎 ፎቶ ወይም ፋይል አያይዝ (አማራጭ):</label>
+                                    <input type="file" name="attachment" accept="image/*,.pdf,.doc,.docx" style="margin-bottom:10px;">
+                                    <br>
                                     <button type="submit" style="background:#3498db; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">Send Notification</button>
                                 </form>
+                                <hr style="margin:20px 0;">
+                                <h3 style="color:#555;">📋 የላኳቸው ማስታወቂያዎች</h3>
+                                ${adminNotiRows || '<p style="color:#777;">ምንም መልዕክት አልተላከም</p>'}
                             </div>
 
                             <div class="card">
@@ -612,7 +645,19 @@ app.get('/admin', (req, res) => {
                             </div>
 
                             <br><div style="text-align:center;"><a href="/logout" style="color:red; font-weight:bold; font-size:18px;">🔒 ውጣ (Logout)</a></div><br><br>
+                            
+                            <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+                            <script>
+                                var quill = new Quill('#editor', {
+                                    theme: 'snow',
+                                    modules: { toolbar: [ [{ 'font': [] }, { 'size': [] }], ['bold', 'italic', 'underline', 'strike'], [{ 'color': [] }, { 'background': [] }], [{ 'align': [] }], ['link', 'image'] ] }
+                                });
+                                document.getElementById('notifForm').onsubmit = function() {
+                                    document.getElementById('hiddenMessage').value = quill.root.innerHTML;
+                                };
+                            </script>
                         </body></html>`);
+                        });
                     });
                 });
             });
@@ -865,12 +910,6 @@ app.get('/class-hub/:className', (req, res) => {
     });
 });
 
-app.post('/admin/send-notification', (req, res) => {
-    if (!req.session.isAdmin) return res.redirect('/');
-    db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at) VALUES (?,?,?,?,?)`,
-        ['Admin', 'School Admin', 'ALL', req.body.message, new Date().toLocaleString()], () => res.redirect('/admin'));
-});
-
 // TEACHER DASHBOARD - Proctor Monitor Assignment
 app.get('/teacher-dashboard', (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
@@ -901,103 +940,152 @@ app.get('/teacher-dashboard', (req, res) => {
                             let currentSection = allSections.find(sec => isClassMatch(sec.name, selectedClass)) || {};
                             let isProctor = currentSection.proctor_name === teacher.name;
 
-                            let classOptions = assignedClasses.map(c => `<option value="${esc(c)}" ${c === selectedClass ? 'selected' : ''}>${c}</option>`).join('');
-                            let courseOptions = classCourses.map(c => `<option value="${c.id}" ${c.id.toString() === (selectedCourseId||'').toString() ? 'selected' : ''}>${c.title} (${c.code})</option>`).join('');
+                            // መምህሩ የላካቸውን ማስታወቂያዎች ለማግኘት
+                            db.all(`SELECT * FROM notifications WHERE sender_name = ? ORDER BY id DESC`, [teacher.name], (err, mySentNotifs) => {
 
-                            let studentRows = studentsInClass.map((st, idx) => {
-                                let asm = assessments ? assessments.find(a => a.student_id === st.student_id) || {} : {};
-                                return `<tr>
-                                <td><b>${idx + 1}</b></td>
-                                <td>${st.student_id}</td><td>${st.name}</td>
-                                <form action="/teacher/save-grade?cls=${encodeURIComponent(selectedClass)}&course_id=${selectedCourseId}" method="POST">
-                                <input type="hidden" name="student_id" value="${st.student_id}">
-                                <td><input type="number" name="quiz" value="${asm.quiz!==undefined?asm.quiz:''}" min="0" max="20" style="width:50px;"></td>
-                                <td><input type="number" name="mid" value="${asm.mid!==undefined?asm.mid:''}" min="0" max="30" style="width:50px;"></td>
-                                <td><input type="number" name="final" value="${asm.final!==undefined?asm.final:''}" min="0" max="50" style="width:50px;"></td>
-                                <td><strong>${asm.total||0}</strong></td>
-                                <td><button type="submit" style="background:#27ae60;color:white;border:none;padding:5px 10px; border-radius:3px; cursor:pointer;">💾 Save / Update</button></td></form></tr>`;
-                            }).join('');
+                                let classOptions = assignedClasses.map(c => `<option value="${esc(c)}" ${c === selectedClass ? 'selected' : ''}>${c}</option>`).join('');
+                                let courseOptions = classCourses.map(c => `<option value="${c.id}" ${c.id.toString() === (selectedCourseId||'').toString() ? 'selected' : ''}>${c.title} (${c.code})</option>`).join('');
 
-                            let absRows = classAbsences.map(ab => `<div style="background:#fdf2e9; padding:10px; border-left:4px solid #e67e22; margin-bottom:10px;">
-                                <strong>${ab.student_name} (${ab.student_id})</strong> - <em>${ab.created_at}</em><br>
-                                📝 <strong>መልዕክት:</strong> ${ab.reason}<br>
-                                ${ab.teacher_feedback ? `<span style="color:green; font-weight:bold;">💬 Your Feedback: ${ab.teacher_feedback}</span>` : `
-                                <form action="/teacher/give-feedback?cls=${encodeURIComponent(selectedClass)}" method="POST" style="margin-top:5px; display:flex; gap:5px;">
-                                    <input type="hidden" name="req_id" value="${ab.id}">
-                                    <input type="text" name="feedback" placeholder="Reply to student..." required style="flex:1; padding:4px;">
-                                    <button type="submit" style="background:#16a085; color:white; border:none; padding:4px 8px; border-radius:3px;">Send</button>
-                                </form>`}
-                            </div>`).join('');
+                                let studentRows = studentsInClass.map((st, idx) => {
+                                    let asm = assessments ? assessments.find(a => a.student_id === st.student_id) || {} : {};
+                                    return `<tr>
+                                    <td><b>${idx + 1}</b></td>
+                                    <td>${st.student_id}</td><td>${st.name}</td>
+                                    <form action="/teacher/save-grade?cls=${encodeURIComponent(selectedClass)}&course_id=${selectedCourseId}" method="POST">
+                                    <input type="hidden" name="student_id" value="${st.student_id}">
+                                    <td><input type="number" name="quiz" value="${asm.quiz!==undefined?asm.quiz:''}" min="0" max="20" style="width:50px;"></td>
+                                    <td><input type="number" name="mid" value="${asm.mid!==undefined?asm.mid:''}" min="0" max="30" style="width:50px;"></td>
+                                    <td><input type="number" name="final" value="${asm.final!==undefined?asm.final:''}" min="0" max="50" style="width:50px;"></td>
+                                    <td><strong>${asm.total||0}</strong></td>
+                                    <td><button type="submit" style="background:#27ae60;color:white;border:none;padding:5px 10px; border-radius:3px; cursor:pointer;">💾 Save / Update</button></td></form></tr>`;
+                                }).join('');
 
-                            let proctorPanel = '';
-                            if (isProctor) {
-                                proctorPanel = `
-                                <div class="card" style="background:#f9fcf7; border: 1px solid #c3e6cb;">
-                                    <h3 style="color:#27ae60; margin-top:0;">👑 የክፍል ተቆጣጣሪ ፓነል (Proctor Panel)</h3>
-                                    <p>እርስዎ የዚህ ክፍል (<b>${selectedClass}</b>) ተቆጣጣሪ ነዎት።</p>
-                                    <p><b>የአሁኑ የክፍል ተጠሪ (Monitor):</b> ${currentSection.class_monitor || '<span style="color:red;">ያልተመደበ (None)</span>'}</p>
-                                    <form action="/teacher/assign-monitor?cls=${encodeURIComponent(selectedClass)}" method="POST" style="display:flex; gap:10px; max-width:400px; margin-top:10px;">
-                                        <select name="monitor_name" style="flex:1; padding:8px; border-radius:4px;">
-                                            <option value="">-- የክፍል ተጠሪ (Monitor) ይምረጡ --</option>
-                                            ${studentsInClass.map(s => `<option value="${esc(s.name)}">${s.name}</option>`).join('')}
-                                        </select>
-                                        <button type="submit" style="background:#27ae60; color:white; border:none; padding:8px 15px; border-radius:4px; font-weight:bold;">መድብ (Assign)</button>
-                                    </form>
-                                </div>`;
-                            }
+                                let absRows = classAbsences.map(ab => `<div style="background:#fdf2e9; padding:10px; border-left:4px solid #e67e22; margin-bottom:10px;">
+                                    <strong>${ab.student_name} (${ab.student_id})</strong> - <em>${ab.created_at}</em><br>
+                                    📝 <strong>መልዕክት:</strong> ${ab.reason}<br>
+                                    ${ab.attachment ? `<a href="/uploads/${ab.attachment}" target="_blank" style="color:blue;">📎 የተያያዘ ፋይል/ማስረጃ ክፈት</a><br>` : ''}
+                                    ${ab.teacher_feedback ? `<span style="color:green; font-weight:bold;">💬 Your Feedback: ${ab.teacher_feedback}</span>` : `
+                                    <form action="/teacher/give-feedback?cls=${encodeURIComponent(selectedClass)}" method="POST" style="margin-top:5px; display:flex; gap:5px;">
+                                        <input type="hidden" name="req_id" value="${ab.id}">
+                                        <input type="text" name="feedback" placeholder="Reply to student..." required style="flex:1; padding:4px;">
+                                        <button type="submit" style="background:#16a085; color:white; border:none; padding:4px 8px; border-radius:3px;">Send</button>
+                                    </form>`}
+                                </div>`).join('');
 
-                            res.send(`
-                            <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Teacher Dashboard</title>
-                            <style>body{font-family:sans-serif; background:#f4f7f6; padding:20px;} .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px; box-shadow:0 2px 5px rgba(0,0,0,0.1); overflow-x:auto;} table{width:100%; border-collapse:collapse; margin-top:10px; min-width:400px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#1f4e79; color:white;}</style></head>
-                            <body>
-                            <div style="max-width:900px; margin:auto;">
-                                <h2><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 10px;">👨‍🏫 Teacher Portal: ${teacher.name}</h2>
-                                
-                                <form method="GET" action="/teacher-dashboard" style="background:#eef2f5; padding:15px; border-radius:5px; margin-bottom:15px; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
-                                    <div style="flex:1; min-width:200px;">
-                                        <label style="font-weight:bold;">1. ክፍል ምረጥ (Select Class):</label><br>
-                                        <select name="cls" onchange="this.form.submit()" style="width:100%; padding:8px; border-radius:4px; margin-top:5px;">
-                                            ${classOptions || '<option>No Classes Assigned</option>'}
-                                        </select>
-                                    </div>
-                                    <div style="flex:1; min-width:200px;">
-                                        <label style="font-weight:bold;">2. ትምህርት ምረጥ (Select Course):</label><br>
-                                        <select name="course_id" onchange="this.form.submit()" style="width:100%; padding:8px; border-radius:4px; margin-top:5px;">
-                                            ${courseOptions || '<option value="">No Courses Assigned for this Class</option>'}
-                                        </select>
-                                    </div>
-                                </form>
+                                let teacherNotiRows = mySentNotifs.map(n => {
+                                    let attachHtml = n.attachment ? `<br><a href="/uploads/${n.attachment}" target="_blank" style="color:blue; font-weight:bold;">📎 የተያያዘ ፋይል ክፈት</a>` : '';
+                                    return `<div style="background:#e8f4fd; padding:10px; margin-bottom:10px; border-radius:5px;">
+                                        <strong>🔔 ወደ ${n.target_audience} የተላከ (${n.created_at})</strong><br>
+                                        <div>${n.message}</div>
+                                        ${attachHtml}
+                                        <div style="margin-top:10px; border-top:1px solid #ccc; padding-top:5px;">
+                                            <button onclick="document.getElementById('editNotif_${n.id}').style.display='block'" style="background:orange; color:white; border:none; padding:3px 8px; border-radius:3px; cursor:pointer;">✏️ Edit</button>
+                                            <a href="/delete-notification/${n.id}" onclick="return confirm('እርግጠኛ ነዎት ይጠፋ?')" style="background:red; color:white; padding:4px 8px; border-radius:3px; text-decoration:none; font-size:13px;">🗑️ Delete</a>
+                                            
+                                            <form id="editNotif_${n.id}" action="/edit-notification/${n.id}" method="POST" enctype="multipart/form-data" style="display:none; margin-top:10px;">
+                                                <textarea name="message" rows="3" style="width:100%;">${n.message.replace(/<[^>]+>/g, '')}</textarea>
+                                                <input type="file" name="attachment" style="margin-top:5px;">
+                                                <button type="submit" style="background:green; color:white; border:none; padding:4px 8px; margin-top:5px;">💾 Save Edit</button>
+                                            </form>
+                                        </div>
+                                    </div>`;
+                                }).join('');
 
-                                ${proctorPanel}
-
-                                ${selectedClass ? `
-                                <div style="margin-bottom:15px;">
-                                    <a href="/attendance-sheet/${encodeURIComponent(selectedClass)}" target="_blank" style="background:#2980b9; color:white; padding:10px; display:inline-block; border-radius:5px; text-decoration:none; margin-right:10px; font-weight:bold;">📋 Daily Attendance Sheet (${selectedClass})</a>
-                                </div>
-
-                                <div style="display:flex; gap:20px; flex-wrap:wrap;">
-                                    <div class="card" style="flex:1; min-width:300px;">
-                                        <h3>📢 Send Notification to ${selectedClass}</h3>
-                                        <form action="/teacher/send-notification?cls=${encodeURIComponent(selectedClass)}" method="POST">
-                                            <textarea name="message" rows="3" placeholder="Write class notification here..." required style="width:100%; padding:10px; border-radius:5px; border:1px solid #ccc; margin-bottom:10px;"></textarea>
-                                            <button type="submit" style="background:#3498db; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">Send Notification</button>
+                                let proctorPanel = '';
+                                if (isProctor) {
+                                    proctorPanel = `
+                                    <div class="card" style="background:#f9fcf7; border: 1px solid #c3e6cb;">
+                                        <h3 style="color:#27ae60; margin-top:0;">👑 የክፍል ተቆጣጣሪ ፓነል (Proctor Panel)</h3>
+                                        <p>እርስዎ የዚህ ክፍል (<b>${selectedClass}</b>) ተቆጣጣሪ ነዎት።</p>
+                                        <p><b>የአሁኑ የክፍል ተጠሪ (Monitor):</b> ${currentSection.class_monitor || '<span style="color:red;">ያልተመደበ (None)</span>'}</p>
+                                        <form action="/teacher/assign-monitor?cls=${encodeURIComponent(selectedClass)}" method="POST" style="display:flex; gap:10px; max-width:400px; margin-top:10px;">
+                                            <select name="monitor_name" style="flex:1; padding:8px; border-radius:4px;">
+                                                <option value="">-- የክፍል ተጠሪ (Monitor) ይምረጡ --</option>
+                                                ${studentsInClass.map(s => `<option value="${esc(s.name)}">${s.name}</option>`).join('')}
+                                            </select>
+                                            <button type="submit" style="background:#27ae60; color:white; border:none; padding:8px 15px; border-radius:4px; font-weight:bold;">መድብ (Assign)</button>
                                         </form>
-                                    </div>
-                                    
-                                    <div class="card" style="flex:1; min-width:300px; max-height: 250px; overflow-y:auto; border:1px solid #ccc;">
-                                        <h3>📩 Student Requests & Absences (${selectedClass})</h3>${absRows || '<p style="color:#777;">No requests.</p>'}
-                                    </div>
-                                </div>
+                                    </div>`;
+                                }
 
-                                <div style="overflow-x:auto;">
-                                <h3 style="background:#1f4e79; color:white; padding:10px; margin:0; border-top-left-radius:5px; border-top-right-radius:5px;">📝 የውጤት መሙያ (Grades) - ${selectedCourse ? selectedCourse.title : 'No Course Selected'}</h3>
-                                <table border="1" width="100%" style="border-collapse:collapse; text-align:center; min-width:600px; background:white;">
-                                    <tr style="background:#eef2f5;"><th>No</th><th>ID</th><th>Name</th><th>Quiz(20)</th><th>Mid(30)</th><th>Final(50)</th><th>Total</th><th>Action</th></tr>
-                                    ${selectedCourse ? (studentRows || '<tr><td colspan="8">No students in this class</td></tr>') : '<tr><td colspan="8">Please select a course to enter grades.</td></tr>'}
-                                </table></div>` : ''}
-                                
-                                <br><br><a href="/logout" style="color:red; font-weight:bold; font-size:18px;">🔒 Logout</a>
-                            </div></body></html>`);
+                                res.send(`
+                                <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Teacher Dashboard</title>
+                                <style>body{font-family:sans-serif; background:#f4f7f6; padding:20px;} .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px; box-shadow:0 2px 5px rgba(0,0,0,0.1); overflow-x:auto;} table{width:100%; border-collapse:collapse; margin-top:10px; min-width:400px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#1f4e79; color:white;}</style>
+                                <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+                                </head>
+                                <body>
+                                <div style="max-width:900px; margin:auto;">
+                                    <h2><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 10px;">👨‍🏫 Teacher Portal: ${teacher.name}</h2>
+                                    
+                                    <form method="GET" action="/teacher-dashboard" style="background:#eef2f5; padding:15px; border-radius:5px; margin-bottom:15px; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+                                        <div style="flex:1; min-width:200px;">
+                                            <label style="font-weight:bold;">1. ክፍል ምረጥ (Select Class):</label><br>
+                                            <select name="cls" onchange="this.form.submit()" style="width:100%; padding:8px; border-radius:4px; margin-top:5px;">
+                                                ${classOptions || '<option>No Classes Assigned</option>'}
+                                            </select>
+                                        </div>
+                                        <div style="flex:1; min-width:200px;">
+                                            <label style="font-weight:bold;">2. ትምህርት ምረጥ (Select Course):</label><br>
+                                            <select name="course_id" onchange="this.form.submit()" style="width:100%; padding:8px; border-radius:4px; margin-top:5px;">
+                                                ${courseOptions || '<option value="">No Courses Assigned for this Class</option>'}
+                                            </select>
+                                        </div>
+                                    </form>
+
+                                    ${proctorPanel}
+
+                                    ${selectedClass ? `
+                                    <div style="margin-bottom:15px;">
+                                        <a href="/attendance-sheet/${encodeURIComponent(selectedClass)}" target="_blank" style="background:#2980b9; color:white; padding:10px; display:inline-block; border-radius:5px; text-decoration:none; margin-right:10px; font-weight:bold;">📋 Daily Attendance Sheet (${selectedClass})</a>
+                                    </div>
+
+                                    <div style="display:flex; gap:20px; flex-wrap:wrap;">
+                                        <div class="card" style="flex:1; min-width:300px;">
+                                            <h3 style="color:#2980b9;">📢 ማስታወቂያ ላክ ወደ ${selectedClass}</h3>
+                                            <form action="/teacher/send-notification?cls=${encodeURIComponent(selectedClass)}" method="POST" enctype="multipart/form-data" id="teacherNotifForm">
+                                                <div id="editorTeacher" style="height: 100px; background: white; margin-bottom: 10px;"></div>
+                                                <input type="hidden" name="message" id="hiddenMessageTeacher" required>
+                                                
+                                                <label style="font-size: 13px; font-weight:bold; display:block; margin:10px 0;">📎 ፎቶ ወይም ፋይል አያይዝ:</label>
+                                                <input type="file" name="attachment" accept="image/*,.pdf,.doc,.docx" style="margin-bottom:10px; width:100%;">
+                                                
+                                                <button type="submit" style="background:#3498db; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">Send Notification</button>
+                                            </form>
+                                            
+                                            <hr style="margin:20px 0;">
+                                            <h3 style="color:#555;">📋 እርስዎ የላኳቸው ማስታወቂያዎች</h3>
+                                            ${teacherNotiRows || '<p style="color:#777;">ምንም መልዕክት አልተላከም</p>'}
+                                        </div>
+                                        
+                                        <div class="card" style="flex:1; min-width:300px; max-height: 400px; overflow-y:auto; border:1px solid #ccc;">
+                                            <h3>📩 Student Requests & Absences (${selectedClass})</h3>${absRows || '<p style="color:#777;">No requests.</p>'}
+                                        </div>
+                                    </div>
+
+                                    <div style="overflow-x:auto;">
+                                    <h3 style="background:#1f4e79; color:white; padding:10px; margin:0; border-top-left-radius:5px; border-top-right-radius:5px;">📝 የውጤት መሙያ (Grades) - ${selectedCourse ? selectedCourse.title : 'No Course Selected'}</h3>
+                                    <table border="1" width="100%" style="border-collapse:collapse; text-align:center; min-width:600px; background:white;">
+                                        <tr style="background:#eef2f5;"><th>No</th><th>ID</th><th>Name</th><th>Quiz(20)</th><th>Mid(30)</th><th>Final(50)</th><th>Total</th><th>Action</th></tr>
+                                        ${selectedCourse ? (studentRows || '<tr><td colspan="8">No students in this class</td></tr>') : '<tr><td colspan="8">Please select a course to enter grades.</td></tr>'}
+                                    </table></div>` : ''}
+                                    
+                                    <br><br><a href="/logout" style="color:red; font-weight:bold; font-size:18px;">🔒 Logout</a>
+                                </div>
+                                <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+                                <script>
+                                    var quill = new Quill('#editorTeacher', {
+                                        theme: 'snow',
+                                        modules: { toolbar: [ [{ 'font': [] }, { 'size': [] }], ['bold', 'italic', 'underline', 'strike'], [{ 'color': [] }, { 'background': [] }], [{ 'align': [] }], ['link', 'image'] ] }
+                                    });
+                                    var form = document.getElementById('teacherNotifForm');
+                                    if(form) {
+                                        form.onsubmit = function() {
+                                            document.getElementById('hiddenMessageTeacher').value = quill.root.innerHTML;
+                                        };
+                                    }
+                                </script>
+                                </body></html>`);
+                            });
                         });
                     });
                 });
@@ -1025,13 +1113,51 @@ app.post('/teacher/assign-monitor', (req, res) => {
     });
 });
 
-app.post('/teacher/send-notification', (req, res) => {
+// አዲስ ማስታወቂያ ለመላክ - አስተማሪ
+app.post('/teacher/send-notification', upload.single('attachment'), (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
     let targetClass = req.query.cls || '';
+    let attachment = req.file ? req.file.filename : null;
     db.get(`SELECT * FROM teachers WHERE id = ?`, [req.session.teacherId], (err, teacher) => {
-        db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at) VALUES (?,?,?,?,?)`,
-            ['Teacher', teacher.name, targetClass, req.body.message, new Date().toLocaleString()], () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}`));
+        db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at, attachment) VALUES (?,?,?,?,?,?)`,
+            ['Teacher', teacher.name, targetClass, req.body.message, new Date().toLocaleString(), attachment], () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}`));
     });
+});
+
+// አዲስ ማስታወቂያ ለመላክ - አድሚን
+app.post('/admin/send-notification', upload.single('attachment'), (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    let attachment = req.file ? req.file.filename : null;
+    db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at, attachment) VALUES (?,?,?,?,?,?)`,
+        ['Admin', 'School Admin', 'ALL', req.body.message, new Date().toLocaleString(), attachment], () => res.redirect('/admin'));
+});
+
+// ====== DELETE & EDIT ROUTES ======
+
+app.get('/delete-notification/:id', (req, res) => {
+    db.run(`DELETE FROM notifications WHERE id = ?`, [req.params.id], () => res.redirect('back'));
+});
+
+app.get('/delete-request/:id', (req, res) => {
+    db.run(`DELETE FROM absence_requests WHERE id = ?`, [req.params.id], () => res.redirect('back'));
+});
+
+app.post('/edit-notification/:id', upload.single('attachment'), (req, res) => {
+    let updateQuery = req.file 
+        ? `UPDATE notifications SET message = ?, attachment = ? WHERE id = ?` 
+        : `UPDATE notifications SET message = ? WHERE id = ?`;
+    let params = req.file ? [req.body.message, req.file.filename, req.params.id] : [req.body.message, req.params.id];
+    
+    db.run(updateQuery, params, () => res.redirect('back'));
+});
+
+app.post('/edit-request/:id', upload.single('attachment'), (req, res) => {
+    let updateQuery = req.file 
+        ? `UPDATE absence_requests SET reason = ?, attachment = ? WHERE id = ?` 
+        : `UPDATE absence_requests SET reason = ? WHERE id = ?`;
+    let params = req.file ? [req.body.reason, req.file.filename, req.params.id] : [req.body.reason, req.params.id];
+    
+    db.run(updateQuery, params, () => res.redirect('back'));
 });
 
 app.post('/teacher/give-feedback', (req, res) => {
@@ -1088,16 +1214,38 @@ app.get('/student-dashboard', (req, res) => {
                         db.all(`SELECT * FROM absence_requests WHERE student_id = ? ORDER BY id DESC`, [student.student_id], (err, myAbsences) => {
                             
                             let myNotifs = allNotifs.filter(n => n.target_audience === 'ALL' || isClassMatch(n.target_audience, student.class_level));
-                            let notiRows = myNotifs.map(n => `<div style="background:${n.sender_role==='Admin'?'#f8d7da':'#d1ecf1'}; color:${n.sender_role==='Admin'?'#721c24':'#0c5460'}; padding:10px; margin-bottom:10px; border-radius:5px; border-left:5px solid ${n.sender_role==='Admin'?'#f5c6cb':'#bee5eb'};">
-                                <strong style="font-size:12px;">🔔 From: ${n.sender_name} (${n.created_at})</strong><br>
-                                ${n.message}
-                            </div>`).join('');
+                            let notiRows = myNotifs.map(n => {
+                                let attachHtml = n.attachment ? `<br><a href="/uploads/${n.attachment}" target="_blank" style="color:blue; font-weight:bold; display:inline-block; margin-top:5px;">📎 የተያያዘ ፋይል ክፈት</a>` : '';
+                                return `<div style="background:${n.sender_role==='Admin'?'#f8d7da':'#d1ecf1'}; color:${n.sender_role==='Admin'?'#721c24':'#0c5460'}; padding:10px; margin-bottom:10px; border-radius:5px; border-left:5px solid ${n.sender_role==='Admin'?'#f5c6cb':'#bee5eb'};">
+                                    <strong style="font-size:12px;">🔔 From: ${n.sender_name} (${n.created_at})</strong><br>
+                                    <div style="margin-top:5px;">${n.message}</div>
+                                    ${attachHtml}
+                                </div>`;
+                            }).join('');
 
-                            let myAbsRows = myAbsences.map(ab => `<div style="background:#f9f9f9; padding:8px; border:1px solid #ddd; margin-bottom:5px; border-radius:4px;">
-                                <small>📅 ${ab.created_at}</small><br>
-                                <strong>Message:</strong> ${ab.reason}<br>
-                                ${ab.teacher_feedback ? `<span style="color:green; font-weight:bold;">💬 Teacher Reply: ${ab.teacher_feedback}</span>` : `<span style="color:orange;">⏳ Pending teacher response...</span>`}
-                            </div>`).join('');
+                            let myAbsRows = myAbsences.map(ab => {
+                                let attachHtml = ab.attachment ? `<br><a href="/uploads/${ab.attachment}" target="_blank" style="color:#2980b9;">📎 የተያያዘ ፋይል እይ</a>` : '';
+                                let actionBtns = !ab.teacher_feedback ? `
+                                    <div style="margin-top:10px;">
+                                        <a href="/delete-request/${ab.id}" onclick="return confirm('መልዕክቱ ይጠፋል፣ እርግጠኛ ነዎት?')" style="color:red; font-size:13px; font-weight:bold; margin-right:15px;">🗑️ ሰርዝ (Delete)</a>
+                                        <button onclick="document.getElementById('editReq_${ab.id}').style.display='block'" style="background:transparent; border:none; color:orange; font-weight:bold; cursor:pointer;">✏️ አስተካክል (Edit)</button>
+                                        <form id="editReq_${ab.id}" action="/edit-request/${ab.id}" method="POST" enctype="multipart/form-data" style="display:none; margin-top:5px;">
+                                            <textarea name="reason" style="width:100%; padding:5px;">${ab.reason.replace(/\[ለ: .*?\] - /, '')}</textarea>
+                                            <input type="file" name="attachment" style="margin-top:5px; font-size:12px;">
+                                            <button type="submit" style="background:green; color:white; padding:5px; border:none; border-radius:3px;">አድስ (Save)</button>
+                                        </form>
+                                    </div>` : `<div style="margin-top:5px;"><span style="font-size:12px; color:gray;">(መምህሩ ምላሽ ስለሰጠ Edit አይቻልም)</span></div>`;
+
+                                return `<div style="background:#f9f9f9; padding:10px; border:1px solid #ddd; margin-bottom:8px; border-radius:4px;">
+                                    <small>📅 ${ab.created_at}</small><br>
+                                    <strong>መልዕክት:</strong> ${ab.reason}
+                                    ${attachHtml}
+                                    <div style="margin-top:8px;">
+                                        ${ab.teacher_feedback ? `<span style="color:green; font-weight:bold;">💬 Teacher Reply: ${ab.teacher_feedback}</span>` : `<span style="color:orange;">⏳ Pending response...</span>`}
+                                    </div>
+                                    ${actionBtns}
+                                </div>`;
+                            }).join('');
 
                             let gradesHtml = myCourses.map(c => {
                                 let asm = myGrades.find(a => a.course_code === c.code) || {};
@@ -1151,17 +1299,24 @@ app.get('/student-dashboard', (req, res) => {
                                     <div class="card" style="background:#fdf2e9; border: 1px solid #e67e22;">
                                         <h3 style="color:#d35400;">⚠️ መልዕክት / ፈቃድ ላክ</h3>
                                         <p style="font-size:13px; color:#555;">መልዕክት መላክ የሚፈልጉለትን መምህር ይምረጡ:</p>
-                                        <form action="/student/absence" method="POST">
+                                        
+                                        <form action="/student/absence" method="POST" enctype="multipart/form-data">
                                             <select name="target_teacher" required style="width:100%; padding:10px; margin-bottom:10px; border-radius:5px;">
                                                 <option value="Proctor/Monitor">ወደ: የክፍል ተቆጣጣሪ (Class Proctor)</option>
                                                 ${teacherOptions}
                                             </select>
-                                            <textarea name="reason" placeholder="መልዕክትዎን ወይም የፈቃድ ጥያቄዎን እዚህ ይጻፉ..." style="width:100%; padding:10px; margin-bottom:10px; border-radius:5px; border:1px solid #ccc;" rows="3" required></textarea>
+                                            
+                                            <textarea name="reason" placeholder="መልዕክትዎን ወይም የፈቃድ ጥያቄዎን እዚህ ይጻፉ..." style="width:100%; padding:10px; border-radius:5px; border:1px solid #ccc;" rows="3" required></textarea>
+                                            
+                                            <label style="font-size:13px; display:block; margin: 10px 0; font-weight:bold;">📎 የህክምና ማስረጃ ወይም ፎቶ ያያይዙ (አማራጭ):</label>
+                                            <input type="file" name="attachment" accept="image/*,.pdf,.doc,.docx" style="margin-bottom:15px; width:100%;">
+                                            
                                             <button type="submit" style="background:#e67e22; color:white; padding:10px; border:none; border-radius:5px; width:100%; cursor:pointer; font-weight:bold;">ጥያቄውን ላክ (Send Message)</button>
                                         </form>
-                                        <hr style="margin:15px 0;">
+                                        
+                                        <hr style="margin:20px 0;">
                                         <h4>📋 የላኳቸው ጥያቄዎች እና የመምህር ምላሽ</h4>
-                                        ${myAbsRows || '<p style="font-size:12px; color:#777;">No requests sent yet.</p>'}
+                                        ${myAbsRows || '<p style="font-size:12px; color:#777;">ምንም ጥያቄ አልላኩም</p>'}
                                     </div>
                                     <a href="/logout" style="color:red; font-weight:bold; font-size:18px;">🔒 ውጣ (Logout)</a>
                                 </div>
@@ -1186,14 +1341,15 @@ app.post('/student/update-photo', upload.single('new_photo'), (req, res) => {
     }
 });
 
-app.post('/student/absence', (req, res) => {
+app.post('/student/absence', upload.single('attachment'), (req, res) => {
     if (!req.session.studentId) return res.redirect('/');
+    let attachment = req.file ? req.file.filename : null;
     db.get('SELECT name, class_level FROM students WHERE student_id=?', [req.session.studentId], (err, st) => {
         if(st) {
             let timestamp = new Date().toLocaleString(); 
             let fullReason = `[ለ: ${req.body.target_teacher}] - ${req.body.reason}`;
-            db.run(`INSERT INTO absence_requests (student_id, student_name, class_level, reason, teacher_feedback, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
-            [req.session.studentId, st.name, st.class_level, fullReason, '', 'Pending', timestamp], () => {
+            db.run(`INSERT INTO absence_requests (student_id, student_name, class_level, reason, teacher_feedback, status, created_at, attachment) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, 
+            [req.session.studentId, st.name, st.class_level, fullReason, '', 'Pending', timestamp, attachment], () => {
                 res.redirect('/student-dashboard');
             });
         }
