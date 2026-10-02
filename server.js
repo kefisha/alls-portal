@@ -23,6 +23,7 @@ const pool = new Pool({
     ssl: { rejectUnauthorized: false }
 });
 
+// Database Wrapper for SQLite to PostgreSQL compatibility
 const db = {
     run: (sql, params, callback) => {
         if (typeof params === 'function') { callback = params; params = []; }
@@ -87,6 +88,9 @@ async function initDB() {
         await pool.query(`CREATE TABLE IF NOT EXISTS daily_attendance (
             id SERIAL PRIMARY KEY, student_id TEXT, student_name TEXT, class_level TEXT, date TEXT, status TEXT
         )`);
+
+        // Add class_monitor column safely if it doesn't exist
+        try { await pool.query(`ALTER TABLE sections ADD COLUMN class_monitor TEXT`); } catch(e) {}
 
         let tRes = await pool.query("SELECT COUNT(*) as count FROM teachers");
         if (tRes.rows[0].count == 0) {
@@ -436,7 +440,6 @@ app.get('/admin', (req, res) => {
                 db.all(`SELECT * FROM sections ORDER BY name`, [], (err, sections) => {
                     db.all(`SELECT * FROM courses ORDER BY class_level, code`, [], (err, courses) => {
 
-                        // Payment Details correctly displayed to Admin
                         let pRows = pending.map(s => {
                             let paymentDisplay = s.payment_type === 'slip_file' ? `<a href="/uploads/${s.bank_slip_val}" target="_blank" style="color:#2980b9; text-decoration:underline;">📄 ደረሰኝ እይ</a>` : `<b>TXN:</b> ${s.bank_slip_val}`;
                             return `<tr><td>-</td><td>${s.student_id}</td><td>${s.name}</td><td>${paymentDisplay}</td><td><a href="/admin/approve/${s.id}?lang=${lang}" style="color:green; font-weight:bold;">✅ Approve</a></td></tr>`;
@@ -467,7 +470,8 @@ app.get('/admin', (req, res) => {
                                 <button type="submit">Save</button></form></td>
                             <td><a href="/admin/delete-section/${sec.id}?lang=${lang}" onclick="return confirm('Delete this section?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td>
                             <td>
-                                <a href="/attendance-sheet/${encodeURIComponent(sec.name)}" style="color:#2980b9; font-weight:bold; margin-right:10px;" target="_blank">📋 Attendance Sheet</a>
+                                <a href="/attendance-sheet/${encodeURIComponent(sec.name)}" style="color:#2980b9; font-weight:bold; margin-right:10px;" target="_blank">📋 Attendance</a>
+                                <a href="/admin/export-section-students/${encodeURIComponent(sec.name)}" style="background:#27ae60; color:white; padding:4px 8px; border-radius:3px; text-decoration:none; font-weight:bold;">📥 Excel</a>
                             </td>
                             </tr>`).join('');
 
@@ -513,7 +517,7 @@ app.get('/admin', (req, res) => {
                                     </select>
                                     <button type="submit" style="background:#2980b9; color:white; border:none; padding:8px 14px; border-radius:5px;">➕ Add Section</button>
                                 </form>
-                                <table><tr><th>Section Name</th><th>Proctor Name (Teacher)</th><th>Delete</th><th>Sheets & Portals</th></tr>${secRows||'<tr><td colspan="4">None</td></tr>'}</table>
+                                <table><tr><th>Section Name</th><th>Proctor Name (Teacher)</th><th>Delete</th><th>Sheets & Excel</th></tr>${secRows||'<tr><td colspan="4">None</td></tr>'}</table>
                             </div>
 
                             <div class="card">
@@ -529,6 +533,9 @@ app.get('/admin', (req, res) => {
                                     <button type="submit" style="background:#2980b9; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">➕ Add Teacher</button>
                                 </form>
                                 <table><tr><th>ID</th><th>Name</th><th>Grades (1-12)</th><th>Classes</th><th>Phone</th><th>Password</th><th>Edit</th><th>Remove</th></tr>${tRows||'<tr><td colspan="8">None</td></tr>'}</table>
+                                <div style="margin-top:15px; text-align:center;">
+                                    <a class="btn" href="/admin/export-teachers" style="background:#16a085;">📊 Total Teachers (Export to Excel)</a>
+                                </div>
                             </div>
 
                             <div class="card">
@@ -547,6 +554,9 @@ app.get('/admin', (req, res) => {
                             <div class="card">
                                 <h3>ሁሉም ተማሪዎች</h3>
                                 <table><tr><th>ID</th><th>Name</th><th>Class</th><th>Phone</th><th>Password</th><th>Edit</th><th>Reset Password</th><th>Delete</th></tr>${sRows||'<tr><td colspan="9">None</td></tr>'}</table>
+                                <div style="margin-top:15px; text-align:center;">
+                                    <a class="btn" href="/admin/export-students" style="background:#27ae60;">📊 Total Students (Export to Excel)</a>
+                                </div>
                             </div>
                             <br><a href="/logout" style="color:red; font-weight:bold; font-size:18px;">🔒 ውጣ (Logout)</a>
                         </body></html>`);
@@ -566,6 +576,49 @@ app.get('/admin/approve/:id', (req, res) => {
             if (insertErr) console.error("Approve Insert Error:", insertErr);
             db.run(`DELETE FROM pending_students WHERE id = ?`, [req.params.id], () => res.redirect('/admin'));
         });
+    });
+});
+
+// ================= ADMIN EXCEL EXPORTS =================
+
+app.get('/admin/export-students', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.all(`SELECT student_id, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, status FROM students ORDER BY class_level, name`, [], (err, students) => {
+        let header = ['student_id','name','mother_name','gender','age','phone','emergency_phone','region','zone','woreda','kebele','class_level','payment_type','status'];
+        let rows = [header.join(',')];
+        students.forEach(s => rows.push(header.map(col => csvCell(s[col])).join(',')));
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=all_students.csv');
+        res.send(rows.join('\r\n'));
+    });
+});
+
+app.get('/admin/export-teachers', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.all(`SELECT id, name, phone, assigned_sections, assigned_grades FROM teachers ORDER BY name`, [], (err, teachers) => {
+        let header = ['Teacher ID','Full Name','Phone','Assigned Sections','Assigned Grades'];
+        let rows = [header.join(',')];
+        teachers.forEach(t => {
+            rows.push([csvCell(t.id), csvCell(t.name), csvCell(t.phone), csvCell(t.assigned_sections), csvCell(t.assigned_grades)].join(','));
+        });
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=all_teachers.csv');
+        res.send(rows.join('\r\n'));
+    });
+});
+
+app.get('/admin/export-section-students/:secName', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    let secName = decodeURIComponent(req.params.secName);
+    db.all(`SELECT student_id, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, status FROM students`, [], (err, allStudents) => {
+        let students = allStudents.filter(s => isClassMatch(s.class_level, secName));
+        let header = ['student_id','name','mother_name','gender','age','phone','emergency_phone','region','zone','woreda','kebele','class_level','payment_type','status'];
+        let rows = [header.join(',')];
+        students.forEach(s => rows.push(header.map(col => csvCell(s[col])).join(',')));
+        res.setHeader('Content-Type', 'text/csv');
+        let filename = `students_${secName.replace(/\s+/g, '_')}.csv`;
+        res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+        res.send(rows.join('\r\n'));
     });
 });
 
@@ -703,39 +756,6 @@ app.get('/admin/delete-student/:id', (req, res) => {
     });
 });
 
-app.get('/admin/export-students', (req, res) => {
-    if (!req.session.isAdmin) return res.redirect('/');
-    db.all(`SELECT student_id, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, status FROM students ORDER BY class_level, name`, [], (err, students) => {
-        let header = ['student_id','name','mother_name','gender','age','phone','emergency_phone','region','zone','woreda','kebele','class_level','payment_type','status'];
-        let rows = [header.join(',')];
-        students.forEach(s => rows.push(header.map(col => csvCell(s[col])).join(',')));
-        res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', 'attachment; filename=alls_students.csv');
-        res.send(rows.join('\r\n'));
-    });
-});
-
-app.post('/admin/import-students', csvUpload.single('csv_file'), (req, res) => {
-    if (!req.session.isAdmin) return res.redirect('/');
-    if (!req.file) return res.redirect('/admin');
-    let lines = req.file.buffer.toString('utf8').split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
-    if (lines.length && lines[0].toLowerCase().startsWith('name,')) lines.shift();
-
-    let processRow = (i) => {
-        if (i >= lines.length) return res.redirect('/admin');
-        let cols = lines[i].split(',').map(c => c.trim());
-        let [name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level] = cols;
-        if (!name) return processRow(i + 1);
-
-        let autoID = generateStudentID(); let autoPIN = generate4DigitPIN();
-        ensureSectionExists(class_level || 'Unassigned');
-        db.run(`INSERT INTO students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo, status, admin_message) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [autoID, autoPIN, name, mother_name || '', gender || '', age || null, phone || '', emergency_phone || '', region || '', zone || '', woreda || '', kebele || '', class_level || 'Unassigned', 'admin_added', '-', '', 'Approved', 'Added directly by Admin.'],
-        () => processRow(i + 1));
-    };
-    processRow(0);
-});
-
 // SINGLE CLICK CLASS HUB FOR DIRECTORS
 app.get('/class-hub/:className', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
@@ -798,7 +818,7 @@ app.post('/admin/send-notification', (req, res) => {
         ['Admin', 'School Admin', 'ALL', req.body.message, new Date().toLocaleString()], () => res.redirect('/admin'));
 });
 
-// TEACHER DASHBOARD - Advanced Dropdown Class & Course Selection
+// TEACHER DASHBOARD - Proctor Monitor Assignment
 app.get('/teacher-dashboard', (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
     
@@ -824,87 +844,130 @@ app.get('/teacher-dashboard', (req, res) => {
                     db.all(`SELECT * FROM absence_requests ORDER BY id DESC`, [], (err, allAbsences) => {
                         let classAbsences = allAbsences.filter(ab => isClassMatch(ab.class_level, selectedClass));
 
-                        let classOptions = assignedClasses.map(c => `<option value="${esc(c)}" ${c === selectedClass ? 'selected' : ''}>${c}</option>`).join('');
-                        let courseOptions = classCourses.map(c => `<option value="${c.id}" ${c.id.toString() === (selectedCourseId||'').toString() ? 'selected' : ''}>${c.title} (${c.code})</option>`).join('');
+                        db.all(`SELECT * FROM sections`, [], (err, allSections) => {
+                            let currentSection = allSections.find(sec => isClassMatch(sec.name, selectedClass)) || {};
+                            let isProctor = currentSection.proctor_name === teacher.name;
 
-                        let studentRows = studentsInClass.map((st, idx) => {
-                            let asm = assessments ? assessments.find(a => a.student_id === st.student_id) || {} : {};
-                            return `<tr>
-                            <td><b>${idx + 1}</b></td>
-                            <td>${st.student_id}</td><td>${st.name}</td>
-                            <form action="/teacher/save-grade?cls=${encodeURIComponent(selectedClass)}&course_id=${selectedCourseId}" method="POST">
-                            <input type="hidden" name="student_id" value="${st.student_id}">
-                            <td><input type="number" name="quiz" value="${asm.quiz!==undefined?asm.quiz:''}" min="0" max="20" style="width:50px;"></td>
-                            <td><input type="number" name="mid" value="${asm.mid!==undefined?asm.mid:''}" min="0" max="30" style="width:50px;"></td>
-                            <td><input type="number" name="final" value="${asm.final!==undefined?asm.final:''}" min="0" max="50" style="width:50px;"></td>
-                            <td><strong>${asm.total||0}</strong></td>
-                            <td><button type="submit" style="background:#27ae60;color:white;border:none;padding:5px 10px; border-radius:3px; cursor:pointer;">💾 Save / Update</button></td></form></tr>`;
-                        }).join('');
+                            let classOptions = assignedClasses.map(c => `<option value="${esc(c)}" ${c === selectedClass ? 'selected' : ''}>${c}</option>`).join('');
+                            let courseOptions = classCourses.map(c => `<option value="${c.id}" ${c.id.toString() === (selectedCourseId||'').toString() ? 'selected' : ''}>${c.title} (${c.code})</option>`).join('');
 
-                        let absRows = classAbsences.map(ab => `<div style="background:#fdf2e9; padding:10px; border-left:4px solid #e67e22; margin-bottom:10px;">
-                            <strong>${ab.student_name} (${ab.student_id})</strong> - <em>${ab.created_at}</em><br>
-                            📝 <strong>መልዕክት:</strong> ${ab.reason}<br>
-                            ${ab.teacher_feedback ? `<span style="color:green; font-weight:bold;">💬 Your Feedback: ${ab.teacher_feedback}</span>` : `
-                            <form action="/teacher/give-feedback?cls=${encodeURIComponent(selectedClass)}" method="POST" style="margin-top:5px; display:flex; gap:5px;">
-                                <input type="hidden" name="req_id" value="${ab.id}">
-                                <input type="text" name="feedback" placeholder="Reply to student..." required style="flex:1; padding:4px;">
-                                <button type="submit" style="background:#16a085; color:white; border:none; padding:4px 8px; border-radius:3px;">Send</button>
-                            </form>`}
-                        </div>`).join('');
+                            let studentRows = studentsInClass.map((st, idx) => {
+                                let asm = assessments ? assessments.find(a => a.student_id === st.student_id) || {} : {};
+                                return `<tr>
+                                <td><b>${idx + 1}</b></td>
+                                <td>${st.student_id}</td><td>${st.name}</td>
+                                <form action="/teacher/save-grade?cls=${encodeURIComponent(selectedClass)}&course_id=${selectedCourseId}" method="POST">
+                                <input type="hidden" name="student_id" value="${st.student_id}">
+                                <td><input type="number" name="quiz" value="${asm.quiz!==undefined?asm.quiz:''}" min="0" max="20" style="width:50px;"></td>
+                                <td><input type="number" name="mid" value="${asm.mid!==undefined?asm.mid:''}" min="0" max="30" style="width:50px;"></td>
+                                <td><input type="number" name="final" value="${asm.final!==undefined?asm.final:''}" min="0" max="50" style="width:50px;"></td>
+                                <td><strong>${asm.total||0}</strong></td>
+                                <td><button type="submit" style="background:#27ae60;color:white;border:none;padding:5px 10px; border-radius:3px; cursor:pointer;">💾 Save / Update</button></td></form></tr>`;
+                            }).join('');
 
-                        res.send(`
-                        <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Teacher Dashboard</title>
-                        <style>body{font-family:sans-serif; background:#f4f7f6; padding:20px;} .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px; box-shadow:0 2px 5px rgba(0,0,0,0.1); overflow-x:auto;} table{width:100%; border-collapse:collapse; margin-top:10px; min-width:400px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#1f4e79; color:white;}</style></head>
-                        <body>
-                        <div style="max-width:900px; margin:auto;">
-                            <h2><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 10px;">👨‍🏫 Teacher Portal: ${teacher.name}</h2>
-                            
-                            <form method="GET" action="/teacher-dashboard" style="background:#eef2f5; padding:15px; border-radius:5px; margin-bottom:15px; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
-                                <div style="flex:1; min-width:200px;">
-                                    <label style="font-weight:bold;">1. ክፍል ምረጥ (Select Class):</label><br>
-                                    <select name="cls" onchange="this.form.submit()" style="width:100%; padding:8px; border-radius:4px; margin-top:5px;">
-                                        ${classOptions || '<option>No Classes Assigned</option>'}
-                                    </select>
-                                </div>
-                                <div style="flex:1; min-width:200px;">
-                                    <label style="font-weight:bold;">2. ትምህርት ምረጥ (Select Course):</label><br>
-                                    <select name="course_id" onchange="this.form.submit()" style="width:100%; padding:8px; border-radius:4px; margin-top:5px;">
-                                        ${courseOptions || '<option value="">No Courses Assigned for this Class</option>'}
-                                    </select>
-                                </div>
-                            </form>
+                            let absRows = classAbsences.map(ab => `<div style="background:#fdf2e9; padding:10px; border-left:4px solid #e67e22; margin-bottom:10px;">
+                                <strong>${ab.student_name} (${ab.student_id})</strong> - <em>${ab.created_at}</em><br>
+                                📝 <strong>መልዕክት:</strong> ${ab.reason}<br>
+                                ${ab.teacher_feedback ? `<span style="color:green; font-weight:bold;">💬 Your Feedback: ${ab.teacher_feedback}</span>` : `
+                                <form action="/teacher/give-feedback?cls=${encodeURIComponent(selectedClass)}" method="POST" style="margin-top:5px; display:flex; gap:5px;">
+                                    <input type="hidden" name="req_id" value="${ab.id}">
+                                    <input type="text" name="feedback" placeholder="Reply to student..." required style="flex:1; padding:4px;">
+                                    <button type="submit" style="background:#16a085; color:white; border:none; padding:4px 8px; border-radius:3px;">Send</button>
+                                </form>`}
+                            </div>`).join('');
 
-                            ${selectedClass ? `
-                            <div style="margin-bottom:15px;">
-                                <a href="/attendance-sheet/${encodeURIComponent(selectedClass)}" target="_blank" style="background:#2980b9; color:white; padding:10px; display:inline-block; border-radius:5px; text-decoration:none; margin-right:10px; font-weight:bold;">📋 Daily Attendance Sheet (${selectedClass})</a>
-                            </div>
-
-                            <div style="display:flex; gap:20px; flex-wrap:wrap;">
-                                <div class="card" style="flex:1; min-width:300px;">
-                                    <h3>📢 Send Notification to ${selectedClass}</h3>
-                                    <form action="/teacher/send-notification?cls=${encodeURIComponent(selectedClass)}" method="POST">
-                                        <textarea name="message" rows="3" placeholder="Write class notification here..." required style="width:100%; padding:10px; border-radius:5px; border:1px solid #ccc; margin-bottom:10px;"></textarea>
-                                        <button type="submit" style="background:#3498db; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">Send Notification</button>
+                            let proctorPanel = '';
+                            if (isProctor) {
+                                proctorPanel = `
+                                <div class="card" style="background:#f9fcf7; border: 1px solid #c3e6cb;">
+                                    <h3 style="color:#27ae60; margin-top:0;">👑 የክፍል ተቆጣጣሪ ፓነል (Proctor Panel)</h3>
+                                    <p>እርስዎ የዚህ ክፍል (<b>${selectedClass}</b>) ተቆጣጣሪ ነዎት።</p>
+                                    <p><b>የአሁኑ የክፍል ተጠሪ (Monitor):</b> ${currentSection.class_monitor || '<span style="color:red;">ያልተመደበ (None)</span>'}</p>
+                                    <form action="/teacher/assign-monitor?cls=${encodeURIComponent(selectedClass)}" method="POST" style="display:flex; gap:10px; max-width:400px; margin-top:10px;">
+                                        <select name="monitor_name" style="flex:1; padding:8px; border-radius:4px;">
+                                            <option value="">-- የክፍል ተጠሪ (Monitor) ይምረጡ --</option>
+                                            ${studentsInClass.map(s => `<option value="${esc(s.name)}">${s.name}</option>`).join('')}
+                                        </select>
+                                        <button type="submit" style="background:#27ae60; color:white; border:none; padding:8px 15px; border-radius:4px; font-weight:bold;">መድብ (Assign)</button>
                                     </form>
-                                </div>
-                                
-                                <div class="card" style="flex:1; min-width:300px; max-height: 250px; overflow-y:auto; border:1px solid #ccc;">
-                                    <h3>📩 Student Requests & Absences (${selectedClass})</h3>${absRows || '<p style="color:#777;">No requests.</p>'}
-                                </div>
-                            </div>
+                                </div>`;
+                            }
 
-                            <div style="overflow-x:auto;">
-                            <h3 style="background:#1f4e79; color:white; padding:10px; margin:0; border-top-left-radius:5px; border-top-right-radius:5px;">📝 የውጤት መሙያ (Grades) - ${selectedCourse ? selectedCourse.title : 'No Course Selected'}</h3>
-                            <table border="1" width="100%" style="border-collapse:collapse; text-align:center; min-width:600px; background:white;">
-                                <tr style="background:#eef2f5;"><th>No</th><th>ID</th><th>Name</th><th>Quiz(20)</th><th>Mid(30)</th><th>Final(50)</th><th>Total</th><th>Action</th></tr>
-                                ${selectedCourse ? (studentRows || '<tr><td colspan="8">No students in this class</td></tr>') : '<tr><td colspan="8">Please select a course to enter grades.</td></tr>'}
-                            </table></div>` : ''}
-                            
-                            <br><br><a href="/logout" style="color:red; font-weight:bold; font-size:18px;">🔒 Logout</a>
-                        </div></body></html>`);
+                            res.send(`
+                            <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Teacher Dashboard</title>
+                            <style>body{font-family:sans-serif; background:#f4f7f6; padding:20px;} .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px; box-shadow:0 2px 5px rgba(0,0,0,0.1); overflow-x:auto;} table{width:100%; border-collapse:collapse; margin-top:10px; min-width:400px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#1f4e79; color:white;}</style></head>
+                            <body>
+                            <div style="max-width:900px; margin:auto;">
+                                <h2><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 10px;">👨‍🏫 Teacher Portal: ${teacher.name}</h2>
+                                
+                                <form method="GET" action="/teacher-dashboard" style="background:#eef2f5; padding:15px; border-radius:5px; margin-bottom:15px; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+                                    <div style="flex:1; min-width:200px;">
+                                        <label style="font-weight:bold;">1. ክፍል ምረጥ (Select Class):</label><br>
+                                        <select name="cls" onchange="this.form.submit()" style="width:100%; padding:8px; border-radius:4px; margin-top:5px;">
+                                            ${classOptions || '<option>No Classes Assigned</option>'}
+                                        </select>
+                                    </div>
+                                    <div style="flex:1; min-width:200px;">
+                                        <label style="font-weight:bold;">2. ትምህርት ምረጥ (Select Course):</label><br>
+                                        <select name="course_id" onchange="this.form.submit()" style="width:100%; padding:8px; border-radius:4px; margin-top:5px;">
+                                            ${courseOptions || '<option value="">No Courses Assigned for this Class</option>'}
+                                        </select>
+                                    </div>
+                                </form>
+
+                                ${proctorPanel}
+
+                                ${selectedClass ? `
+                                <div style="margin-bottom:15px;">
+                                    <a href="/attendance-sheet/${encodeURIComponent(selectedClass)}" target="_blank" style="background:#2980b9; color:white; padding:10px; display:inline-block; border-radius:5px; text-decoration:none; margin-right:10px; font-weight:bold;">📋 Daily Attendance Sheet (${selectedClass})</a>
+                                </div>
+
+                                <div style="display:flex; gap:20px; flex-wrap:wrap;">
+                                    <div class="card" style="flex:1; min-width:300px;">
+                                        <h3>📢 Send Notification to ${selectedClass}</h3>
+                                        <form action="/teacher/send-notification?cls=${encodeURIComponent(selectedClass)}" method="POST">
+                                            <textarea name="message" rows="3" placeholder="Write class notification here..." required style="width:100%; padding:10px; border-radius:5px; border:1px solid #ccc; margin-bottom:10px;"></textarea>
+                                            <button type="submit" style="background:#3498db; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">Send Notification</button>
+                                        </form>
+                                    </div>
+                                    
+                                    <div class="card" style="flex:1; min-width:300px; max-height: 250px; overflow-y:auto; border:1px solid #ccc;">
+                                        <h3>📩 Student Requests & Absences (${selectedClass})</h3>${absRows || '<p style="color:#777;">No requests.</p>'}
+                                    </div>
+                                </div>
+
+                                <div style="overflow-x:auto;">
+                                <h3 style="background:#1f4e79; color:white; padding:10px; margin:0; border-top-left-radius:5px; border-top-right-radius:5px;">📝 የውጤት መሙያ (Grades) - ${selectedCourse ? selectedCourse.title : 'No Course Selected'}</h3>
+                                <table border="1" width="100%" style="border-collapse:collapse; text-align:center; min-width:600px; background:white;">
+                                    <tr style="background:#eef2f5;"><th>No</th><th>ID</th><th>Name</th><th>Quiz(20)</th><th>Mid(30)</th><th>Final(50)</th><th>Total</th><th>Action</th></tr>
+                                    ${selectedCourse ? (studentRows || '<tr><td colspan="8">No students in this class</td></tr>') : '<tr><td colspan="8">Please select a course to enter grades.</td></tr>'}
+                                </table></div>` : ''}
+                                
+                                <br><br><a href="/logout" style="color:red; font-weight:bold; font-size:18px;">🔒 Logout</a>
+                            </div></body></html>`);
+                        });
                     });
                 });
             });
+        });
+    });
+});
+
+app.post('/teacher/assign-monitor', (req, res) => {
+    if (!req.session.teacherId) return res.redirect('/');
+    let targetClass = req.query.cls || '';
+    let monitorName = req.body.monitor_name;
+    
+    db.get(`SELECT * FROM teachers WHERE id = ?`, [req.session.teacherId], (err, teacher) => {
+        db.all(`SELECT * FROM sections`, [], (err, sections) => {
+            let section = sections.find(sec => isClassMatch(sec.name, targetClass));
+            if(section && section.proctor_name === teacher.name) {
+                db.run(`UPDATE sections SET class_monitor = ? WHERE id = ?`, [monitorName, section.id], () => {
+                    res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}`);
+                });
+            } else {
+                res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}`);
+            }
         });
     });
 });
@@ -966,12 +1029,10 @@ app.get('/student-dashboard', (req, res) => {
             
             db.all(`SELECT * FROM course_assessments WHERE student_id = ?`, [student.student_id], (err, myGrades) => {
                 db.all(`SELECT * FROM sections`, [], (err, allSections) => {
-                    let section = allSections.find(sec => isClassMatch(sec.name, student.class_level));
+                    let section = allSections.find(sec => isClassMatch(sec.name, student.class_level)) || { proctor_name: "N/A", proctor_phone: "-", class_monitor: "ያልተመደበ" };
                     
                     db.all(`SELECT * FROM notifications ORDER BY id DESC`, [], (err, allNotifs) => {
                         db.all(`SELECT * FROM absence_requests WHERE student_id = ? ORDER BY id DESC`, [student.student_id], (err, myAbsences) => {
-
-                            let monitor = section || { proctor_name: "N/A", proctor_phone: "-" };
                             
                             let myNotifs = allNotifs.filter(n => n.target_audience === 'ALL' || isClassMatch(n.target_audience, student.class_level));
                             let notiRows = myNotifs.map(n => `<div style="background:${n.sender_role==='Admin'?'#f8d7da':'#d1ecf1'}; color:${n.sender_role==='Admin'?'#721c24':'#0c5460'}; padding:10px; margin-bottom:10px; border-radius:5px; border-left:5px solid ${n.sender_role==='Admin'?'#f5c6cb':'#bee5eb'};">
@@ -1019,8 +1080,11 @@ app.get('/student-dashboard', (req, res) => {
                                             </form>
                                         </div>
                                         <div style="flex:1;">
-                                            <h3>${student.name} (${student.student_id})</h3>
-                                            <p><b>ክፍል:</b> ${student.class_level} | <b>ተቆጣጣሪ:</b> ${monitor.proctor_name} (${monitor.proctor_phone})</p>
+                                            <h3 style="margin-top:0;">${student.name} (${student.student_id})</h3>
+                                            <p style="margin:5px 0;"><b>ክፍል:</b> ${student.class_level}</p>
+                                            <p style="margin:5px 0;"><b>የክፍል ተቆጣጣሪ (Proctor):</b> ${section.proctor_name} (${section.proctor_phone})</p>
+                                            <p style="margin:5px 0; color:#27ae60;"><b>የክፍል ተጠሪ (Monitor / ስም-ጠሪ):</b> ${section.class_monitor || 'ያልተመደበ'}</p>
+                                            <br>
                                             <a href="/download-id-pdf/${student.student_id}" style="display:inline-block; padding:10px; background:#27ae60; color:white; text-decoration:none; border-radius:5px; font-weight:bold;">📥 ዲጂታል መታወቂያ ያውርዱ</a>
                                         </div>
                                     </div>
@@ -1036,7 +1100,7 @@ app.get('/student-dashboard', (req, res) => {
                                         <p style="font-size:13px; color:#555;">መልዕክት መላክ የሚፈልጉለትን መምህር ይምረጡ:</p>
                                         <form action="/student/absence" method="POST">
                                             <select name="target_teacher" required style="width:100%; padding:10px; margin-bottom:10px; border-radius:5px;">
-                                                <option value="Proctor/Monitor">ወደ: የክፍል ተቆጣጣሪ (Class Monitor)</option>
+                                                <option value="Proctor/Monitor">ወደ: የክፍል ተቆጣጣሪ (Class Proctor)</option>
                                                 ${teacherOptions}
                                             </select>
                                             <textarea name="reason" placeholder="መልዕክትዎን ወይም የፈቃድ ጥያቄዎን እዚህ ይጻፉ..." style="width:100%; padding:10px; margin-bottom:10px; border-radius:5px; border:1px solid #ccc;" rows="3" required></textarea>
