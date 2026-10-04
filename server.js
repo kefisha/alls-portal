@@ -18,9 +18,9 @@ const app = express();
 app.set('trust proxy', 1); 
 const PORT = process.env.PORT || 3000;
 
-// የ Chapa Test API Key (ይህንን በ .env ፋይልዎ ውስጥ መቀየር ይችላሉ)
+// Chapa Payment Keys & Configuration
 const CHAPA_SECRET_KEY = process.env.CHAPA_SECRET_KEY || 'CHASECK_TEST-n1B9WlH63jK2L7PzQ8vRm4T5sY0x'; 
-const REGISTRATION_FEE = '1000'; // የምዝገባ ክፍያ መጠን (በብር)
+const REGISTRATION_FEE = '1000'; // የምዝገባ ክፍያ (በብር)
 
 if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
     fs.mkdirSync(path.join(__dirname, 'uploads'));
@@ -76,9 +76,6 @@ async function initDB() {
             id SERIAL PRIMARY KEY, student_id TEXT, teacher_id TEXT, course_code TEXT, course_title TEXT, 
             quiz REAL, mid REAL, final REAL, total REAL, remark TEXT
         )`);
-        await pool.query(`CREATE TABLE IF NOT EXISTS withdrawals (
-            id SERIAL PRIMARY KEY, student_id TEXT, reason TEXT, details TEXT, status TEXT, admin_reply TEXT
-        )`);
         await pool.query(`CREATE TABLE IF NOT EXISTS courses (
             id SERIAL PRIMARY KEY, code TEXT, title TEXT, credit_hours INTEGER,
             teacher_id TEXT, teacher_name TEXT, class_level TEXT
@@ -106,6 +103,12 @@ async function initDB() {
             await pool.query(`INSERT INTO teachers (id, name, password, phone, assigned_sections, assigned_grades, is_proctor) VALUES 
             ('T-101', 'Dr. Teshale Kebede', $1, '0911001122', 'Grade 1 - Section A', 'Grade 1', 1)`, [hashedPass]);
         }
+
+        let sRes = await pool.query("SELECT COUNT(*) as count FROM sections");
+        if (sRes.rows[0].count == 0) {
+            await pool.query(`INSERT INTO sections (name, proctor_name, proctor_phone) VALUES 
+            ('Grade 1 - Section A', 'Dr. Teshale Kebede', '0912345678') ON CONFLICT (name) DO NOTHING`);
+        }
     } catch (err) {
         console.error('DB init error:', err);
     }
@@ -122,7 +125,7 @@ const fileFilter = (req, file, cb) => {
     if (allowedMimeTypes.includes(file.mimetype)) {
         cb(null, true);
     } else {
-        cb(new Error('❌ ያልተፈቀደ የፋይል አይነት ነው! ፎቶ፣ ፒዲኤፍ (PDF) ወይም ወርድ (Word) ብቻ ይላኩ።'), false);
+        cb(new Error('❌ ያልተፈቀደ የፋይል አይነት ነው!'), false);
     }
 };
 
@@ -186,7 +189,7 @@ function assignClassSection(requestedYearLevel, callback) {
 
 function esc(v) { return v === null || v === undefined ? '' : String(v).replace(/"/g, '&quot;'); }
 
-// ================= PUBLIC ROUTES =================
+// ================= LOGIN & PUBLIC ROUTES =================
 app.get('/', (req, res) => {
     const lang = req.query.lang === 'en' ? 'en' : 'am';
     const t = lang === 'en' ? {
@@ -243,10 +246,9 @@ app.post('/login', loginLimiter, (req, res) => {
     } else { res.redirect(`/?lang=${lang}&error=invalid`); }
 });
 
-app.get('/forgot-password', (req, res) => {
-    res.send(`<!DOCTYPE html><html><head><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-100 flex items-center justify-center min-h-screen"><div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md text-center"><h2>Forgot Password Logic Here</h2><a href="/" class="text-blue-500">Back</a></div></body></html>`);
-});
+app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 
+// ================= STUDENT REGISTRATION & CHAPA PAYMENT =================
 app.get('/student-register', (req, res) => {
     const lang = req.query.lang === 'en' ? 'en' : 'am';
     let gradeOptions = ''; for(let i=1; i<=12; i++) gradeOptions += `<option value="Grade ${i}">Grade ${i}</option>`;
@@ -277,11 +279,9 @@ app.get('/student-register', (req, res) => {
                         <div><label class="block text-gray-700 text-sm font-bold mb-2">ስልክ ቁጥር</label><input type="text" name="phone" required class="w-full px-3 py-2 border rounded-lg"></div>
                         <div><label class="block text-gray-700 text-sm font-bold mb-2">የአደጋ ጊዜ ተጠሪ ስልክ</label><input type="text" name="emergency_phone" required class="w-full px-3 py-2 border rounded-lg"></div>
                     </div>
-                    
                     <div class="mb-6"><label class="block text-gray-700 text-sm font-bold mb-2">የክፍል ደረጃ</label><select name="year_level" class="w-full px-3 py-2 border rounded-lg">${gradeOptions}</select></div>
                     <div class="mb-6"><label class="block text-gray-700 text-sm font-bold mb-2">የጉርድ ፎቶ</label><input type="file" name="student_photo" accept="image/*" required class="w-full p-2 border border-dashed rounded-lg"></div>
-
-                    <!-- አዲሱ የክፍያ አማራጭ እዚህ ጋር ነው -->
+                    
                     <div class="mb-8 p-4 border border-blue-200 rounded-lg bg-blue-50">
                         <label class="block text-blue-900 text-sm font-bold mb-2">ክፍያ (Registration Fee: ${REGISTRATION_FEE} ETB)</label>
                         <select name="payment_type" id="payType" onchange="document.getElementById('slipBox').style.display = this.value=='slip_file'?'block':'none'; document.getElementById('txnBox').style.display = this.value=='txn_id'?'block':'none';" class="w-full px-3 py-2 border rounded-lg mb-4">
@@ -291,9 +291,7 @@ app.get('/student-register', (req, res) => {
                         </select>
                         <div id="txnBox" style="display:none;"><input type="text" name="txn_id" placeholder="Transaction ID ያስገቡ..." class="w-full px-3 py-2 border rounded-lg"></div>
                         <div id="slipBox" style="display:none;"><input type="file" name="bank_slip_file" accept="image/*,.pdf" class="w-full p-2 border border-dashed rounded-lg bg-white"></div>
-                        <p class="text-xs text-blue-700 mt-2"><i class="fa-solid fa-shield-halved"></i> ደህንነቱ የተረጋገጠ የ Chapa ክፍያ ስርአት</p>
                     </div>
-
                     <button type="submit" id="subBtn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg">ምዝገባ ላክ (Submit)</button>
                 </form>
             </div>
@@ -318,109 +316,89 @@ app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 },
 
         assignClassSection(year_level, (assignedSection) => {
             let photoPath = (req.files && req.files['student_photo']) ? req.files['student_photo'][0].filename : '';
-            let slipPath = '';
-            
-            if (payment_type === 'chapa') {
-                slipPath = `Awaiting Chapa Payment: ${tx_ref}`;
-            } else {
-                slipPath = payment_type === 'slip_file' && (req.files && req.files['bank_slip_file']) ? req.files['bank_slip_file'][0].filename : xss(txn_id);
-            }
+            let slipPath = payment_type === 'chapa' ? `Awaiting Chapa Payment: ${tx_ref}` : (payment_type === 'slip_file' && (req.files && req.files['bank_slip_file']) ? req.files['bank_slip_file'][0].filename : xss(txn_id));
 
             db.get(`INSERT INTO pending_students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, class_level, payment_type, bank_slip_val, photo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`,
             [autoID, hashedPIN, name, mother_name || '', gender || '', age || null, phone || '', emergency_phone || '', assignedSection, payment_type, slipPath, photoPath], function(err, row) {
                 if (err) return res.redirect(`/student-register?lang=${lang}&error=db`);
                 
-                let insertedId = row ? row.id : (this.lastID || autoID);
-
-                // *********** CHAPA PAYMENT INTEGRATION ***********
                 if (payment_type === 'chapa') {
                     const chapaPayload = {
-                        amount: REGISTRATION_FEE,
-                        currency: 'ETB',
-                        email: 'student@alls.edu.et',
-                        first_name: name.split(' ')[0] || 'Student',
-                        last_name: name.split(' ')[1] || 'ALLS',
-                        phone_number: phone,
-                        tx_ref: tx_ref,
+                        amount: REGISTRATION_FEE, currency: 'ETB', email: 'student@alls.edu.et',
+                        first_name: name.split(' ')[0] || 'Student', last_name: name.split(' ')[1] || 'ALLS',
+                        phone_number: phone, tx_ref: tx_ref,
                         return_url: `${req.protocol}://${req.get('host')}/payment-verify/${tx_ref}/${autoID}?lang=${lang}`,
                         customization: { title: 'ALLS Registration Fee', description: 'School Registration Payment' }
                     };
 
                     fetch('https://api.chapa.co/v1/transaction/initialize', {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${CHAPA_SECRET_KEY}`,
-                            'Content-Type': 'application/json'
-                        },
+                        method: 'POST', headers: { 'Authorization': `Bearer ${CHAPA_SECRET_KEY}`, 'Content-Type': 'application/json' },
                         body: JSON.stringify(chapaPayload)
                     })
                     .then(r => r.json())
                     .then(data => {
-                        if(data.status === 'success') {
-                            // Redirect user to Chapa Checkout
-                            res.redirect(data.data.checkout_url);
-                        } else {
-                            res.send('Chapa initialization failed. Please contact admin.');
-                        }
+                        if(data.status === 'success') res.redirect(data.data.checkout_url);
+                        else res.send('Chapa initialization failed.');
                     })
-                    .catch(e => {
-                        console.error("Chapa Error: ", e);
-                        res.send('Payment system error. Ensure you are connected to internet.');
-                    });
-
+                    .catch(e => res.send('Payment system error.'));
                 } else {
-                    // Normal Manual Payment Success Page
-                    res.send(`<!DOCTYPE html><html><head><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-100 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center"><h2 class="text-3xl font-bold text-gray-800 mb-6">ተሳክቷል! (Success)</h2><div class="bg-gray-50 p-6 rounded-xl border mb-6 text-left"><p><strong>ID:</strong> <span class="text-blue-600 font-bold">${autoID}</span></p><p><strong>PIN:</strong> <span class="text-red-600 font-extrabold text-2xl">${autoPIN}</span></p></div><a href="/download-pending-slip/${autoID}" class="block w-full bg-gray-800 text-white font-bold py-3 rounded-lg mb-3">📥 Download PDF</a><a href="/" class="block w-full bg-green-600 text-white font-bold py-3 rounded-lg">ወደ መግቢያ ተመለስ</a></div></body></html>`);
+                    res.send(`<!DOCTYPE html><html><head><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-100 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center"><h2 class="text-3xl font-bold text-gray-800 mb-6">ተሳክቷል!</h2><div class="bg-gray-50 p-6 rounded-xl border mb-6 text-left"><p><strong>ID:</strong> <span class="text-blue-600 font-bold">${autoID}</span></p><p><strong>PIN:</strong> <span class="text-red-600 font-extrabold text-2xl">${autoPIN}</span></p></div><a href="/" class="block w-full bg-green-600 text-white font-bold py-3 rounded-lg">ወደ መግቢያ ተመለስ</a></div></body></html>`);
                 }
             });
         });
     });
 });
 
-// *********** CHAPA VERIFICATION ROUTE ***********
 app.get('/payment-verify/:tx_ref/:student_id', (req, res) => {
-    const tx_ref = req.params.tx_ref;
-    const student_id = req.params.student_id;
-
-    fetch(`https://api.chapa.co/v1/transaction/verify/${tx_ref}`, {
-        headers: { 'Authorization': `Bearer ${CHAPA_SECRET_KEY}` }
-    })
+    const tx_ref = req.params.tx_ref; const student_id = req.params.student_id;
+    fetch(`https://api.chapa.co/v1/transaction/verify/${tx_ref}`, { headers: { 'Authorization': `Bearer ${CHAPA_SECRET_KEY}` } })
     .then(r => r.json())
     .then(data => {
         if (data.status === 'success' && data.data.status === 'success') {
-            // Payment verified! Update database
             db.run(`UPDATE pending_students SET bank_slip_val = ? WHERE student_id = ?`, [`✅ PAID ONLINE (${tx_ref})`, student_id], () => {
-                db.get(`SELECT password FROM pending_students WHERE student_id = ?`, [student_id], (err, st) => {
-                    res.send(`<!DOCTYPE html><html><head><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-100 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center">
-                        <div class="text-green-500 text-6xl mb-4">✅</div>
-                        <h2 class="text-2xl font-bold text-gray-800 mb-2">ክፍያዎ ተረጋግጧል!</h2>
-                        <p class="text-gray-600 mb-6">የምዝገባ ክፍያ በተሳካ ሁኔታ ተፈፅሟል። የትምህርት ቤቱ አድሚን በቅርቡ ያፀድቀዋል።</p>
-                        <div class="bg-green-50 border border-green-200 p-4 rounded-lg mb-6 text-left">
-                            <p><strong>የመታወቂያ ቁጥር (ID):</strong> <span class="text-blue-600 font-bold">${student_id}</span></p>
-                            <p class="text-xs text-gray-500 mt-2">የይለፍ ቃልዎን (PIN) ማስታወሻ መያዝዎን አይርሱ!</p>
-                        </div>
-                        <a href="/download-pending-slip/${student_id}" class="block w-full bg-gray-800 text-white font-bold py-3 rounded-lg shadow-md mb-3">📥 የደረሰኝ ፒዲኤፍ አውርድ</a>
-                        <a href="/" class="block w-full bg-green-600 text-white font-bold py-3 rounded-lg shadow-md">ወደ መግቢያ ተመለስ</a>
-                    </div></body></html>`);
-                });
+                res.send(`<!DOCTYPE html><html><head><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-100 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center"><div class="text-green-500 text-6xl mb-4">✅</div><h2 class="text-2xl font-bold mb-2">ክፍያዎ ተረጋግጧል!</h2><p class="text-gray-600 mb-6">የመታወቂያ ቁጥርዎ: <strong class="text-blue-600">${student_id}</strong></p><a href="/" class="block w-full bg-green-600 text-white font-bold py-3 rounded-lg">ወደ መግቢያ ተመለስ</a></div></body></html>`);
             });
-        } else {
-            res.send(`<!DOCTYPE html><html><head><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-100 flex items-center justify-center min-h-screen"><div class="bg-white p-8 rounded-2xl shadow-xl max-w-md text-center"><h2 class="text-red-500 text-2xl font-bold">❌ ክፍያ አልተሳካም!</h2><p class="mt-4">እባክዎ እንደገና ይሞክሩ።</p><a href="/" class="text-blue-500 mt-4 block">ወደ መግቢያ ተመለስ</a></div></body></html>`);
-        }
-    })
-    .catch(e => {
-        console.error("Verification Error:", e);
-        res.send("ክፍያውን ማረጋገጥ አልተቻለም።");
-    });
+        } else { res.send(`ክፍያ አልተሳካም።`); }
+    }).catch(e => res.send("ክፍያ ማረጋገጥ አልተቻለም።"));
 });
-// ===============================================
 
-// ... (የቀረው የ Admin, Teacher, እና Student Dashboard ኮድ ምንም ሳይቀየር ከበፊቱ ጋር ተመሳሳይ ነው) ...
+// ================= ADMIN DASHBOARD (WITH CHARTS) =================
 app.get('/admin', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     db.all(`SELECT * FROM pending_students`, [], (err, pending) => {
-        let pRows = pending.map(s => `<tr><td>-</td><td>${s.student_id}</td><td>${s.name}</td><td style="color:${s.bank_slip_val.includes('PAID ONLINE') ? 'green' : 'black'}; font-weight:bold;">${s.bank_slip_val}</td><td><a href="/admin/approve/${s.id}" style="color:green; font-weight:bold;">✅ Approve</a></td></tr>`).join('');
-        res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Director Hub</title><style>body{font-family:sans-serif; padding:20px;} table{width:100%; border-collapse:collapse; margin-top:20px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;}</style></head><body><h2>የዳይሬክተር መቆጣጠሪያ</h2><h3>አዲስ ተመዝጋቢዎች (Pending)</h3><table><tr><th>Photo</th><th>ID</th><th>Name</th><th>Payment Status</th><th>Action</th></tr>${pRows||'<tr><td colspan="5">None</td></tr>'}</table><br><a href="/logout">Logout</a></body></html>`);
+        db.all(`SELECT student_id, name, class_level, phone, password, status, gender FROM students ORDER BY class_level, name`, [], (err, students) => {
+            db.all(`SELECT * FROM course_assessments`, [], (err, assessments) => {
+                let maleCount = students.filter(s => s.gender === 'Male').length;
+                let femaleCount = students.filter(s => s.gender === 'Female').length;
+                let excellent = 0, good = 0, average = 0, poor = 0;
+                assessments.forEach(a => {
+                    if (a.total >= 90) excellent++; else if (a.total >= 75) good++; else if (a.total >= 50) average++; else poor++;
+                });
+
+                let pRows = pending.map(s => `<tr><td>${s.student_id}</td><td>${s.name}</td><td style="color:${s.bank_slip_val.includes('PAID ONLINE')?'green':'black'}; font-weight:bold;">${s.bank_slip_val}</td><td><a href="/admin/approve/${s.id}" style="color:green; font-weight:bold;">✅ Approve</a></td></tr>`).join('');
+
+                res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Director Hub</title>
+                <style>body{font-family:sans-serif; background:#eef2f5; padding:20px;} .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px; box-shadow:0 2px 4px rgba(0,0,0,0.05); overflow-x:auto;} table{width:100%; border-collapse:collapse;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#2c3e50; color:white;} .charts-container { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 20px; } .chart-box { flex: 1; min-width: 300px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }</style>
+                <script src="https://cdn.jsdelivr.net/npm/chart.js"></script></head>
+                <body>
+                    <h2>🔐 የዳይሬክተር / አድሚን መቆጣጠሪያ</h2>
+                    <div class="charts-container">
+                        <div class="chart-box"><h3 style="text-align:center;">የተማሪዎች ውጤት ስርጭት</h3><canvas id="performanceChart"></canvas></div>
+                        <div class="chart-box"><h3 style="text-align:center;">የተማሪዎች የስርዓተ-ፆታ ስብጥር</h3><canvas id="genderChart"></canvas></div>
+                    </div>
+                    <div class="card"><h3>አዲስ ተመዝጋቢዎች (Pending)</h3><table><tr><th>ID</th><th>Name</th><th>Payment</th><th>Action</th></tr>${pRows||'<tr><td colspan="4">None</td></tr>'}</table></div>
+                    <div style="text-align:center;"><a href="/logout" style="color:red; font-weight:bold; font-size:18px;">🔒 Logout</a></div>
+                    <script>
+                        new Chart(document.getElementById('performanceChart').getContext('2d'), {
+                            type: 'bar', data: { labels: ['Excellent', 'Good', 'Average', 'Poor'], datasets: [{ label: 'Students Count', data: [${excellent}, ${good}, ${average}, ${poor}], backgroundColor: ['rgba(39, 174, 96, 0.7)', 'rgba(41, 128, 185, 0.7)', 'rgba(241, 196, 15, 0.7)', 'rgba(231, 76, 60, 0.7)'] }] }, options: { responsive: true }
+                        });
+                        new Chart(document.getElementById('genderChart').getContext('2d'), {
+                            type: 'pie', data: { labels: ['Male', 'Female'], datasets: [{ data: [${maleCount}, ${femaleCount}], backgroundColor: ['rgba(52, 152, 219, 0.8)', 'rgba(233, 30, 99, 0.8)'] }] }, options: { responsive: true }
+                        });
+                    </script>
+                </body></html>`);
+            });
+        });
     });
 });
 
@@ -435,5 +413,121 @@ app.get('/admin/approve/:id', (req, res) => {
     });
 });
 
-app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
-app.listen(PORT, () => console.log(`🚀 Modernized Server with Chapa Payment API running on port ${PORT}`));
+// ================= TEACHER DASHBOARD (WITH AJAX GRADE SAVING) =================
+app.get('/teacher-dashboard', (req, res) => {
+    if (!req.session.teacherId) return res.redirect('/');
+    db.get(`SELECT * FROM teachers WHERE id = ?`, [req.session.teacherId], (err, teacher) => {
+        let assignedClasses = teacher.assigned_sections ? teacher.assigned_sections.split(',').map(s => s.trim()) : [];
+        let selectedClass = (req.query.cls || assignedClasses[0] || '').trim();
+
+        db.all(`SELECT student_id, name, class_level FROM students ORDER BY name ASC`, [], (err, allStudents) => {
+            let studentsInClass = allStudents.filter(s => isClassMatch(s.class_level, selectedClass));
+            db.all(`SELECT * FROM courses WHERE teacher_id = ?`, [req.session.teacherId], (err, courses) => {
+                let classCourses = courses.filter(c => isClassMatch(c.class_level, selectedClass));
+                let selectedCourseId = req.query.course_id;
+                let selectedCourse = classCourses.find(c => c.id.toString() === (selectedCourseId || '').toString());
+                if (!selectedCourse && classCourses.length > 0) { selectedCourse = classCourses[0]; selectedCourseId = selectedCourse.id; }
+
+                db.all(`SELECT * FROM course_assessments WHERE teacher_id = ? AND course_code = ?`, [req.session.teacherId, selectedCourse ? selectedCourse.code : ''], (err, assessments) => {
+                    let classOptions = assignedClasses.map(c => `<option value="${esc(c)}" ${c === selectedClass ? 'selected' : ''}>${c}</option>`).join('');
+                    let courseOptions = classCourses.map(c => `<option value="${c.id}" ${c.id.toString() === (selectedCourseId||'').toString() ? 'selected' : ''}>${c.title} (${c.code})</option>`).join('');
+
+                    let studentRows = studentsInClass.map((st, idx) => {
+                        let asm = assessments ? assessments.find(a => a.student_id === st.student_id) || {} : {};
+                        return `<tr>
+                            <td><b>${idx + 1}</b></td><td>${st.student_id}</td><td style="text-align:left;">${st.name}</td>
+                            <td><input form="form_${st.student_id}" type="number" name="quiz" value="${asm.quiz!==undefined?asm.quiz:''}" min="0" max="20" style="width:50px; text-align:center;"></td>
+                            <td><input form="form_${st.student_id}" type="number" name="mid" value="${asm.mid!==undefined?asm.mid:''}" min="0" max="30" style="width:50px; text-align:center;"></td>
+                            <td><input form="form_${st.student_id}" type="number" name="final" value="${asm.final!==undefined?asm.final:''}" min="0" max="50" style="width:50px; text-align:center;"></td>
+                            <td><strong id="total_${st.student_id}" style="color:#2c3e50; font-size:16px;">${asm.total||0}</strong></td>
+                            <td>
+                                <form id="form_${st.student_id}" class="ajax-grade-form" action="/teacher/save-grade?cls=${encodeURIComponent(selectedClass)}&course_id=${selectedCourseId}" method="POST" style="margin:0;">
+                                    <input type="hidden" name="student_id" value="${st.student_id}">
+                                    <button type="submit" style="background:#27ae60;color:white;border:none;padding:5px 10px; border-radius:3px; cursor:pointer;">💾 Save</button>
+                                </form>
+                            </td>
+                        </tr>`;
+                    }).join('');
+
+                    res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Teacher Dashboard</title>
+                    <style>body{font-family:sans-serif; background:#f4f7f6; padding:20px;} .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px;} table{width:100%; border-collapse:collapse; margin-top:10px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#1f4e79; color:white;}</style></head>
+                    <body><div style="max-width:900px; margin:auto;">
+                        <h2>👨‍🏫 Teacher Portal: ${teacher.name}</h2>
+                        <form method="GET" action="/teacher-dashboard" style="background:#eef2f5; padding:15px; border-radius:5px; margin-bottom:15px; display:flex; gap:10px;">
+                            <select name="cls" onchange="this.form.submit()" style="padding:8px; flex:1;">${classOptions || '<option>No Classes</option>'}</select>
+                            <select name="course_id" onchange="this.form.submit()" style="padding:8px; flex:1;">${courseOptions || '<option value="">No Courses</option>'}</select>
+                        </form>
+                        ${selectedClass ? `<h3>📝 የውጤት መሙያ - ${selectedCourse ? selectedCourse.title : ''}</h3><table><tr><th>No</th><th>ID</th><th>Name</th><th>Quiz(20)</th><th>Mid(30)</th><th>Final(50)</th><th>Total</th><th>Action</th></tr>${studentRows}</table>` : ''}
+                        <br><a href="/logout" style="color:red; font-weight:bold;">🔒 Logout</a>
+                    </div>
+                    <script>
+                        document.querySelectorAll('.ajax-grade-form').forEach(form => {
+                            form.addEventListener('submit', function(e) {
+                                e.preventDefault();
+                                let btn = this.querySelector('button'); let orig = btn.innerHTML; btn.innerHTML = '⏳...'; btn.disabled = true;
+                                let studentId = this.querySelector('input[name="student_id"]').value;
+                                let quiz = document.querySelector('input[form="form_'+studentId+'"][name="quiz"]').value;
+                                let mid = document.querySelector('input[form="form_'+studentId+'"][name="mid"]').value;
+                                let final = document.querySelector('input[form="form_'+studentId+'"][name="final"]').value;
+                                
+                                let payload = new URLSearchParams(); payload.append('student_id', studentId); payload.append('quiz', quiz); payload.append('mid', mid); payload.append('final', final);
+                                
+                                fetch(this.action, { method: 'POST', body: payload, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } })
+                                .then(res => res.json()).then(res => {
+                                    if(res.success) {
+                                        btn.innerHTML = '✅ Saved'; btn.style.background = '#16a085';
+                                        document.getElementById('total_' + studentId).innerText = res.total;
+                                        setTimeout(() => { btn.innerHTML = orig; btn.style.background = '#27ae60'; btn.disabled = false; }, 2000);
+                                    }
+                                }).catch(() => { btn.innerHTML = '❌ Error'; setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2000); });
+                            });
+                        });
+                    </script></body></html>`);
+                });
+            });
+        });
+    });
+});
+
+app.post('/teacher/save-grade', (req, res) => {
+    if (!req.session.teacherId) return res.json({ error: 'Unauthorized' });
+    let courseId = req.query.course_id || '';
+    let { student_id, quiz, mid, final } = req.body;
+    let total = (parseFloat(quiz) || 0) + (parseFloat(mid) || 0) + (parseFloat(final) || 0);
+    
+    db.get(`SELECT * FROM courses WHERE id = ?`, [courseId], (err, course) => {
+        if(!course) return res.json({ error: 'Course not found' });
+        db.get(`SELECT id FROM course_assessments WHERE student_id = ? AND teacher_id = ? AND course_code = ?`, [student_id, req.session.teacherId, course.code], (err, row) => {
+            if (row) {
+                db.run(`UPDATE course_assessments SET quiz=?, mid=?, final=?, total=?, remark=? WHERE id=?`, [quiz, mid, final, total, total >= 50 ? 'Pass' : 'Fail', row.id], () => res.json({ success: true, total: total }));
+            } else {
+                db.run(`INSERT INTO course_assessments (student_id, teacher_id, course_code, course_title, quiz, mid, final, total, remark) VALUES (?,?,?,?,?,?,?,?,?)`, [student_id, req.session.teacherId, course.code, course.title, quiz, mid, final, total, total >= 50 ? 'Pass' : 'Fail'], () => res.json({ success: true, total: total }));
+            }
+        });
+    });
+});
+
+// ================= STUDENT DASHBOARD =================
+app.get('/student-dashboard', (req, res) => {
+    if (!req.session.studentId) return res.redirect('/');
+    db.get(`SELECT * FROM students WHERE student_id = ?`, [req.session.studentId], (err, student) => {
+        db.all(`SELECT * FROM courses`, [], (err, allCourses) => {
+            let myCourses = allCourses.filter(c => isClassMatch(c.class_level, student.class_level));
+            db.all(`SELECT * FROM course_assessments WHERE student_id = ?`, [student.student_id], (err, myGrades) => {
+                let gradesHtml = myCourses.map(c => {
+                    let asm = myGrades.find(a => a.course_code === c.code) || {};
+                    return `<tr><td><b>${c.title}</b></td><td>${asm.quiz ?? '-'}</td><td>${asm.mid ?? '-'}</td><td>${asm.final ?? '-'}</td><td><strong style="color:#27ae60;">${asm.total ?? '-'}</strong></td><td>${asm.remark ?? '-'}</td></tr>`;
+                }).join('');
+
+                res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Student Dashboard</title><style>body{font-family:sans-serif; background:#f4f7f6; padding:20px;} .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px;} table{width:100%; border-collapse:collapse; margin-top:10px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#1f4e79; color:white;}</style></head>
+                <body><div style="max-width:850px; margin:auto;">
+                    <h2>🎓 የተማሪ መቆጣጠሪያ: ${student.name} (${student.student_id})</h2>
+                    <div class="card"><h3>📊 የትምህርት ውጤቶች</h3><table><tr><th>Subject</th><th>Quiz(20)</th><th>Mid(30)</th><th>Final(50)</th><th>Total(100)</th><th>Remark</th></tr>${gradesHtml||'<tr><td colspan="6">No grades posted yet.</td></tr>'}</table></div>
+                    <a href="/logout" style="color:red; font-weight:bold;">🔒 Logout</a>
+                </div></body></html>`);
+            });
+        });
+    });
+});
+
+app.listen(PORT, () => console.log(`🚀 Modern Full School System running on port ${PORT}`));
