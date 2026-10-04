@@ -17,6 +17,7 @@ process.on('uncaughtException', (err) => { console.error('CRITICAL ERROR:', err)
 process.on('unhandledRejection', (reason, p) => { console.error('UNHANDLED REJECTION:', reason); });
 
 const app = express();
+app.set('trust proxy', 1); // ይህችን አዲስ ኮድ እዚህ ጋር ይጨምሩ
 const PORT = process.env.PORT || 3000;
 
 if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
