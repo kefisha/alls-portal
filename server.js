@@ -1,4 +1,4 @@
-require('dotenv').config(); // 1. ሚስጥራዊ ፋይሎችን (env) ለማንበብ
+require('dotenv').config(); 
 const express = require('express');
 const session = require('express-session');
 const multer = require('multer');
@@ -8,23 +8,21 @@ const PDFDocument = require('pdfkit');
 const bwipjs = require('bwip-js'); 
 const { Pool } = require('pg'); 
 
-// የሴኪዩሪቲ ፓኬጆች (Security Packages)
-const bcrypt = require('bcryptjs'); // ፓስወርድ ለመደበቅ
-const xss = require('xss'); // አደገኛ ጽሁፎችን (XSS Attack) ለማክሸፍ
-const rateLimit = require('express-rate-limit'); // የይለፍ ቃል ግምትን (Brute-force) ለመከላከል
+const bcrypt = require('bcryptjs'); 
+const xss = require('xss'); 
+const rateLimit = require('express-rate-limit'); 
 
 process.on('uncaughtException', (err) => { console.error('CRITICAL ERROR:', err); });
 process.on('unhandledRejection', (reason, p) => { console.error('UNHANDLED REJECTION:', reason); });
 
 const app = express();
-app.set('trust proxy', 1); // ይህችን አዲስ ኮድ እዚህ ጋር ይጨምሩ
+app.set('trust proxy', 1); // Render እና ሌሎች Proxy ሰርቨሮችን ለማሳለፍ
 const PORT = process.env.PORT || 3000;
 
 if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
     fs.mkdirSync(path.join(__dirname, 'uploads'));
 }
 
-// ሚስጥራዊ የዳታቤዝ ማገናኛ ከ .env ፋይል
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false }
@@ -111,21 +109,19 @@ async function initDB() {
             await pool.query(`INSERT INTO sections (name, proctor_name, proctor_phone) VALUES 
             ('Grade 1 - Section A', 'Dr. Teshale Kebede', '0912345678') ON CONFLICT (name) DO NOTHING`);
         }
-        console.log('✅ አዲሱ የተጠበቀ Database በተሳካ ሁኔታ ተገናኝቷል!');
+        console.log('✅ Database initialization complete.');
     } catch (err) {
         console.error('Database initialization error:', err);
     }
 }
 initDB();
 
-// የፋይል ሴኪዩሪቲ (File Upload Validation)
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, path.join(__dirname, 'uploads/')),
     filename: (req, file, cb) => cb(null, Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname))
 });
 
 const fileFilter = (req, file, cb) => {
-    // የተፈቀዱ የፋይል አይነቶች (ምስሎች፣ PDF፣ Word)
     const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
     if (allowedMimeTypes.includes(file.mimetype)) {
         cb(null, true);
@@ -147,11 +143,12 @@ app.use(session({
     cookie: { maxAge: 3600000 }
 }));
 
-// የመግቢያ የሴኪዩሪቲ ጥበቃ (Rate Limiter - ከ5 ጊዜ በላይ ከተሳሳቱ ብሎክ ያደርጋል)
 const loginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 ደቂቃ
-    max: 5, // በ 15 ደቂቃ ውስጥ 5 ጊዜ ብቻ መሞከር ይቻላል
-    message: "<h3 style='color:red; text-align:center; margin-top:50px;'>❌ በጣም ብዙ የተሳሳተ ሙከራ! እባክዎ ከ15 ደቂቃ በኋላ እንደገና ይሞክሩ (Too many attempts. Try again in 15 mins).</h3>"
+    windowMs: 15 * 60 * 1000, 
+    max: 5, 
+    message: "<h3 style='color:red; text-align:center; margin-top:50px;'>❌ በጣም ብዙ የተሳሳተ ሙከራ! እባክዎ ከ15 ደቂቃ በኋላ እንደገና ይሞክሩ (Too many attempts. Try again in 15 mins).</h3>",
+    standardHeaders: true,
+    legacyHeaders: false,
 });
 
 const ADMIN_USER = process.env.ADMIN_USER;
@@ -215,7 +212,6 @@ function csvCell(v) {
 
 function esc(v) { return v === null || v === undefined ? '' : String(v).replace(/"/g, '&quot;'); }
 
-// ================= PUBLIC ROUTES =================
 app.get('/', (req, res) => {
     const lang = req.query.lang === 'en' ? 'en' : 'am';
     const t = lang === 'en' ? {
@@ -248,18 +244,19 @@ app.get('/', (req, res) => {
     </body></html>`);
 });
 
-// መግቢያ (Login) - በRate Limiter እና Password Hash የተጠበቀ
 app.post('/login', loginLimiter, (req, res) => {
     const lang = req.query.lang || 'am';
     const { role, username, password } = req.body;
     const uKey = username.trim();
+
+    let remaining = req.rateLimit ? req.rateLimit.remaining : 0;
+    let attemptMsg = remaining > 0 ? `<br><br><span style="color:orange; font-size:18px; font-weight:bold;">⚠️ የቀረዎት ሙከራ: ${remaining}</span>` : '';
 
     if (role === 'admin' && uKey === ADMIN_USER && password === ADMIN_PASS) {
         req.session.isAdmin = true; return res.redirect(`/admin?lang=${lang}`);
     } else if (role === 'teacher') {
         db.get(`SELECT * FROM teachers WHERE id = ?`, [uKey.toUpperCase()], (err, t) => {
             if (t) {
-                // የድሮ (ያልተደበቀ) ወይም አዲስ (የተደበቀ) ፓስወርድ መሆኑን ማረጋገጥ
                 let isMatch = false;
                 if(t.password.startsWith('$2a$') || t.password.startsWith('$2b$')) {
                     isMatch = bcrypt.compareSync(password, t.password);
@@ -271,7 +268,7 @@ app.post('/login', loginLimiter, (req, res) => {
                     req.session.teacherId = t.id; return res.redirect(`/teacher-dashboard?lang=${lang}`);
                 }
             }
-            res.send(`<h3 style="color:red; text-align:center; margin-top:50px;">❌ የተሳሳተ መረጃ! (Invalid Credentials) <a href="/?lang=${lang}">Back</a></h3>`);
+            res.send(`<div style="text-align:center; margin-top:50px; font-family:sans-serif;"><h3 style="color:red;">❌ የተሳሳተ መረጃ! (Invalid Credentials)</h3> ${attemptMsg} <br><br><br><a href="/?lang=${lang}" style="background:#1f4e79; color:white; padding:10px 20px; text-decoration:none; border-radius:5px; font-weight:bold;">ወደ ኋላ ተመለስ (Back)</a></div>`);
         });
     } else if (role === 'student') {
         db.get(`SELECT * FROM students WHERE student_id = ?`, [uKey.toUpperCase()], (err, s) => {
@@ -287,10 +284,10 @@ app.post('/login', loginLimiter, (req, res) => {
                     req.session.studentId = s.student_id; return res.redirect(`/student-dashboard?lang=${lang}`);
                 }
             }
-            res.send(`<h3 style="color:red; text-align:center; margin-top:50px;">❌ የተሳሳተ መረጃ ወይም ገና አልጸደቀም (Invalid or not approved). <a href="/?lang=${lang}">Back</a></h3>`);
+            res.send(`<div style="text-align:center; margin-top:50px; font-family:sans-serif;"><h3 style="color:red;">❌ የተሳሳተ መረጃ ወይም ገና አልጸደቀም!</h3> ${attemptMsg} <br><br><br><a href="/?lang=${lang}" style="background:#1f4e79; color:white; padding:10px 20px; text-decoration:none; border-radius:5px; font-weight:bold;">ወደ ኋላ ተመለስ (Back)</a></div>`);
         });
     } else {
-        res.send(`<h3 style="color:red; text-align:center; margin-top:50px;">❌ Invalid <a href="/?lang=${lang}">Back</a></h3>`);
+        res.send(`<div style="text-align:center; margin-top:50px; font-family:sans-serif;"><h3 style="color:red;">❌ የተሳሳተ መረጃ!</h3> ${attemptMsg} <br><br><br><a href="/?lang=${lang}" style="background:#1f4e79; color:white; padding:10px 20px; text-decoration:none; border-radius:5px; font-weight:bold;">ወደ ኋላ ተመለስ (Back)</a></div>`);
     }
 });
 
@@ -329,7 +326,7 @@ app.post('/api/forgot-password', (req, res) => {
     db.get(`SELECT student_id FROM students WHERE phone = ? AND mother_name = ?`, [phone, mother_name], (err, s) => {
         if (s) {
             let newPin = generate4DigitPIN();
-            let hashedPIN = bcrypt.hashSync(newPin, 10); // ፓስወርዱን መደበቅ
+            let hashedPIN = bcrypt.hashSync(newPin, 10); 
             return db.run(`UPDATE students SET password = ? WHERE student_id = ?`, [hashedPIN, s.student_id], () => {
                 res.send(`<div style="text-align:center; padding:40px; font-family:sans-serif;"><h2 style="color:green;">✅ Password Reset / የይለፍ ቃል ተቀይሯል!</h2><p>New PIN / አዲሱ የይለፍ ቁጥርዎ: <span style="color:red; font-size:24px; font-weight:bold;">${newPin}</span></p><a href="/?lang=${lang}">Back</a></div>`);
             });
@@ -396,13 +393,11 @@ app.get('/student-register', (req, res) => {
     </body></html>`);
 });
 
-// ፋይል እና ፎቶ Validate አድርጎ (አጣርቶ) መቀበል
 app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 }, { name: 'bank_slip_file', maxCount: 1 }]), (req, res) => {
     const lang = req.query.lang || 'am';
     try {
         let { name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, year_level, payment_type, txn_id } = req.body;
         
-        // ዳታዎችን አጽዳ (XSS Protection)
         name = xss(name); mother_name = xss(mother_name); phone = xss(phone);
         
         db.get(`SELECT student_id FROM students WHERE name = ? AND mother_name = ? UNION SELECT student_id FROM pending_students WHERE name = ? AND mother_name = ?`, 
@@ -414,7 +409,7 @@ app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 },
 
             let autoID = generateStudentID(); 
             let autoPIN = generate4DigitPIN();
-            let hashedPIN = bcrypt.hashSync(autoPIN, 10); // ፓስወርዱን መደበቅ (Hash)
+            let hashedPIN = bcrypt.hashSync(autoPIN, 10); 
 
             assignClassSection(year_level, (assignedSection) => {
                 let photoPath = (req.files && req.files['student_photo']) ? req.files['student_photo'][0].filename : '';
@@ -432,7 +427,6 @@ app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 },
                         <div style="background:#eef2f5; display:inline-block; padding:20px; border-radius:8px; text-align:left;">
                             <p><strong>Class:</strong> ${assignedSection}</p>
                             <p><strong>ID Number:</strong> <span style="color:red; font-size:20px;">${autoID}</span></p>
-                            <!-- ተማሪው አሁን እንዲያየው የደበቅነውን ሳይሆን ትክክለኛውን እናሳየዋለን -->
                             <p><strong>Password PIN:</strong> <span style="color:red; font-size:20px;">${autoPIN}</span></p>
                             <p style="color:#e67e22; font-size:13px;">⏳ ${msg}</p>
                             <p><a href="/download-pending-slip/${insertedId}" style="background:#e67e22; color:white; padding:10px; text-decoration:none; border-radius:5px;">📥 Download PDF</a></p>
@@ -486,7 +480,6 @@ app.get('/download-pending-slip/:id', (req, res) => {
     });
 });
 
-// ================= DIRECTOR / ADMIN DASHBOARD =================
 app.get('/admin', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const lang = req.query.lang || 'am';
@@ -734,7 +727,6 @@ app.post('/admin/add-teacher', (req, res) => {
     let { name, phone, assigned_sections } = req.body;
     let gradesArr = req.body.grades ? (Array.isArray(req.body.grades) ? req.body.grades.join(', ') : req.body.grades) : '';
     
-    // የቲቸሩን ፓስወርድ መደበቅ (Hash)
     let autoPIN = generate4DigitPIN();
     let hashedPIN = bcrypt.hashSync(autoPIN, 10);
 
@@ -742,7 +734,6 @@ app.post('/admin/add-teacher', (req, res) => {
     [generateTeacherID(), name, hashedPIN, phone, assigned_sections || '', gradesArr, 0], () => res.redirect('/admin'));
 });
 
-// አድሚን ፓስወርድ ሲቀይር (Hash ያደርጋል)
 app.post('/admin/update-pass', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     let { type, id, new_pass } = req.body;
@@ -792,6 +783,47 @@ app.get('/admin/delete-student/:id', (req, res) => {
     });
 });
 
+app.get('/admin/export-students', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.all(`SELECT student_id, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, status FROM students ORDER BY class_level, name`, [], (err, students) => {
+        let header = ['student_id','name','mother_name','gender','age','phone','emergency_phone','region','zone','woreda','kebele','class_level','payment_type','status'];
+        let rows = [header.join(',')];
+        students.forEach(s => rows.push(header.map(col => csvCell(s[col])).join(',')));
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=all_students.csv');
+        res.send(rows.join('\r\n'));
+    });
+});
+
+app.get('/admin/export-teachers', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.all(`SELECT id, name, phone, assigned_sections, assigned_grades FROM teachers ORDER BY name`, [], (err, teachers) => {
+        let header = ['Teacher ID','Full Name','Phone','Assigned Sections','Assigned Grades'];
+        let rows = [header.join(',')];
+        teachers.forEach(t => {
+            rows.push([csvCell(t.id), csvCell(t.name), csvCell(t.phone), csvCell(t.assigned_sections), csvCell(t.assigned_grades)].join(','));
+        });
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=all_teachers.csv');
+        res.send(rows.join('\r\n'));
+    });
+});
+
+app.get('/admin/export-section-students/:secName', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    let secName = decodeURIComponent(req.params.secName);
+    db.all(`SELECT student_id, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, status FROM students`, [], (err, allStudents) => {
+        let students = allStudents.filter(s => isClassMatch(s.class_level, secName));
+        let header = ['student_id','name','mother_name','gender','age','phone','emergency_phone','region','zone','woreda','kebele','class_level','payment_type','status'];
+        let rows = [header.join(',')];
+        students.forEach(s => rows.push(header.map(col => csvCell(s[col])).join(',')));
+        res.setHeader('Content-Type', 'text/csv');
+        let filename = `students_${secName.replace(/\s+/g, '_')}.csv`;
+        res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+        res.send(rows.join('\r\n'));
+    });
+});
+
 app.get('/admin/edit-student/:id', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     db.get(`SELECT * FROM students WHERE student_id = ?`, [req.params.id], (err, s) => {
@@ -830,7 +862,61 @@ app.post('/admin/edit-student/:id', (req, res) => {
     [name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, status, admin_message, req.params.id], () => res.redirect('/admin'));
 });
 
-// TEACHER DASHBOARD - Proctor Monitor Assignment
+app.get('/class-hub/:className', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    let className = decodeURIComponent(req.params.className);
+    
+    db.all(`SELECT student_id, name, gender, class_level FROM students`, [], (err, allStudents) => {
+        let students = allStudents.filter(s => isClassMatch(s.class_level, className));
+        db.all(`SELECT * FROM course_assessments`, [], (err, assessments) => {
+            
+            students.forEach(st => {
+                let st_ass = assessments.filter(a => a.student_id === st.student_id);
+                st.cumulative_total = st_ass.reduce((sum, a) => sum + (a.total || 0), 0);
+            });
+            students.sort((a, b) => b.cumulative_total - a.cumulative_total);
+
+            db.all(`SELECT * FROM sections`, [], (err, allSections) => {
+                let section = allSections.find(sec => isClassMatch(sec.name, className));
+                db.all(`SELECT * FROM courses`, [], (err, allCourses) => {
+                    let courses = allCourses.filter(c => isClassMatch(c.class_level, className));
+                    
+                    let sRows = students.map((s, idx) => `<tr>
+                        <td><b>${idx + 1}</b></td>
+                        <td>${s.student_id}</td>
+                        <td style="text-align:left;">${s.name}</td>
+                        <td>${s.gender}</td>
+                        <td>${s.cumulative_total}</td>
+                    </tr>`).join('');
+
+                    let cRows = courses.map(c => `<tr><td>${c.code}</td><td>${c.title}</td><td>${c.credit_hours}</td><td>${c.teacher_name || 'N/A'}</td></tr>`).join('');
+
+                    res.send(`
+                    <!DOCTYPE html><html><head><meta charset="UTF-8"><title>Class Hub - ${className}</title>
+                    <style>body{font-family:sans-serif; padding:20px; background:#f4f7f6;} .card{background:white; padding:20px; border-radius:8px; margin-bottom:15px;} table{width:100%; border-collapse:collapse; margin-top:10px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#1f4e79; color:white;}</style>
+                    </head><body>
+                        <a href="/admin" style="background:#7f8c8d; color:white; padding:8px 12px; text-decoration:none; border-radius:5px;">⬅️ Back to Admin Dashboard</a>
+                        <h2>📂 Class Hub: ${className}</h2>
+                        <div class="card">
+                            <p><strong>Proctor / Attendance Monitor:</strong> ${section ? section.proctor_name : 'N/A'}</p>
+                            <p><strong>Total Students:</strong> ${students.length}</p>
+                            <a href="/attendance-sheet/${encodeURIComponent(className)}" target="_blank" style="background:#2980b9; color:white; padding:8px 12px; text-decoration:none; border-radius:5px;">📋 Attendance Sheet</a>
+                        </div>
+                        <div class="card">
+                            <h3>📚 Subjects / Courses for this Class</h3>
+                            <table><tr><th>Code</th><th>Title</th><th>Cr.Hr</th><th>Teacher</th></tr>${cRows||'<tr><td colspan="4">No courses</td></tr>'}</table>
+                        </div>
+                        <div class="card">
+                            <h3>🏆 Students Ranking List (Total across all subjects) in ${className}</h3>
+                            <table><tr><th>Rank</th><th>ID</th><th>Full Name</th><th>Gender</th><th>Total Score</th></tr>${sRows||'<tr><td colspan="5">No students</td></tr>'}</table>
+                        </div>
+                    </body></html>`);
+                });
+            });
+        });
+    });
+});
+
 app.get('/teacher-dashboard', (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
     
@@ -860,7 +946,6 @@ app.get('/teacher-dashboard', (req, res) => {
                             let currentSection = allSections.find(sec => isClassMatch(sec.name, selectedClass)) || {};
                             let isProctor = currentSection.proctor_name === teacher.name;
 
-                            // መምህሩ የላካቸውን ማስታወቂያዎች ለማግኘት
                             db.all(`SELECT * FROM notifications WHERE sender_name = ? ORDER BY id DESC`, [teacher.name], (err, mySentNotifs) => {
 
                                 let classOptions = assignedClasses.map(c => `<option value="${esc(c)}" ${c === selectedClass ? 'selected' : ''}>${c}</option>`).join('');
@@ -1033,12 +1118,11 @@ app.post('/teacher/assign-monitor', (req, res) => {
     });
 });
 
-// አዲስ ማስታወቂያ ለመላክ - አስተማሪ (XSS Cleaned)
 app.post('/teacher/send-notification', upload.single('attachment'), (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
     let targetClass = req.query.cls || '';
     let attachment = req.file ? req.file.filename : null;
-    let safeMessage = xss(req.body.message); // የጽሁፍ ደህንነት ማጣሪያ
+    let safeMessage = xss(req.body.message); 
     
     db.get(`SELECT * FROM teachers WHERE id = ?`, [req.session.teacherId], (err, teacher) => {
         db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at, attachment) VALUES (?,?,?,?,?,?)`,
@@ -1046,11 +1130,10 @@ app.post('/teacher/send-notification', upload.single('attachment'), (req, res) =
     });
 });
 
-// አዲስ ማስታወቂያ ለመላክ - አድሚን (XSS Cleaned)
 app.post('/admin/send-notification', upload.single('attachment'), (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     let attachment = req.file ? req.file.filename : null;
-    let safeMessage = xss(req.body.message); // የጽሁፍ ደህንነት ማጣሪያ
+    let safeMessage = xss(req.body.message); 
     
     db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at, attachment) VALUES (?,?,?,?,?,?)`,
         ['Admin', 'School Admin', 'ALL', safeMessage, new Date().toLocaleString(), attachment], () => res.redirect('/admin'));
@@ -1117,7 +1200,6 @@ app.post('/teacher/save-grade', (req, res) => {
     });
 });
 
-// STUDENT DASHBOARD
 app.get('/student-dashboard', (req, res) => {
     if (!req.session.studentId) return res.redirect('/');
     
@@ -1261,7 +1343,6 @@ app.post('/student/update-photo', upload.single('new_photo'), (req, res) => {
     }
 });
 
-// ተማሪ መልዕክት ሲልክ (XSS Protection)
 app.post('/student/absence', upload.single('attachment'), (req, res) => {
     if (!req.session.studentId) return res.redirect('/');
     let attachment = req.file ? req.file.filename : null;
@@ -1279,7 +1360,6 @@ app.post('/student/absence', upload.single('attachment'), (req, res) => {
     });
 });
 
-// DAILY ATTENDANCE (MONDAY - FRIDAY) WITH SAVE FUNCTIONALITY
 app.get('/attendance-sheet/:secName', (req, res) => {
     if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
     let sec = decodeURIComponent(req.params.secName);
