@@ -201,7 +201,7 @@ function assignClassSection(requestedYearLevel, callback) {
 
 function esc(v) { return v === null || v === undefined ? '' : String(v).replace(/"/g, '&quot;'); }
 
-// ================= PUBLIC ROUTES (TAILWIND CSS MODERNIZED) =================
+// ================= PUBLIC ROUTES =================
 app.get('/', (req, res) => {
     const lang = req.query.lang === 'en' ? 'en' : 'am';
     const t = lang === 'en' ? {
@@ -541,10 +541,8 @@ app.get('/admin', (req, res) => {
                 db.all(`SELECT * FROM sections ORDER BY name`, [], (err, sections) => {
                     db.all(`SELECT * FROM courses ORDER BY class_level, code`, [], (err, courses) => {
                         db.all(`SELECT * FROM notifications WHERE sender_role = 'Admin' ORDER BY id DESC`, [], (err, adminNotifs) => {
-                        
                         db.all(`SELECT * FROM course_assessments`, [], (err, assessments) => {
 
-                        // --- Data processing for charts ---
                         let maleCount = students.filter(s => s.gender === 'Male').length;
                         let femaleCount = students.filter(s => s.gender === 'Female').length;
                         
@@ -556,11 +554,9 @@ app.get('/admin', (req, res) => {
                             else poor++;
                         });
 
-                        // -----------------------------------
-
                         let pRows = pending.map(s => `<tr><td>-</td><td>${s.student_id}</td><td>${s.name}</td><td>${s.payment_type === 'slip_file' ? `<a href="/uploads/${s.bank_slip_val}" target="_blank" style="color:#2980b9;">📄 እይ</a>` : `<b>TXN:</b> ${s.bank_slip_val}`}</td><td><a href="/admin/approve/${s.id}?lang=${lang}" style="color:green; font-weight:bold;">✅ Approve</a></td></tr>`).join('');
 
-                        let secRows = sections.map(sec => `<tr><td><a href="/class-hub/${encodeURIComponent(sec.name)}" style="color:#16a085; font-weight:bold;" target="_blank">📂 ${sec.name}</a></td><td><form action="/admin/edit-section/${sec.id}?lang=${lang}" method="POST" style="display:flex; gap:4px;"><select name="proctor_name" style="width:140px;"><option value="${esc(sec.proctor_name)}">${sec.proctor_name || '-- Select --'}</option>${teachers.map(tc => `<option value="${esc(tc.name)}">${tc.name}</option>`).join('')}</select><button type="submit">Save</button></form></td><td><a href="/admin/delete-section/${sec.id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td><td><a href="/attendance-sheet/${encodeURIComponent(sec.name)}" style="color:#2980b9; font-weight:bold; margin-right:10px;" target="_blank">📋 Attendance</a><a href="/admin/export-section-students/${encodeURIComponent(sec.name)}" style="background:#27ae60; color:white; padding:4px 8px; border-radius:3px; text-decoration:none; font-weight:bold;">📥 Excel</a></td></tr>`).join('');
+                        let secRows = sections.map(sec => `<tr><td><a href="/class-hub/${encodeURIComponent(sec.name)}" style="color:#16a085; font-weight:bold;" target="_blank">📂 ${sec.name}</a></td><td><form action="/admin/edit-section/${sec.id}?lang=${lang}" method="POST" style="display:flex; gap:4px;"><select name="proctor_name" style="width:140px;"><option value="${esc(sec.proctor_name)}">${sec.proctor_name || '-- Select --'}</option>${teachers.map(tc => `<option value="${esc(tc.name)}">${tc.name}</option>`).join('')}</select><button type="submit">Save</button></form></td><td><a href="/admin/delete-section/${sec.id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑️️ Delete</a></td><td><a href="/attendance-sheet/${encodeURIComponent(sec.name)}" style="color:#2980b9; font-weight:bold; margin-right:10px;" target="_blank">📋 Attendance</a><a href="/admin/export-section-students/${encodeURIComponent(sec.name)}" style="background:#27ae60; color:white; padding:4px 8px; border-radius:3px; text-decoration:none; font-weight:bold;">📥 Excel</a></td></tr>`).join('');
 
                         let sectionOptions = sections.map(sec => `<option value="${esc(sec.name)}">${sec.name}</option>`).join('');
                         let teacherOptions = teachers.map(tc => `<option value="${tc.id}">${tc.name}</option>`).join('');
@@ -589,7 +585,6 @@ app.get('/admin', (req, res) => {
                         <body>
                             <h2><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 10px;"> 🔐 የዳይሬክተር / አድሚን መቆጣጠሪያ</h2>
                             
-                            <!-- Charts Section -->
                             <div class="charts-container mb-20">
                                 <div class="chart-box">
                                     <h3 style="text-align:center; color:#2c3e50;">የተማሪዎች ውጤት ስርጭት</h3>
@@ -600,7 +595,6 @@ app.get('/admin', (req, res) => {
                                     <canvas id="genderChart"></canvas>
                                 </div>
                             </div>
-                            <!-- End Charts Section -->
 
                             <div class="card" style="background:#e8f4fd;"><h3 style="color:#2980b9;">📢 አዲስ ማስታወቂያ ላክ</h3><form action="/admin/send-notification" method="POST" enctype="multipart/form-data" id="notifForm"><div id="editor" style="height: 120px; background: white; margin-bottom: 10px;"></div><input type="hidden" name="message" id="hiddenMessage" required><label style="font-size: 13px; font-weight:bold; display:block; margin: 10px 0;">📎 ፎቶ ወይም ፋይል አያይዝ (አማራጭ):</label><input type="file" name="attachment" accept="image/*,.pdf,.doc,.docx" style="margin-bottom:10px;"><br><button type="submit" style="background:#3498db; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">Send Notification</button></form><hr style="margin:20px 0;"><h3 style="color:#555;">📋 የላኳቸው ማስታወቂያዎች</h3>${adminNotiRows || '<p style="color:#777;">ምንም መልዕክት አልተላከም</p>'}</div>
                             <div class="card"><h3>📁 የዳይሬክተር ሳምንታዊ እና ወርሃዊ ሪፖርት</h3><a href="/director-report" target="_blank" style="background:#8e44ad; color:white; padding:10px 15px; text-decoration:none; border-radius:5px; font-weight:bold; display:inline-block;">📁 View Director Academic Year Report</a></div>
@@ -617,7 +611,6 @@ app.get('/admin', (req, res) => {
                                 var quill = new Quill('#editor', { theme: 'snow', modules: { toolbar: [ [{ 'font': [] }, { 'size': [] }], ['bold', 'italic', 'underline', 'strike'], [{ 'color': [] }, { 'background': [] }], [{ 'align': [] }], ['link', 'image'] ] }}); 
                                 document.getElementById('notifForm').onsubmit = function() { document.getElementById('hiddenMessage').value = quill.root.innerHTML; };
                                 
-                                // Chart.js Initialization
                                 const perfCtx = document.getElementById('performanceChart').getContext('2d');
                                 new Chart(perfCtx, {
                                     type: 'bar',
@@ -836,9 +829,24 @@ app.get('/teacher-dashboard', (req, res) => {
                                 let classOptions = assignedClasses.map(c => `<option value="${esc(c)}" ${c === selectedClass ? 'selected' : ''}>${c}</option>`).join('');
                                 let courseOptions = classCourses.map(c => `<option value="${c.id}" ${c.id.toString() === (selectedCourseId||'').toString() ? 'selected' : ''}>${c.title} (${c.code})</option>`).join('');
 
+                                // ***************** AJAX FORM MODIFICATION HERE *****************
                                 let studentRows = studentsInClass.map((st, idx) => {
                                     let asm = assessments ? assessments.find(a => a.student_id === st.student_id) || {} : {};
-                                    return `<tr><td><b>${idx + 1}</b></td><td>${st.student_id}</td><td>${st.name}</td><form action="/teacher/save-grade?cls=${encodeURIComponent(selectedClass)}&course_id=${selectedCourseId}" method="POST"><input type="hidden" name="student_id" value="${st.student_id}"><td><input type="number" name="quiz" value="${asm.quiz!==undefined?asm.quiz:''}" min="0" max="20" style="width:50px;"></td><td><input type="number" name="mid" value="${asm.mid!==undefined?asm.mid:''}" min="0" max="30" style="width:50px;"></td><td><input type="number" name="final" value="${asm.final!==undefined?asm.final:''}" min="0" max="50" style="width:50px;"></td><td><strong>${asm.total||0}</strong></td><td><button type="submit" style="background:#27ae60;color:white;border:none;padding:5px 10px; border-radius:3px; cursor:pointer;">💾 Save</button></td></form></tr>`;
+                                    return `<tr>
+                                        <td><b>${idx + 1}</b></td>
+                                        <td>${st.student_id}</td>
+                                        <td style="text-align:left;">${st.name}</td>
+                                        <td><input form="form_${st.student_id}" type="number" name="quiz" value="${asm.quiz!==undefined?asm.quiz:''}" min="0" max="20" style="width:50px; text-align:center; padding:3px;"></td>
+                                        <td><input form="form_${st.student_id}" type="number" name="mid" value="${asm.mid!==undefined?asm.mid:''}" min="0" max="30" style="width:50px; text-align:center; padding:3px;"></td>
+                                        <td><input form="form_${st.student_id}" type="number" name="final" value="${asm.final!==undefined?asm.final:''}" min="0" max="50" style="width:50px; text-align:center; padding:3px;"></td>
+                                        <td><strong id="total_${st.student_id}" style="color:#2c3e50; font-size:16px;">${asm.total||0}</strong></td>
+                                        <td>
+                                            <form id="form_${st.student_id}" class="ajax-grade-form" action="/teacher/save-grade?cls=${encodeURIComponent(selectedClass)}&course_id=${selectedCourseId}" method="POST" style="margin:0;">
+                                                <input type="hidden" name="student_id" value="${st.student_id}">
+                                                <button type="submit" style="background:#27ae60;color:white;border:none;padding:5px 10px; border-radius:3px; cursor:pointer; width:90px; transition:0.3s;">💾 Save</button>
+                                            </form>
+                                        </td>
+                                    </tr>`;
                                 }).join('');
 
                                 let absRows = classAbsences.map(ab => `<div style="background:#fdf2e9; padding:10px; border-left:4px solid #e67e22; margin-bottom:10px;"><strong>${ab.student_name} (${ab.student_id})</strong> - <em>${ab.created_at}</em><br>📝 <strong>መልዕክት:</strong> ${ab.reason}<br>${ab.attachment ? `<a href="/uploads/${ab.attachment}" target="_blank" style="color:blue;">📎 ፋይል/ማስረጃ ክፈት</a><br>` : ''}${ab.teacher_feedback ? `<span style="color:green; font-weight:bold;">💬 Your Feedback: ${ab.teacher_feedback}</span>` : `<form action="/teacher/give-feedback?cls=${encodeURIComponent(selectedClass)}" method="POST" style="margin-top:5px; display:flex; gap:5px;"><input type="hidden" name="req_id" value="${ab.id}"><input type="text" name="feedback" placeholder="Reply..." required style="flex:1; padding:4px;"><button type="submit" style="background:#16a085; color:white; border:none; padding:4px 8px; border-radius:3px;">Send</button></form>`}</div>`).join('');
@@ -861,7 +869,64 @@ app.get('/teacher-dashboard', (req, res) => {
                                     <br><br><a href="/logout" style="color:red; font-weight:bold; font-size:18px;">🔒 Logout</a>
                                 </div>
                                 <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
-                                <script>var quill = new Quill('#editorTeacher', { theme: 'snow', modules: { toolbar: [ [{ 'font': [] }, { 'size': [] }], ['bold', 'italic', 'underline', 'strike'], [{ 'color': [] }, { 'background': [] }], [{ 'align': [] }], ['link', 'image'] ] }}); var form = document.getElementById('teacherNotifForm'); if(form) { form.onsubmit = function() { document.getElementById('hiddenMessageTeacher').value = quill.root.innerHTML; }; }</script>
+                                <script>
+                                    // 1. Notification Editor
+                                    var quill = new Quill('#editorTeacher', { theme: 'snow', modules: { toolbar: [ [{ 'font': [] }, { 'size': [] }], ['bold', 'italic', 'underline', 'strike'], [{ 'color': [] }, { 'background': [] }], [{ 'align': [] }], ['link', 'image'] ] }}); 
+                                    var form = document.getElementById('teacherNotifForm'); 
+                                    if(form) { form.onsubmit = function() { document.getElementById('hiddenMessageTeacher').value = quill.root.innerHTML; }; }
+                                    
+                                    // 2. AJAX (Fetch API) for Saving Grades Without Reload
+                                    document.querySelectorAll('.ajax-grade-form').forEach(form => {
+                                        form.addEventListener('submit', function(e) {
+                                            e.preventDefault(); // ፔጁ ሪፍሬሽ እንዳያደርግ ይከለክላል
+                                            
+                                            let btn = this.querySelector('button');
+                                            let originalText = btn.innerHTML;
+                                            btn.innerHTML = '⏳...';
+                                            btn.disabled = true;
+                                            
+                                            // የህፃናቱን ውጤት ማንበብ
+                                            let studentId = this.querySelector('input[name="student_id"]').value;
+                                            let quiz = document.querySelector('input[form="form_'+studentId+'"][name="quiz"]').value;
+                                            let mid = document.querySelector('input[form="form_'+studentId+'"][name="mid"]').value;
+                                            let final = document.querySelector('input[form="form_'+studentId+'"][name="final"]').value;
+                                            
+                                            let payload = new URLSearchParams();
+                                            payload.append('student_id', studentId);
+                                            payload.append('quiz', quiz);
+                                            payload.append('mid', mid);
+                                            payload.append('final', final);
+                                            
+                                            fetch(this.action, {
+                                                method: 'POST',
+                                                body: payload,
+                                                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                                            })
+                                            .then(res => res.json())
+                                            .then(res => {
+                                                if(res.success) {
+                                                    // የተሳካ ቆንጆ ፅሁፍ ማሳየት
+                                                    btn.innerHTML = '✅ Saved';
+                                                    btn.style.background = '#16a085';
+                                                    
+                                                    // ድምር (Total) ውጤቱን በዛው ሰከንድ አፕዴት ማድረግ
+                                                    document.getElementById('total_' + studentId).innerText = res.total;
+                                                    
+                                                    setTimeout(() => { 
+                                                        btn.innerHTML = originalText; 
+                                                        btn.style.background = '#27ae60'; 
+                                                        btn.disabled = false; 
+                                                    }, 2000);
+                                                }
+                                            })
+                                            .catch(err => {
+                                                btn.innerHTML = '❌ Error';
+                                                btn.style.background = '#e74c3c';
+                                                setTimeout(() => { btn.innerHTML = originalText; btn.style.background = '#27ae60'; btn.disabled = false; }, 2000);
+                                            });
+                                        });
+                                    });
+                                </script>
                                 </body></html>`);
                             });
                         });
@@ -921,22 +986,23 @@ app.post('/teacher/give-feedback', (req, res) => {
     db.run(`UPDATE absence_requests SET teacher_feedback = ? WHERE id = ?`, [xss(req.body.feedback), req.body.req_id], () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}`));
 });
 
+// ************** አዲሱ የ AJAX Grade Saving Endpoint **************
 app.post('/teacher/save-grade', (req, res) => {
-    if (!req.session.teacherId) return res.redirect('/');
-    let targetClass = req.query.cls || '';
+    if (!req.session.teacherId) return res.json({ error: 'Unauthorized' });
     let courseId = req.query.course_id || '';
     let { student_id, quiz, mid, final } = req.body;
     let total = (parseFloat(quiz) || 0) + (parseFloat(mid) || 0) + (parseFloat(final) || 0);
     
     db.get(`SELECT * FROM courses WHERE id = ?`, [courseId], (err, course) => {
-        if(!course) return res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}`);
+        if(!course) return res.json({ error: 'Course not found' });
+        
         db.get(`SELECT id FROM course_assessments WHERE student_id = ? AND teacher_id = ? AND course_code = ?`, [student_id, req.session.teacherId, course.code], (err, row) => {
             if (row) {
                 db.run(`UPDATE course_assessments SET quiz=?, mid=?, final=?, total=?, remark=? WHERE id=?`, 
-                [quiz, mid, final, total, total >= 50 ? 'Pass' : 'Fail', row.id], () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}&course_id=${courseId}`));
+                [quiz, mid, final, total, total >= 50 ? 'Pass' : 'Fail', row.id], () => res.json({ success: true, total: total }));
             } else {
                 db.run(`INSERT INTO course_assessments (student_id, teacher_id, course_code, course_title, quiz, mid, final, total, remark) VALUES (?,?,?,?,?,?,?,?,?)`,
-                [student_id, req.session.teacherId, course.code, course.title, quiz, mid, final, total, total >= 50 ? 'Pass' : 'Fail'], () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}&course_id=${courseId}`));
+                [student_id, req.session.teacherId, course.code, course.title, quiz, mid, final, total, total >= 50 ? 'Pass' : 'Fail'], () => res.json({ success: true, total: total }));
             }
         });
     });
@@ -1018,7 +1084,7 @@ app.get('/attendance-sheet/:secName', (req, res) => {
                 } else { rowsHtml += `<tr><td>${i+1}</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>-</td></tr>`; }
             }
 
-            res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Attendance Sheet - ${sec}</title><style>body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background: #fff; } .sheet-table { width: 100%; border-collapse: collapse; font-size:13px; } .sheet-table th, .sheet-table td { border: 1px solid #000; padding: 6px 10px; text-align: center; height: 25px; } .sheet-table th { background: #d9d9d9; color: #000; } .header-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px; } button { background: #107c41; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight:bold; } .save-btn { background: #2980b9; padding: 10px 20px; font-size: 15px; } @media print { button, .no-print { display: none; } }</style></head><body><div class="header-bar"><div><h2>AMANUEL LIGHT AND LIFE SCHOOL</h2><h3>📋 Daily Attendance Sheet - Class: ${sec}</h3></div><div class="no-print"><form method="GET" action="/attendance-sheet/${encodeURIComponent(sec)}" style="display:inline-block; margin-right:10px;"><label><b>Select Date:</b></label><input type="date" name="date" value="${selectedDate}" onchange="this.form.submit()" style="padding:5px;"></form><button onclick="window.print()">🖨️️ Print Sheet</button> <button onclick="window.close()">❌ Close</button></div></div><form action="/save-attendance" method="POST"><input type="hidden" name="class_level" value="${sec}"><input type="hidden" name="date" value="${selectedDate}"><table class="sheet-table"><tr><th>No.</th><th>Student ID</th><th>Student Full Name</th><th>Gender</th><th>Daily Status</th></tr>${rowsHtml}</table><br class="no-print"><div class="no-print" style="text-align:center;"><button type="submit" class="save-btn">💾 Save Attendance</button></div></form><br><br><div style="display:flex; justify-content:space-between; font-weight:bold;"><p>Teacher's Signature: ______________________</p><p>Director's Signature: ______________________</p></div></body></html>`);
+            res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Attendance Sheet - ${sec}</title><style>body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background: #fff; } .sheet-table { width: 100%; border-collapse: collapse; font-size:13px; } .sheet-table th, .sheet-table td { border: 1px solid #000; padding: 6px 10px; text-align: center; height: 25px; } .sheet-table th { background: #d9d9d9; color: #000; } .header-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px; } button { background: #107c41; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight:bold; } .save-btn { background: #2980b9; padding: 10px 20px; font-size: 15px; } @media print { button, .no-print { display: none; } }</style></head><body><div class="header-bar"><div><h2>AMANUEL LIGHT AND LIFE SCHOOL</h2><h3>📋 Daily Attendance Sheet - Class: ${sec}</h3></div><div class="no-print"><form method="GET" action="/attendance-sheet/${encodeURIComponent(sec)}" style="display:inline-block; margin-right:10px;"><label><b>Select Date:</b></label><input type="date" name="date" value="${selectedDate}" onchange="this.form.submit()" style="padding:5px;"></form><button onclick="window.print()">🖨️ Print Sheet</button> <button onclick="window.close()">❌ Close</button></div></div><form action="/save-attendance" method="POST"><input type="hidden" name="class_level" value="${sec}"><input type="hidden" name="date" value="${selectedDate}"><table class="sheet-table"><tr><th>No.</th><th>Student ID</th><th>Student Full Name</th><th>Gender</th><th>Daily Status</th></tr>${rowsHtml}</table><br class="no-print"><div class="no-print" style="text-align:center;"><button type="submit" class="save-btn">💾 Save Attendance</button></div></form><br><br><div style="display:flex; justify-content:space-between; font-weight:bold;"><p>Teacher's Signature: ______________________</p><p>Director's Signature: ______________________</p></div></body></html>`);
         });
     });
 });
