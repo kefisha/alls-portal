@@ -530,17 +530,33 @@ app.get('/download-pending-slip/:id', (req, res) => {
     });
 });
 
-// ================= DASHBOARDS (WITH MINIMAL CSS PRESERVED) =================
+// ================= DASHBOARDS =================
 app.get('/admin', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const lang = req.query.lang || 'am';
 
     db.all(`SELECT * FROM pending_students`, [], (err, pending) => {
-        db.all(`SELECT student_id, name, class_level, phone, password, status FROM students ORDER BY class_level, name`, [], (err, students) => {
+        db.all(`SELECT student_id, name, class_level, phone, password, status, gender FROM students ORDER BY class_level, name`, [], (err, students) => {
             db.all(`SELECT * FROM teachers`, [], (err, teachers) => {
                 db.all(`SELECT * FROM sections ORDER BY name`, [], (err, sections) => {
                     db.all(`SELECT * FROM courses ORDER BY class_level, code`, [], (err, courses) => {
                         db.all(`SELECT * FROM notifications WHERE sender_role = 'Admin' ORDER BY id DESC`, [], (err, adminNotifs) => {
+                        
+                        db.all(`SELECT * FROM course_assessments`, [], (err, assessments) => {
+
+                        // --- Data processing for charts ---
+                        let maleCount = students.filter(s => s.gender === 'Male').length;
+                        let femaleCount = students.filter(s => s.gender === 'Female').length;
+                        
+                        let excellent = 0, good = 0, average = 0, poor = 0;
+                        assessments.forEach(a => {
+                            if (a.total >= 90) excellent++;
+                            else if (a.total >= 75) good++;
+                            else if (a.total >= 50) average++;
+                            else poor++;
+                        });
+
+                        // -----------------------------------
 
                         let pRows = pending.map(s => `<tr><td>-</td><td>${s.student_id}</td><td>${s.name}</td><td>${s.payment_type === 'slip_file' ? `<a href="/uploads/${s.bank_slip_val}" target="_blank" style="color:#2980b9;">📄 እይ</a>` : `<b>TXN:</b> ${s.bank_slip_val}`}</td><td><a href="/admin/approve/${s.id}?lang=${lang}" style="color:green; font-weight:bold;">✅ Approve</a></td></tr>`).join('');
 
@@ -565,12 +581,27 @@ app.get('/admin', (req, res) => {
 
                         res.send(`
                         <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Director Hub</title>
-                        <style>body{font-family:sans-serif; background:#eef2f5; padding:20px;} .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px; overflow-x:auto; box-shadow: 0 2px 4px rgba(0,0,0,0.05);} table{width:100%; border-collapse:collapse; min-width:600px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#2c3e50; color:white;} input,select{padding:6px;} .toggle-btn { background:#2c3e50; color:white; padding:15px 30px; font-size:16px; border:none; border-radius:8px; cursor:pointer; font-weight:bold; width:100%; max-width:400px; margin: 10px auto; display:block;}</style>
+                        <style>body{font-family:sans-serif; background:#eef2f5; padding:20px;} .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px; overflow-x:auto; box-shadow: 0 2px 4px rgba(0,0,0,0.05);} table{width:100%; border-collapse:collapse; min-width:600px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#2c3e50; color:white;} input,select{padding:6px;} .toggle-btn { background:#2c3e50; color:white; padding:15px 30px; font-size:16px; border:none; border-radius:8px; cursor:pointer; font-weight:bold; width:100%; max-width:400px; margin: 10px auto; display:block;} .charts-container { display: flex; flex-wrap: wrap; gap: 20px; } .chart-box { flex: 1; min-width: 300px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }</style>
                         <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+                        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
                         <script>function toggleSection(id) { var el = document.getElementById(id); el.style.display = el.style.display === 'none' ? 'block' : 'none'; }</script>
                         </head>
                         <body>
                             <h2><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 10px;"> 🔐 የዳይሬክተር / አድሚን መቆጣጠሪያ</h2>
+                            
+                            <!-- Charts Section -->
+                            <div class="charts-container mb-20">
+                                <div class="chart-box">
+                                    <h3 style="text-align:center; color:#2c3e50;">የተማሪዎች ውጤት ስርጭት</h3>
+                                    <canvas id="performanceChart"></canvas>
+                                </div>
+                                <div class="chart-box">
+                                    <h3 style="text-align:center; color:#2c3e50;">የተማሪዎች የስርዓተ-ፆታ ስብጥር</h3>
+                                    <canvas id="genderChart"></canvas>
+                                </div>
+                            </div>
+                            <!-- End Charts Section -->
+
                             <div class="card" style="background:#e8f4fd;"><h3 style="color:#2980b9;">📢 አዲስ ማስታወቂያ ላክ</h3><form action="/admin/send-notification" method="POST" enctype="multipart/form-data" id="notifForm"><div id="editor" style="height: 120px; background: white; margin-bottom: 10px;"></div><input type="hidden" name="message" id="hiddenMessage" required><label style="font-size: 13px; font-weight:bold; display:block; margin: 10px 0;">📎 ፎቶ ወይም ፋይል አያይዝ (አማራጭ):</label><input type="file" name="attachment" accept="image/*,.pdf,.doc,.docx" style="margin-bottom:10px;"><br><button type="submit" style="background:#3498db; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">Send Notification</button></form><hr style="margin:20px 0;"><h3 style="color:#555;">📋 የላኳቸው ማስታወቂያዎች</h3>${adminNotiRows || '<p style="color:#777;">ምንም መልዕክት አልተላከም</p>'}</div>
                             <div class="card"><h3>📁 የዳይሬክተር ሳምንታዊ እና ወርሃዊ ሪፖርት</h3><a href="/director-report" target="_blank" style="background:#8e44ad; color:white; padding:10px 15px; text-decoration:none; border-radius:5px; font-weight:bold; display:inline-block;">📁 View Director Academic Year Report</a></div>
                             <div class="card"><h3>አዲስ ተመዝጋቢዎች (Pending)</h3><table><tr><th>Photo</th><th>ID</th><th>Name</th><th>Payment</th><th>Action</th></tr>${pRows||'<tr><td colspan="5">None</td></tr>'}</table></div>
@@ -582,8 +613,55 @@ app.get('/admin', (req, res) => {
                             <div id="studentsList" class="card" style="display:none; border:2px solid #27ae60;"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;"><h3 style="color:#27ae60; margin:0;">🎓 የሁሉም ተማሪዎች ዝርዝር (በየክፍሉ)</h3><a href="/admin/export-students" style="background:#27ae60; color:white; padding:8px 15px; border-radius:5px; text-decoration:none; font-weight:bold;">📊 Total Students (Excel)</a></div>${groupedStudentsHtml}</div>
                             <br><div style="text-align:center;"><a href="/logout" style="color:red; font-weight:bold; font-size:18px;">🔒 ውጣ (Logout)</a></div><br><br>
                             <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
-                            <script>var quill = new Quill('#editor', { theme: 'snow', modules: { toolbar: [ [{ 'font': [] }, { 'size': [] }], ['bold', 'italic', 'underline', 'strike'], [{ 'color': [] }, { 'background': [] }], [{ 'align': [] }], ['link', 'image'] ] }}); document.getElementById('notifForm').onsubmit = function() { document.getElementById('hiddenMessage').value = quill.root.innerHTML; };</script>
+                            <script>
+                                var quill = new Quill('#editor', { theme: 'snow', modules: { toolbar: [ [{ 'font': [] }, { 'size': [] }], ['bold', 'italic', 'underline', 'strike'], [{ 'color': [] }, { 'background': [] }], [{ 'align': [] }], ['link', 'image'] ] }}); 
+                                document.getElementById('notifForm').onsubmit = function() { document.getElementById('hiddenMessage').value = quill.root.innerHTML; };
+                                
+                                // Chart.js Initialization
+                                const perfCtx = document.getElementById('performanceChart').getContext('2d');
+                                new Chart(perfCtx, {
+                                    type: 'bar',
+                                    data: {
+                                        labels: ['Excellent (>=90)', 'Good (75-89)', 'Average (50-74)', 'Poor (<50)'],
+                                        datasets: [{
+                                            label: 'Students Count',
+                                            data: [${excellent}, ${good}, ${average}, ${poor}],
+                                            backgroundColor: [
+                                                'rgba(39, 174, 96, 0.7)',
+                                                'rgba(41, 128, 185, 0.7)',
+                                                'rgba(241, 196, 15, 0.7)',
+                                                'rgba(231, 76, 60, 0.7)'
+                                            ],
+                                            borderColor: [
+                                                'rgb(39, 174, 96)',
+                                                'rgb(41, 128, 185)',
+                                                'rgb(241, 196, 15)',
+                                                'rgb(231, 76, 60)'
+                                            ],
+                                            borderWidth: 1
+                                        }]
+                                    },
+                                    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+                                });
+
+                                const genderCtx = document.getElementById('genderChart').getContext('2d');
+                                new Chart(genderCtx, {
+                                    type: 'pie',
+                                    data: {
+                                        labels: ['Male', 'Female'],
+                                        datasets: [{
+                                            data: [${maleCount}, ${femaleCount}],
+                                            backgroundColor: [
+                                                'rgba(52, 152, 219, 0.8)',
+                                                'rgba(233, 30, 99, 0.8)'
+                                            ]
+                                        }]
+                                    },
+                                    options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+                                });
+                            </script>
                         </body></html>`);
+                            });
                         });
                     });
                 });
@@ -940,7 +1018,7 @@ app.get('/attendance-sheet/:secName', (req, res) => {
                 } else { rowsHtml += `<tr><td>${i+1}</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>-</td></tr>`; }
             }
 
-            res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Attendance Sheet - ${sec}</title><style>body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background: #fff; } .sheet-table { width: 100%; border-collapse: collapse; font-size:13px; } .sheet-table th, .sheet-table td { border: 1px solid #000; padding: 6px 10px; text-align: center; height: 25px; } .sheet-table th { background: #d9d9d9; color: #000; } .header-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px; } button { background: #107c41; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight:bold; } .save-btn { background: #2980b9; padding: 10px 20px; font-size: 15px; } @media print { button, .no-print { display: none; } }</style></head><body><div class="header-bar"><div><h2>AMANUEL LIGHT AND LIFE SCHOOL</h2><h3>📋 Daily Attendance Sheet - Class: ${sec}</h3></div><div class="no-print"><form method="GET" action="/attendance-sheet/${encodeURIComponent(sec)}" style="display:inline-block; margin-right:10px;"><label><b>Select Date:</b></label><input type="date" name="date" value="${selectedDate}" onchange="this.form.submit()" style="padding:5px;"></form><button onclick="window.print()">🖨️ Print Sheet</button> <button onclick="window.close()">❌ Close</button></div></div><form action="/save-attendance" method="POST"><input type="hidden" name="class_level" value="${sec}"><input type="hidden" name="date" value="${selectedDate}"><table class="sheet-table"><tr><th>No.</th><th>Student ID</th><th>Student Full Name</th><th>Gender</th><th>Daily Status</th></tr>${rowsHtml}</table><br class="no-print"><div class="no-print" style="text-align:center;"><button type="submit" class="save-btn">💾 Save Attendance</button></div></form><br><br><div style="display:flex; justify-content:space-between; font-weight:bold;"><p>Teacher's Signature: ______________________</p><p>Director's Signature: ______________________</p></div></body></html>`);
+            res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Attendance Sheet - ${sec}</title><style>body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background: #fff; } .sheet-table { width: 100%; border-collapse: collapse; font-size:13px; } .sheet-table th, .sheet-table td { border: 1px solid #000; padding: 6px 10px; text-align: center; height: 25px; } .sheet-table th { background: #d9d9d9; color: #000; } .header-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px; } button { background: #107c41; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight:bold; } .save-btn { background: #2980b9; padding: 10px 20px; font-size: 15px; } @media print { button, .no-print { display: none; } }</style></head><body><div class="header-bar"><div><h2>AMANUEL LIGHT AND LIFE SCHOOL</h2><h3>📋 Daily Attendance Sheet - Class: ${sec}</h3></div><div class="no-print"><form method="GET" action="/attendance-sheet/${encodeURIComponent(sec)}" style="display:inline-block; margin-right:10px;"><label><b>Select Date:</b></label><input type="date" name="date" value="${selectedDate}" onchange="this.form.submit()" style="padding:5px;"></form><button onclick="window.print()">🖨️️ Print Sheet</button> <button onclick="window.close()">❌ Close</button></div></div><form action="/save-attendance" method="POST"><input type="hidden" name="class_level" value="${sec}"><input type="hidden" name="date" value="${selectedDate}"><table class="sheet-table"><tr><th>No.</th><th>Student ID</th><th>Student Full Name</th><th>Gender</th><th>Daily Status</th></tr>${rowsHtml}</table><br class="no-print"><div class="no-print" style="text-align:center;"><button type="submit" class="save-btn">💾 Save Attendance</button></div></form><br><br><div style="display:flex; justify-content:space-between; font-weight:bold;"><p>Teacher's Signature: ______________________</p><p>Director's Signature: ______________________</p></div></body></html>`);
         });
     });
 });
