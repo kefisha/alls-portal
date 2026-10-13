@@ -818,6 +818,18 @@ app.post('/teacher/send-notification', upload.single('attachment'), (req, res) =
             ['Teacher', teacher.name, targetClass, xss(req.body.message), new Date().toLocaleString(), req.file ? req.file.filename : null], () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}`));
     });
 });
+// Admin posting/editing notices and calendar
+app.post('/admin/save-notice', upload.single('attachment'), (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    let { title, message, target_audience } = req.body;
+    let attachment = req.file ? req.file.filename : null;
+    let createdAt = new Date().toISOString().split('T')[0];
+
+    db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, attachment, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+        ['Admin', 'School Admin', target_audience || 'ALL', message, attachment, createdAt], (err) => {
+            res.redirect('/admin-dashboard');
+        });
+});
 
 app.post('/admin/send-notification', upload.single('attachment'), (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
