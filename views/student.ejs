@@ -8,45 +8,47 @@
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f7f6; margin: 0; padding: 20px; color: #333; }
         .container { max-width: 950px; margin: auto; }
         .card { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow-x: auto; }
-        h2 { color: #2c3e50; display: flex; align-items: center; gap: 10px; }
-        h3 { color: #34495e; border-bottom: 2px solid #ecf0f1; padding-bottom: 8px; margin-top: 0; }
+        h2 { color: #2c3e50; display: flex; align-items: center; justify-content: space-between; }
+        h3 { color: #34495e; border-bottom: 2px solid #ecf0f1; padding-bottom: 8px; margin-top: 0; display: flex; align-items: center; gap: 8px; }
         table { width: 100%; border-collapse: collapse; min-width: 600px; margin-top: 10px; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: center; font-size: 14px; }
         th { background: #1f4e79; color: white; }
         tr:nth-child(even) { background: #f9f9f9; }
-        input[type="text"], input[type="file"], input[type="date"], textarea, select { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        button { background: #27ae60; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 8px; }
+        input[type="text"], input[type="file"], input[type="date"], textarea, select { width: 100%; padding: 9px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 6px; }
+        button { background: #27ae60; color: white; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top: 8px; }
         button:hover { background: #219653; }
         .profile-header { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
-        .profile-img { width: 95px; height: 95px; border-radius: 8px; object-fit: cover; border: 2px solid #1f4e79; }
-        .btn-id { background: #8e44ad; color: white; padding: 8px 15px; border-radius: 5px; text-decoration: none; font-weight: bold; display: inline-block; margin-top: 10px; }
+        .profile-img { width: 95px; height: 95px; border-radius: 8px; object-fit: cover; border: 2px solid #1f4e79; flex-shrink: 0; }
+        .btn-id { background: #8e44ad; color: white; padding: 8px 15px; border-radius: 6px; text-decoration: none; font-weight: bold; display: inline-block; margin-top: 10px; font-size: 13px; }
         .btn-id:hover { background: #732d91; }
+        .badge { background: #e74c3c; color: white; border-radius: 50px; padding: 2px 8px; font-size: 12px; }
         .logout-btn { display: inline-block; text-align: center; margin-top: 20px; color: #c0392b; font-weight: bold; font-size: 16px; text-decoration: none; }
     </style>
 </head>
 <body>
 <div class="container">
     <h2>
-        <img src="/uploads/<%= student.photo || 'default.png' %>?v=<%= Date.now() %>" class="profile-img">
- 
-        🎓 የተማሪ መቆጣጠሪያ ፖርታል (Student Portal)
+        <span><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 8px;"> 🎓 የተማሪ መቆጣጠሪያ ፖርታል</span>
+        <span style="font-size: 14px; background: #eef2f5; padding: 6px 12px; border-radius: 20px; color: #2c3e50;">ክፍል: <%= student.class_level %></span>
     </h2>
     
+    <!-- Profile & Digital ID -->
     <div class="card profile-header">
-        <img src="/uploads/<%= student.photo || 'default.png' %>?t=<%= Date.now() %>" onerror="this.src='/uploads/logo.jpg'" class="profile-img">
+        <img src="/uploads/<%= student.photo && student.photo.trim() !== '' ? student.photo : 'default.png' %>" onerror="this.src='/uploads/logo.jpg'" class="profile-img">
         <div style="flex-grow: 1;">
-            <h3 style="margin: 0; border: none; padding: 0;">ሰላም, <%= student.name %></h3>
-            <p style="margin: 5px 0; color: #555;"><b>መታወቂያ (ID):</b> <%= student.student_id %> | <b>ክፍል:</b> <%= student.class_level %> | <b>ስልክ:</b> <%= student.phone %></p>
+            <h3 style="margin: 0; border: none; padding: 0; color: #2c3e50;">ሰላም, <%= student.name %></h3>
+            <p style="margin: 6px 0; color: #555; font-size: 14px;"><b>መታወቂያ (ID):</b> <%= student.student_id %> | <b>ስልክ:</b> <%= student.phone || '-' %></p>
             
-            <a href="/student/digital-id" target="_blank" class="btn-id">🆔 ዲጂታል መታወቂያ አውርድ (Digital ID)</a>
+            <a href="/student/digital-id" target="_blank" class="btn-id">🆔 ዲጂታል መታወቂያ አውርድ (Download PDF)</a>
 
-            <form action="/student/update-photo" method="POST" enctype="multipart/form-data" style="margin-top: 10px; display: flex; gap: 10px; align-items: center;">
+            <form action="/student/update-photo" method="POST" enctype="multipart/form-data" style="margin-top: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                 <input type="file" name="new_photo" accept="image/*" required style="width: auto; padding: 4px; font-size: 12px;">
-                <button type="submit" style="padding: 5px 12px; margin: 0; background: #3498db;">ፎቶ ቀይር</button>
+                <button type="submit" style="padding: 6px 14px; margin: 0; background: #3498db; font-size: 13px;">ፎቶ ቀይር</button>
             </form>
         </div>
     </div>
 
+    <!-- Assessment Grades -->
     <div class="card">
         <h3>📊 የትምህርት ውጤቶች (Assessment Grades)</h3>
         <table>
@@ -64,11 +66,41 @@
         </table>
     </div>
 
-    <div class="card" style="background: #e8f4fd;">
-        <h3 style="color: #2980b9;">📢 ማስታወቂያዎች (Notifications)</h3>
-        <%- notiRows || '<p style="color: #777;">ምንም ማስታወቂያ የለም</p>' %>
+    <!-- Real-time Notifications Bell Section -->
+    <div class="card" style="background: #f8fafc; border: 1px solid #e2e8f0;">
+        <h3 style="color: #2980b9;">🔔 የትምህርት ቤት ማስታወቂያዎች (Live Notifications)</h3>
+        <div style="margin-top: 10px;">
+            <%- notiRows || '<p style="color: #777; font-style: italic;">ምንም ማስታወቂያ የለም</p>' %>
+        </div>
     </div>
 
+    <!-- Academic Calendar & Exam Schedule Section -->
+    <div class="card">
+        <h3>📅 የፈተና መርሃ-ጊዜ እና የቀን መቁጠሪያ (Exam Schedule & Calendar)</h3>
+        <p style="font-size: 13px; color: #666; margin-bottom: 10px;">ለዚህ ክፍል የተዘጋጁ ወቅታዊ የፈተና ጊዜያት እና የትምህርት መርሃ-ግብሮች ከዚህ በታች ይገኛሉ፡</p>
+        <table>
+            <tr>
+                <th>ተግባር / ፈተና</th>
+                <th>የሚሰጥበት ቀን (Date)</th>
+                <th>ሰዓት</th>
+                <th>ሁኔታ (Status)</th>
+            </tr>
+            <tr>
+                <td style="text-align: left;"><b>1ኛ ዙር የውድድር / ኪዊዝ ፈተና</b></td>
+                <td>በቅርቡ ይፋ ይሆናል</td>
+                <td>-</td>
+                <td><span style="color: #e67e22; font-weight: bold;">በመጠበቅ ላይ</span></td>
+            </tr>
+            <tr>
+                <td style="text-align: left;"><b>የመካከለኛ ጊዜ ፈተና (Mid-Term Exam)</b></td>
+                <td>በመምህራን ማስታወቂያ መሰረት</td>
+                <td>-</td>
+                <td><span style="color: #e67e22; font-weight: bold;">በመጠበቅ ላይ</span></td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Absence / Leave Request -->
     <div class="card">
         <h3>✉️ የመቅረት / እረፍት ጥያቄ ማቅረቢያ (Absence Request)</h3>
         <form action="/student/absence" method="POST" enctype="multipart/form-data">
@@ -76,17 +108,17 @@
             <label style="font-weight: bold; font-size: 13px;">ቀን (Date):</label>
             <input type="date" name="date" required>
 
-            <label style="font-weight: bold; font-size: 13px; display: block; margin-top: 8px;">ምክንያትዎን ይጻፉ:</label>
+            <label style="font-weight: bold; font-size: 13px; display: block; margin-top: 10px;">ምክንያትዎን ይጻፉ:</label>
             <textarea name="reason" rows="3" placeholder="ለምን እንደቀሩ ወይም ፈቃድ እንደሚፈልጉ በዝርዝር ይጻፉ..." required></textarea>
             
-            <label style="font-weight: bold; font-size: 13px; display: block; margin-top: 8px;">የሕክምና ማረጋገጫ ወይም ደብዳቤ (ካለ ፋይል ያያይዙ):</label>
+            <label style="font-weight: bold; font-size: 13px; display: block; margin-top: 10px;">የሕክምና ማረጋገጫ ወይም ደብዳቤ (ካለ ፋይል ያያይዙ):</label>
             <input type="file" name="attachment" accept="image/*,.pdf">
             
             <button type="submit">ፈቃድ ጥያቄ ላክ</button>
         </form>
         
-        <h4 style="margin-top: 25px; color: #2c3e50;">የቀረቧቸው ጥያቄዎች ታሪክ (History)</h4>
-        <%- myAbsRows || '<p style="color: #777;">ምንም የቀረበ ጥያቄ የለም</p>' %>
+        <h4 style="margin-top: 25px; color: #2c3e50; font-size: 15px;">የቀረቧቸው ጥያቄዎች ታሪክ (History)</h4>
+        <%- myAbsRows || '<p style="color: #777; font-size: 13px;">ምንም የቀረበ ጥያቄ የለም</p>' %>
     </div>
 
     <div style="text-align: center;">
