@@ -829,9 +829,6 @@ app.get('/student-dashboard', (req, res) => {
     });
 });
 
-</html>
-
-
 app.post('/student/update-photo', upload.single('new_photo'), (req, res) => {
     if (!req.session.studentId) return res.redirect('/');
     if (req.file) { db.run(`UPDATE students SET photo = ? WHERE student_id = ?`, [req.file.filename, req.session.studentId], () => res.redirect('/student-dashboard')); } 
