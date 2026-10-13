@@ -407,36 +407,44 @@ app.get('/student/digital-id', (req, res) => {
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eef2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         .id-card { width: 380px; background: white; border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.15); overflow: hidden; border: 2px solid #1f4e79; }
-        .header { background: #1f4e79; color: white; padding: 15px; text-align: center; }
-        .header h3 { margin: 0; font-size: 16px; font-weight: bold; }
-        .header p { margin: 4px 0 0; font-size: 12px; letter-spacing: 0.5px; }
-        .content { padding: 20px; display: flex; gap: 15px; align-items: center; border-bottom: 1px solid #eee; }
-        .profile-img { width: 95px; height: 95px; border-radius: 8px; object-fit: cover; border: 2px solid #1f4e79; }
-        .info { font-size: 14px; line-height: 1.5; color: #333; }
+        .header { background: #1f4e79; color: white; padding: 12px 15px; display: flex; align-items: center; gap: 12px; }
+        .school-logo { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; background: white; border: 2px solid white; }
+        .header-text h3 { margin: 0; font-size: 15px; font-weight: bold; }
+        .header-text p { margin: 2px 0 0; font-size: 11px; letter-spacing: 0.5px; }
+        .content { padding: 18px; display: flex; gap: 15px; align-items: center; border-bottom: 1px solid #eee; }
+        .profile-img { width: 95px; height: 95px; border-radius: 8px; object-fit: cover; border: 2px solid #1f4e79; flex-shrink: 0; }
+        .info { font-size: 13px; line-height: 1.5; color: #333; }
         .info p { margin: 3px 0; }
         .status { color: #27ae60; font-weight: bold; }
-        .qr-section { padding: 15px; text-align: center; background: #fafafa; }
-        .qr-code { width: 90px; height: 90px; }
-        .footer { background: #f1f4f6; padding: 8px; text-align: center; font-size: 11px; color: #555; border-top: 1px solid #ddd; }
+        .qr-section { padding: 12px; text-align: center; background: #fafafa; }
+        .qr-code { width: 80px; height: 80px; }
+        .footer { background: #f1f4f6; padding: 6px; text-align: center; font-size: 10px; color: #555; border-top: 1px solid #ddd; }
         .actions { padding: 10px; background: #fff; display: flex; gap: 10px; }
         .btn { flex: 1; padding: 10px; font-size: 14px; font-weight: bold; cursor: pointer; border: none; border-radius: 6px; text-align: center; text-decoration: none; }
         .btn-print { background: #27ae60; color: white; }
         .btn-print:hover { background: #219653; }
         .btn-back { background: #7f8c8d; color: white; }
         .btn-back:hover { background: #707b7c; }
-        @media print { .actions { display: none; } body { background: white; } .id-card { box-shadow: none; border: 1px solid #000; } }
+        @media print { 
+            .actions { display: none !important; } 
+            body { background: white; height: auto; display: block; } 
+            .id-card { box-shadow: none; border: 1px solid #000; margin: auto; } 
+        }
     </style>
 </head>
 <body>
     <div class="id-card">
         <div class="header">
-            <h3>AMANUEL LIGHT AND LIFE SCHOOL</h3>
-            <p>OFFICIAL DIGITAL STUDENT ID CARD</p>
+            <img src="/uploads/logo.jpg" onerror="this.style.display='none'" class="school-logo">
+            <div class="header-text">
+                <h3>AMANUEL LIGHT & LIFE SCHOOL</h3>
+                <p>OFFICIAL DIGITAL STUDENT ID CARD</p>
+            </div>
         </div>
         <div class="content">
             <img src="/uploads/${student.photo || 'default.png'}" onerror="this.src='/uploads/logo.jpg'" class="profile-img">
             <div class="info">
-                <h3 style="margin: 0 0 5px 0; color: #2c3e50; font-size: 16px;">${student.name}</h3>
+                <h3 style="margin: 0 0 4px 0; color: #2c3e50; font-size: 15px;">${student.name}</h3>
                 <p><b>ID No:</b> ${student.student_id}</p>
                 <p><b>Class:</b> ${student.class_level}</p>
                 <p><b>Phone:</b> ${student.phone || '-'}</p>
@@ -445,7 +453,7 @@ app.get('/student/digital-id', (req, res) => {
         </div>
         <div class="qr-section">
             <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=ID-${student.student_id}-${encodeURIComponent(student.name)}" class="qr-code">
-            <p style="font-size: 10px; color: #777; margin: 5px 0 0;">Scan to verify student status</p>
+            <p style="font-size: 10px; color: #777; margin: 3px 0 0;">Scan to verify student status</p>
         </div>
         <div class="footer">
             This card is property of Amanuel Light and Life School. If found, please return to the office.
@@ -459,6 +467,7 @@ app.get('/student/digital-id', (req, res) => {
 </html>`);
     });
 });
+
 
 
 
