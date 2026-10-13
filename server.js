@@ -17,6 +17,8 @@ process.on('unhandledRejection', (reason, p) => { console.error('UNHANDLED REJEC
 
 const app = express();
 app.set('trust proxy', 1); 
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
 const PORT = process.env.PORT || 3000;
 
 if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
@@ -215,87 +217,10 @@ function esc(v) { return v === null || v === undefined ? '' : String(v).replace(
 // ================= PUBLIC ROUTES =================
 app.get('/', (req, res) => {
     const lang = req.query.lang === 'en' ? 'en' : 'am';
-    const t = lang === 'en' ? {
-        title: "AMANUEL LIGHT AND LIFE SCHOOL", stud: "Student", teach: "Teacher", admin: "Admin/Director",
-        id: "ID Number / Username", pass: "Password PIN", btn: "Log In", reg: "New Student Registration",
-        forgot: "Forgot your password?", forgotBtn: "Reset Password", type: "Account Type"
-    } : {
-        title: "አማኑኤል ብርሃንና ሕይወት ትምህርት ቤት", stud: "ተማሪ (Student)", teach: "መምህር (Teacher)", admin: "አድሚን (Admin)",
-        id: "መታወቂያ ቁጥር (ID)", pass: "ሚስጥር ቁጥር (Password)", btn: "ግባ (Log In)", reg: "አዲስ ተማሪ ምዝገባ",
-        forgot: "የይለፍ ቃልዎን ረሱ?", forgotBtn: "ፓስወርድ ዳግም አስጀምር", type: "የአካውንት አይነት"
-    };
-
-    let alertScript = '';
-    if (req.query.error === 'invalid') {
-        alertScript = `<script>Swal.fire({icon: 'error', title: '${lang==='en'?'Oops!':'ስህተት!'}', text: '${lang==='en'?'Invalid ID or Password!':'የተሳሳተ መለያ ወይም ፓስወርድ አስገብተዋል!'}', confirmButtonColor: '#d33'})</script>`;
-    } else if (req.query.error === 'blocked') {
-        alertScript = `<script>Swal.fire({icon: 'warning', title: '${lang==='en'?'Blocked!':'ታግደዋል!'}', text: '${lang==='en'?'Too many attempts. Try again in 15 mins.':'በጣም ብዙ የተሳሳተ ሙከራ! እባክዎ ከ15 ደቂቃ በኋላ ይሞክሩ።'}', confirmButtonColor: '#f39c12'})</script>`;
-    }
-
-    res.send(`
-    <!DOCTYPE html><html lang="${lang}">
-    <head>
-        <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>${t.title}</title>
-        <script src="https://cdn.tailwindcss.com"></script>
-        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    </head>
-    <body class="bg-gradient-to-br from-blue-50 to-gray-200 flex items-center justify-center min-h-screen p-4">
-        <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md transition-all duration-300 hover:shadow-2xl">
-            <div class="flex justify-end mb-2 space-x-2 text-sm">
-                <a href="/?lang=am" class="text-blue-600 hover:text-blue-800 font-bold">አማርኛ</a> <span class="text-gray-400">|</span> <a href="/?lang=en" class="text-blue-600 hover:text-blue-800 font-bold">English</a>
-            </div>
-            <img src="/uploads/logo.jpg" onerror="this.style.display='none'" class="w-24 h-24 mx-auto rounded-full mb-4 border-4 border-blue-100 shadow-sm object-cover">
-            <h2 class="text-2xl font-extrabold text-center text-gray-800 mb-6">${t.title}</h2>
-            
-            <form action="/login?lang=${lang}" method="POST" class="space-y-5">
-                <div>
-                    <label class="block text-gray-700 text-sm font-bold mb-2">${t.type}</label>
-                    <div class="relative">
-                        <i class="fa-solid fa-users absolute left-3 top-3.5 text-gray-400"></i>
-                        <select name="role" class="w-full pl-10 pr-3 py-3 rounded-lg border border-gray-300 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors cursor-pointer bg-white">
-                            <option value="student">${t.stud}</option>
-                            <option value="teacher">${t.teach}</option>
-                            <option value="admin">${t.admin}</option>
-                        </select>
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-gray-700 text-sm font-bold mb-2">${t.id}</label>
-                    <div class="relative">
-                        <i class="fa-solid fa-id-card absolute left-3 top-3.5 text-gray-400"></i>
-                        <input type="text" name="username" placeholder="${t.id}" required class="w-full pl-10 pr-3 py-3 rounded-lg border border-gray-300 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors">
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-gray-700 text-sm font-bold mb-2">${t.pass}</label>
-                    <div class="relative">
-                        <i class="fa-solid fa-lock absolute left-3 top-3.5 text-gray-400"></i>
-                        <input type="password" name="password" placeholder="${t.pass}" required class="w-full pl-10 pr-3 py-3 rounded-lg border border-gray-300 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors">
-                    </div>
-                </div>
-                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-transform transform hover:-translate-y-1 shadow-md flex justify-center items-center">
-                    <i class="fa-solid fa-right-to-bracket mr-2"></i> ${t.btn}
-                </button>
-            </form>
-            
-            <div class="mt-5 text-center text-sm text-gray-600">
-                ${t.forgot} <a href="/forgot-password?lang=${lang}" class="text-blue-500 hover:text-blue-700 hover:underline font-bold">${t.forgotBtn}</a>
-            </div>
-            
-            <div class="my-6 border-t border-gray-200 relative">
-                <span class="absolute left-1/2 transform -translate-x-1/2 -top-3 bg-white px-2 text-gray-400 text-sm font-bold">OR</span>
-            </div>
-            
-            <a href="/student-register?lang=${lang}" class="flex justify-center items-center w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-lg transition-transform transform hover:-translate-y-1 shadow-md">
-                <i class="fa-solid fa-user-plus mr-2"></i> ${t.reg}
-            </a>
-        </div>
-        ${alertScript}
-    </body>
-    </html>`);
+    const error = req.query.error;
+    res.render('login', { lang, error });
 });
+
 
 app.post('/login', loginLimiter, (req, res) => {
     const lang = req.query.lang || 'am';
