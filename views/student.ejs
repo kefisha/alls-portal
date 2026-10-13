@@ -19,8 +19,9 @@
         button:hover { background: #219653; }
         .profile-header { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
         .profile-img { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 3px solid #3498db; }
+        .btn-id { background: #8e44ad; color: white; padding: 8px 15px; border-radius: 5px; text-decoration: none; font-weight: bold; display: inline-block; margin-top: 10px; }
+        .btn-id:hover { background: #732d91; }
         .logout-btn { display: inline-block; text-align: center; margin-top: 20px; color: #c0392b; font-weight: bold; font-size: 16px; text-decoration: none; }
-        .logout-btn:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -30,13 +31,16 @@
         🎓 የተማሪ መቆጣጠሪያ ፖርታል (Student Portal)
     </h2>
     
-    <!-- Profile & Photo Update -->
+    <!-- Profile & Digital ID -->
     <div class="card profile-header">
         <img src="/uploads/<%= student.photo || 'default.png' %>" onerror="this.src='/uploads/logo.jpg'" class="profile-img">
         <div style="flex-grow: 1;">
             <h3 style="margin: 0; border: none; padding: 0;">ሰላም, <%= student.name %></h3>
             <p style="margin: 5px 0; color: #555;"><b>መታወቂያ (ID):</b> <%= student.student_id %> | <b>ክፍል:</b> <%= student.class_level %> | <b>ስልክ:</b> <%= student.phone %></p>
-            <form action="/student/update-photo" method="POST" enctype="multipart/form-data" style="margin-top: 8px; display: flex; gap: 10px; align-items: center;">
+            
+            <a href="/student/digital-id" target="_blank" class="btn-id">🆔 ዲጂታል መታወቂያ አውርድ (Digital ID)</a>
+
+            <form action="/student/update-photo" method="POST" enctype="multipart/form-data" style="margin-top: 12px; display: flex; gap: 10px; align-items: center;">
                 <input type="file" name="new_photo" accept="image/*" required style="width: auto; padding: 4px; font-size: 12px;">
                 <button type="submit" style="padding: 5px 12px; margin: 0; background: #3498db;">ፎቶ ቀይር</button>
             </form>
@@ -72,13 +76,16 @@
         <h3>✉️ የመቅረት / እረፍት ጥያቄ ማቅረቢያ (Absence Request)</h3>
         <form action="/student/absence" method="POST" enctype="multipart/form-data">
             <input type="hidden" name="target_teacher" value="">
-            <label style="font-weight: bold; font-size: 13px;">ምክንያትዎን ይጻፉ:</label>
+            <label style="font-weight: bold; font-size: 13px;">ቀን (Date):</label>
+            <input type="date" name="date" required>
+
+            <label style="font-weight: bold; font-size: 13px; display: block; margin-top: 8px;">ምክንያትዎን ይጻፉ:</label>
             <textarea name="reason" rows="3" placeholder="ለምን እንደቀሩ ወይም ፈቃድ እንደሚፈልጉ በዝርዝር ይጻፉ..." required></textarea>
             
-            <label style="font-weight: bold; font-size: 13px; display: block; margin-top: 10px;">የሕክምና ማረጋገጫ ወይም ደብዳቤ (ካለ ፋይል ያያይዙ):</label>
+            <label style="font-weight: bold; font-size: 13px; display: block; margin-top: 8px;">የሕክምና ማረጋገጫ ወይም ደብዳቤ (ካለ ፋይል ያያይዙ):</label>
             <input type="file" name="attachment" accept="image/*,.pdf">
             
-            <button type="submit">ጥያቄ ላክ</button>
+            <button type="submit">ፈቃድ ጥያቄ ላክ</button>
         </form>
         
         <h4 style="margin-top: 25px; color: #2c3e50;">የቀረቧቸው ጥያቄዎች ታሪክ (History)</h4>
