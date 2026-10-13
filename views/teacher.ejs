@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Portal</title>
+    <style>
+        body{font-family:sans-serif; background:#f4f7f6; padding:20px;}
+        .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px; box-shadow:0 2px 4px rgba(0,0,0,0.05); overflow-x:auto;}
+        table{width:100%; border-collapse:collapse; min-width:600px;}
+        th,td{border:1px solid #ccc; padding:8px; text-align:center;}
+        th{background:#2c3e50; color:white;}
+        input,select{padding:6px;}
+    </style>
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+</head>
+<body>
+<div style="max-width:900px; margin:auto;">
+    <h2><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 10px;"> 👨‍🏫 የመምህር መቆጣጠሪያ ፖርታል</h2>
+    
+    <div class="card">
+        <form method="GET" action="/teacher-dashboard" style="background:#eef2f5; padding:15px; border-radius:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <label style="font-weight:bold;">ክፍል ምረጥ:</label>
+            <select name="cls" onchange="this.form.submit()" style="padding:8px; border-radius:5px;"><%- classOptions %></select>
+            <label style="font-weight:bold; margin-left:15px;">ትምህርት ምረጥ:</label>
+            <select name="course_id" onchange="this.form.submit()" style="padding:8px; border-radius:5px;"><%- courseOptions %></select>
+        </form>
+    </div>
+
+    <%- proctorPanel %>
+
+    <div class="card">
+        <h3>📊 የውጤት ማስገቢያ (ክፍል: <%= selectedClass %>)</h3>
+        <table>
+            <tr><th>#</th><th>ID</th><th>ስም (Name)</th><th>Quiz (20%)</th><th>Mid (30%)</th><th>Final (50%)</th><th>Action</th></tr>
+            <%- studentRows || '<tr><td colspan="7">ምንም ተማሪ የለም</td></tr>' %>
+        </table>
+    </div>
+
+    <div class="card">
+        <h3>📋 የፈቀዷቸው / የተማሪዎች መቅረት ጥያቄዎች (Absence Requests)</h3>
+        <table>
+            <tr><th>ተማሪ</th><th>ቀን</th><th>ምክንያት</th><th>ሁኔታ</th></tr>
+            <%- absRows || '<tr><td colspan="4">ምንም ጥያቄ የለም</td></tr>' %>
+        </table>
+    </div>
+
+    <div class="card" style="background:#e8f4fd;">
+        <h3 style="color:#2980b9;">📢 ማስታወቂያዎች</h3>
+        <form action="/teacher/send-notification?cls=<%= encodeURIComponent(selectedClass) %>" method="POST" enctype="multipart/form-data" id="notifFormTeacher">
+            <div id="editorTeacher" style="height: 120px; background: white; margin-bottom: 10px;"></div>
+            <input type="hidden" name="message" id="hiddenMessageTeacher" required>
+            <input type="file" name="attachment" style="margin-bottom:10px;"><br>
+            <button type="submit" style="background:#3498db; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">Send Notification</button>
+        </form>
+        <hr style="margin:20px 0;">
+        <%- teacherNotiRows || '<p style="color:#777;">ምንም ማስታወቂያ የለም</p>' %>
+    </div>
+
+    <div style="text-align:center; margin-top:20px;">
+        <a href="/logout" style="color:red; font-weight:bold; font-size:18px; text-decoration:none;">🔒 ውጣ (Logout)</a>
+    </div>
+</div>
+
+<script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+<script>
+    var quill = new Quill('#editorTeacher', { theme: 'snow' });
+    var form = document.getElementById('notifFormTeacher');
+    if(form) {
+        form.onsubmit = function() { document.getElementById('hiddenMessageTeacher').value = quill.root.innerHTML; };
+    }
+
+    document.querySelectorAll('.ajax-grade-form').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const btn = this.querySelector('button');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳...';
+            btn.disabled = true;
+
+            const studentId = this.querySelector('input[name="student_id"]').value;
+            const quiz = this.querySelector('input[name="quiz"]').value;
+            const mid = this.querySelector('input[name="mid"]').value;
+            const final = this.querySelector('input[name="final"]').value;
+
+            let payload = new URLSearchParams();
+            payload.append('student_id', studentId);
+            payload.append('quiz', quiz);
+            payload.append('mid', mid);
+            payload.append('final', final);
+
+            fetch(this.action, { method: 'POST', body: payload })
+            .then(res => res.json())
+            .then(res => {
+                if(res.success) {
+                    btn.innerHTML = '✅ Saved';
+                    btn.style.background = '#27ae60';
+                    setTimeout(() => { btn.innerHTML = originalText; btn.style.background = '#27ae60'; btn.disabled = false; }, 1500);
+                } else {
+                    btn.innerHTML = '❌ Error';
+                    btn.style.background = '#c0392b';
+                    setTimeout(() => { btn.innerHTML = originalText; btn.style.background = '#27ae60'; btn.disabled = false; }, 1500);
+                }
+            })
+            .catch(() => {
+                btn.innerHTML = '❌ Error';
+                btn.disabled = false;
+            });
+        });
+    });
+</script>
+</body>
+</html>
