@@ -736,15 +736,6 @@ app.get('/teacher-dashboard', (req, res) => {
     });
 });
 
-    db.get(`SELECT * FROM teachers WHERE id = ?`, [req.session.teacherId], (err, teacher) => {
-        db.all(`SELECT * FROM sections`, [], (err, sections) => {
-            let section = sections.find(sec => isClassMatch(sec.name, targetClass));
-            if(section && section.proctor_name === teacher.name) {
-                db.run(`UPDATE sections SET class_monitor = ? WHERE id = ?`, [req.body.monitor_name, section.id], () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}`));
-            } else { res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}`); }
-        });
-    });
-});
 
 app.post('/teacher/send-notification', upload.single('attachment'), (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
