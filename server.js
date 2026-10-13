@@ -574,22 +574,16 @@ app.get('/admin', (req, res) => {
                                 });
 
                                 const genderCtx = document.getElementById('genderChart').getContext('2d');
-                                new Chart(genderCtx, {
-                                    type: 'pie',
-                                    data: {
-                                        labels: ['Male', 'Female'],
-                                        datasets: [{
-                                            data: [${maleCount}, ${femaleCount}],
-                                            backgroundColor: [
-                                                'rgba(52, 152, 219, 0.8)',
-                                                'rgba(233, 30, 99, 0.8)'
-                                            ]
-                                        }]
-                                    },
-                                    options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
-                                });
-                            </script>
-                        </body></html>`);
+                        // ይሄኛው ነው የ EJS ጥሪ (ከ res.send(...) ይልቅ)
+                        res.render('admin', {
+                            lang,
+                            excellent, good, average, poor,
+                            maleCount, femaleCount,
+                            pRows, secRows, cRows, tRows,
+                            adminNotiRows, groupedStudentsHtml,
+                            sectionOptions, teacherOptions, gradeCheckboxes
+                        });
+
                             });
                         });
                     });
