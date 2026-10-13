@@ -794,48 +794,69 @@ app.post('/teacher/save-grade', (req, res) => {
     });
 });
 
-app.get('/student-dashboard', (req, res) => {
-    if (!req.session.studentId) return res.redirect('/');
-    db.get(`SELECT s.* FROM students s WHERE s.student_id = ?`, [req.session.studentId], (err, student) => {
-        db.all(`SELECT * FROM courses ORDER BY id`, [], (err, allCourses) => {
-            let myCourses = allCourses.filter(c => isClassMatch(c.class_level, student.class_level));
-            db.all(`SELECT * FROM course_assessments WHERE student_id = ?`, [student.student_id], (err, myGrades) => {
-                db.all(`SELECT * FROM sections`, [], (err, allSections) => {
-                    let section = allSections.find(sec => isClassMatch(sec.name, student.class_level)) || { proctor_name: "N/A", proctor_phone: "-", class_monitor: "ያልተመደበ" };
-                    db.all(`SELECT * FROM notifications ORDER BY id DESC`, [], (err, allNotifs) => {
-                        db.all(`SELECT * FROM absence_requests WHERE student_id = ? ORDER BY id DESC`, [student.student_id], (err, myAbsences) => {
-                            let myNotifs = allNotifs.filter(n => n.target_audience === 'ALL' || isClassMatch(n.target_audience, student.class_level));
-                            let notiRows = myNotifs.map(n => `<div style="background:${n.sender_role==='Admin'?'#f8d7da':'#d1ecf1'}; color:${n.sender_role==='Admin'?'#721c24':'#0c5460'}; padding:10px; margin-bottom:10px; border-radius:5px; border-left:5px solid ${n.sender_role==='Admin'?'#f5c6cb':'#bee5eb'};"><strong style="font-size:12px;">🔔 From: ${n.sender_name} (${n.created_at})</strong><br><div style="margin-top:5px;">${n.message}</div>${n.attachment ? `<br><a href="/uploads/${n.attachment}" target="_blank" style="color:blue; font-weight:bold; display:inline-block; margin-top:5px;">📎 ፋይል ክፈት</a>` : ''}</div>`).join('');
+<!DOCTYPE html>
+<html lang="<%= lang %>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Portal</title>
+    <style>
+        body{font-family:sans-serif; background:#f4f7f6; padding:20px;}
+        .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px; box-shadow:0 2px 4px rgba(0,0,0,0.05); overflow-x:auto;}
+        table{width:100%; border-collapse:collapse; min-width:600px;}
+        th,td{border:1px solid #ccc; padding:8px; text-align:center;}
+        th{background:#2c3e50; color:white;}
+        input,select,textarea{padding:6px; width:100%; box-sizing:border-box;}
+    </style>
+</head>
+<body>
+<div style="max-width:900px; margin:auto;">
+    <h2><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 10px;"> 🎓 የተማሪ መቆጣጠሪያ ፖርታል</h2>
+    
+    <div class="card" style="display:flex; gap:20px; align-items:center; flex-wrap:wrap;">
+        <img src="/uploads/<%= student.photo || 'default.png' %>" onerror="this.src='/uploads/logo.jpg'" style="width:90px; height:90px; border-radius:50%; object-fit:cover; border:3px solid #3498db;">
+        <div>
+            <h3>ሰላም, <%= student.name %></h3>
+            <p><b>መታወቂያ (ID):</b> <%= student.student_id %> | <b>ክፍል:</b> <%= student.class_level %></p>
+            <form action="/student/update-photo" method="POST" enctype="multipart/form-data" style="margin-top:5px;">
+                <input type="file" name="new_photo" accept="image/*" required style="font-size:12px; display:inline-block; width:auto;">
+                <button type="submit" style="background:#3498db; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer;">ፎቶ ቀይር</button>
+            </form>
+        </div>
+    </div>
 
-                            let myAbsRows = myAbsences.map(ab => {
-                                let actionBtns = !ab.teacher_feedback ? `<div style="margin-top:10px;"><a href="/delete-request/${ab.id}" onclick="return confirm('መልዕክቱ ይጠፋል፣ እርግጠኛ ነዎት?')" style="color:red; font-size:13px; font-weight:bold; margin-right:15px;">🗑️ ሰርዝ (Delete)</a><button onclick="document.getElementById('editReq_${ab.id}').style.display='block'" style="background:transparent; border:none; color:orange; font-weight:bold; cursor:pointer;">✏️ አስተካክል (Edit)</button><form id="editReq_${ab.id}" action="/edit-request/${ab.id}" method="POST" enctype="multipart/form-data" style="display:none; margin-top:5px;"><textarea name="reason" style="width:100%; padding:5px;">${ab.reason.replace(/\[ለ: .*?\] - /, '')}</textarea><input type="file" name="attachment" style="margin-top:5px; font-size:12px;"><button type="submit" style="background:green; color:white; padding:5px; border:none; border-radius:3px;">አድስ (Save)</button></form></div>` : `<div style="margin-top:5px;"><span style="font-size:12px; color:gray;">(መምህሩ ምላሽ ስለሰጠ Edit አይቻልም)</span></div>`;
-                                return `<div style="background:#f9f9f9; padding:10px; border:1px solid #ddd; margin-bottom:8px; border-radius:4px;"><small>📅 ${ab.created_at}</small><br><strong>መልዕክት:</strong> ${ab.reason}${ab.attachment ? `<br><a href="/uploads/${ab.attachment}" target="_blank" style="color:#2980b9;">📎 ፋይል እይ</a>` : ''}<div style="margin-top:8px;">${ab.teacher_feedback ? `<span style="color:green; font-weight:bold;">💬 Teacher Reply: ${ab.teacher_feedback}</span>` : `<span style="color:orange;">⏳ Pending response...</span>`}</div>${actionBtns}</div>`;
-                            }).join('');
+    <div class="card">
+        <h3>📊 የትምህርት ውጤቶች (Assessment Grades)</h3>
+        <table>
+            <tr><th>ኮድ</th><th>ትምህርት</th><th>ክሬዲት</th><th>퀴ዝ (20%)</th><th>ሚድ (30%)</th><th>ፋይናል (50%)</th><th>ጠቅላላ</th><th>ደረጃ</th></tr>
+            <%- gradesHtml || '<tr><td colspan="8">ምንም ውጤት አልተመዘገበም</td></tr>' %>
+        </table>
+    </div>
 
-                            let gradesHtml = myCourses.map(c => {
-                                let asm = myGrades.find(a => a.course_code === c.code) || {};
-                                return `<tr><td style="text-align:left;"><b>${c.title}</b><br><small style="color:#777;">Inst: ${c.teacher_name}</small></td><td>${asm.quiz !== undefined ? asm.quiz : '-'}</td><td>${asm.mid !== undefined ? asm.mid : '-'}</td><td>${asm.final !== undefined ? asm.final : '-'}</td><td><strong style="color:#27ae60;">${asm.total !== undefined ? asm.total : '-'}</strong></td><td>${asm.remark || '-'}</td></tr>`;
-                            }).join('');
+    <div class="card" style="background:#e8f4fd;">
+        <h3 style="color:#2980b9;">📢 ማስታወቂያዎች</h3>
+        <%- notiRows || '<p style="color:#777;">ምንም ማስታወቂያ የለም</p>' %>
+    </div>
 
-                            let teacherOptions = myCourses.map(c => `<option value="${c.teacher_name}">ወደ: መምህር ${c.teacher_name} (${c.title})</option>`).join('');
+    <div class="card">
+        <h3>✉️ የመቅረት / እረፍት ጥያቄ ማቅረቢያ (Absence Request)</h3>
+        <form action="/student/absence" method="POST" enctype="multipart/form-data" style="display:flex; flex-direction:column; gap:10px;">
+            <input type="hidden" name="target_teacher" value="">
+            <textarea name="reason" rows="3" placeholder="ምክንያትዎን እዚህ ይጻፉ..." required></textarea>
+            <input type="file" name="attachment" accept="image/*,.pdf">
+            <button type="submit" style="background:#27ae60; color:white; border:none; padding:10px; border-radius:5px; font-weight:bold; cursor:pointer;">ጥያቄ ላክ</button>
+        </form>
+        <h4 style="margin-top:20px;">የቀረቧቸው ጥያቄዎች ታሪክ</h4>
+        <%- myAbsRows || '<p style="color:#777;">ምንም ጥያቄ የለም</p>' %>
+    </div>
 
-                            res.send(`
-                            <!DOCTYPE html><html><head><meta charset="UTF-8"><title>Student Dashboard</title><style>body{font-family:sans-serif; background:#f4f7f6; padding:20px;} .container{max-width:800px; margin:auto;} .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px; box-shadow:0 2px 5px rgba(0,0,0,0.1); overflow-x:auto;} table{width:100%; border-collapse:collapse; margin-top:10px; min-width:400px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#1f4e79; color:white;}</style></head>
-                            <body><div class="container"><h2><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 10px;">🎓 የተማሪ መቆጣጠሪያ</h2>
-                                ${myNotifs.length > 0 ? `<div class="card" style="background:#fff3cd; border:1px solid #ffeeba;"><h3>📢 ማስታወቂያዎች (Notifications)</h3>${notiRows}</div>` : ''}
-                                <div class="card" style="background:#d4edda; color:#155724;">📢 <b>የአድሚን መልዕክት:</b> ${student.admin_message}</div>
-                                <div class="card" style="display:flex; gap:20px; align-items:center; flex-wrap:wrap;"><div><img src="/uploads/${student.photo}" style="width:100px; height:120px; object-fit:cover; border-radius:5px; display:block; margin-bottom:8px;"><form action="/student/update-photo" method="POST" enctype="multipart/form-data"><input type="file" name="new_photo" accept="image/*" required style="font-size:11px; width:130px; margin-bottom:4px;"><br><button type="submit" style="background:#2980b9; color:white; border:none; padding:4px 8px; border-radius:3px; cursor:pointer; font-size:11px;">📷 ፎቶ ቀይር</button></form></div><div style="flex:1;"><h3 style="margin-top:0;">${student.name} (${student.student_id})</h3><p style="margin:5px 0;"><b>ክፍል:</b> ${student.class_level}</p><p style="margin:5px 0;"><b>የክፍል ተቆጣጣሪ (Proctor):</b> ${section.proctor_name} (${section.proctor_phone})</p><p style="margin:5px 0; color:#27ae60;"><b>የክፍል ተጠሪ (Monitor):</b> ${section.class_monitor || 'ያልተመደበ'}</p><br><a href="/download-id-pdf/${student.student_id}" style="display:inline-block; padding:10px; background:#27ae60; color:white; text-decoration:none; border-radius:5px; font-weight:bold;">📥 ዲጂታል መታወቂያ ያውርዱ</a></div></div>
-                                <div class="card"><h3>📊 የትምህርት ውጤቶች (Assessment & Grades)</h3><table><tr><th>Subject & Teacher</th><th>Quiz(20)</th><th>Mid(30)</th><th>Final(50)</th><th>Total(100)</th><th>Remark</th></tr>${gradesHtml||'<tr><td colspan="6">No courses posted yet.</td></tr>'}</table></div>
-                                <div class="card" style="background:#fdf2e9; border: 1px solid #e67e22;"><h3 style="color:#d35400;">⚠️ መልዕክት / ፈቃድ ላክ</h3><form action="/student/absence" method="POST" enctype="multipart/form-data"><select name="target_teacher" required style="width:100%; padding:10px; margin-bottom:10px; border-radius:5px;"><option value="Proctor/Monitor">ወደ: የክፍል ተቆጣጣሪ (Class Proctor)</option>${teacherOptions}</select><textarea name="reason" placeholder="መልዕክትዎን..." style="width:100%; padding:10px; border-radius:5px; border:1px solid #ccc;" rows="3" required></textarea><label style="font-size:13px; display:block; margin: 10px 0; font-weight:bold;">📎 የህክምና ማስረጃ ወይም ፎቶ ያያይዙ:</label><input type="file" name="attachment" accept="image/*,.pdf,.doc,.docx" style="margin-bottom:15px; width:100%;"><button type="submit" style="background:#e67e22; color:white; padding:10px; border:none; border-radius:5px; width:100%; cursor:pointer; font-weight:bold;">ጥያቄውን ላክ (Send Message)</button></form><hr style="margin:20px 0;"><h4>📋 የላኳቸው ጥያቄዎች እና የመምህር ምላሽ</h4>${myAbsRows || '<p style="font-size:12px; color:#777;">ምንም ጥያቄ አልላኩም</p>'}</div>
-                                <a href="/logout" style="color:red; font-weight:bold; font-size:18px;">🔒 ውጣ (Logout)</a>
-                            </div></body></html>`);
-                        });
-                    });
-                });
-            });
-        });
-    });
-});
+    <div style="text-align:center; margin-top:20px;">
+        <a href="/logout" style="color:red; font-weight:bold; font-size:18px; text-decoration:none;">🔒 ውጣ (Logout)</a>
+    </div>
+</div>
+</body>
+</html>
+
 
 app.post('/student/update-photo', upload.single('new_photo'), (req, res) => {
     if (!req.session.studentId) return res.redirect('/');
