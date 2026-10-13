@@ -405,42 +405,54 @@ app.get('/student/digital-id', (req, res) => {
     <meta charset="UTF-8">
     <title>Digital ID - ${student.name}</title>
     <style>
-        body { font-family: sans-serif; background: #eef2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .id-card { width: 350px; background: white; border-radius: 15px; box-shadow: 0 8px 16px rgba(0,0,0,0.15); overflow: hidden; border: 2px solid #3498db; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eef2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .id-card { width: 380px; background: white; border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.15); overflow: hidden; border: 2px solid #1f4e79; }
         .header { background: #1f4e79; color: white; padding: 15px; text-align: center; }
-        .body { padding: 20px; text-align: center; }
-        .profile-img { width: 110px; height: 110px; border-radius: 50%; object-fit: cover; border: 4px solid #3498db; margin-bottom: 15px; }
-        .info { text-align: left; margin-top: 15px; font-size: 15px; line-height: 1.6; }
-        .footer { background: #f4f7f6; padding: 10px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #ddd; }
-        .print-btn { display: block; width: 100%; background: #27ae60; color: white; border: none; padding: 10px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 15px; border-radius: 5px; }
-        @media print { .print-btn { display: none; } body { background: white; } }
+        .header h3 { margin: 0; font-size: 16px; font-weight: bold; }
+        .header p { margin: 4px 0 0; font-size: 12px; letter-spacing: 0.5px; }
+        .content { padding: 20px; display: flex; gap: 15px; align-items: center; border-bottom: 1px solid #eee; }
+        .profile-img { width: 95px; height: 95px; border-radius: 8px; object-fit: cover; border: 2px solid #1f4e79; }
+        .info { font-size: 14px; line-height: 1.5; color: #333; }
+        .info p { margin: 3px 0; }
+        .status { color: #27ae60; font-weight: bold; }
+        .qr-section { padding: 15px; text-align: center; background: #fafafa; }
+        .qr-code { width: 90px; height: 90px; }
+        .footer { background: #f1f4f6; padding: 8px; text-align: center; font-size: 11px; color: #555; border-top: 1px solid #ddd; }
+        .print-btn { display: block; width: 100%; background: #27ae60; color: white; border: none; padding: 10px; font-size: 15px; font-weight: bold; cursor: pointer; border-radius: 0 0 10px 10px; }
+        .print-btn:hover { background: #219653; }
+        @media print { .print-btn { display: none; } body { background: white; } .id-card { box-shadow: none; border: 1px solid #000; } }
     </style>
 </head>
 <body>
     <div class="id-card">
         <div class="header">
-            <h3 style="margin:0;">አማኑኤል ብርሃን እና ሕይወት ት/ቤት</h3>
-            <p style="margin:5px 0 0; font-size:13px;">ኦፊሴላዊ የተማሪ ዲጂታል መታወቂያ</p>
+            <h3>AMANUEL LIGHT AND LIFE SCHOOL</h3>
+            <p>OFFICIAL DIGITAL STUDENT ID CARD</p>
         </div>
-        <div class="body">
+        <div class="content">
             <img src="/uploads/${student.photo || 'default.png'}" onerror="this.src='/uploads/logo.jpg'" class="profile-img">
-            <h2 style="margin: 0; color: #2c3e50;">${student.name}</h2>
             <div class="info">
-                <p><b>መታወቂያ (ID):</b> ${student.student_id}</p>
-                <p><b>ክፍል (Class):</b> ${student.class_level}</p>
-                <p><b>ስልክ ቁጥር:</b> ${student.phone || '-'}</p>
-                <p><b>ፆታ:</b> ${student.gender || '-'}</p>
+                <h3 style="margin: 0 0 5px 0; color: #2c3e50; font-size: 16px;">${student.name}</h3>
+                <p><b>ID No:</b> ${student.student_id}</p>
+                <p><b>Class:</b> ${student.class_level}</p>
+                <p><b>Phone:</b> ${student.phone || '-'}</p>
+                <p><b>Status:</b> <span class="status">Approved</span></p>
             </div>
-            <button onclick="window.print()" class="print-btn">🖨️ አትም / Save as PDF</button>
+        </div>
+        <div class="qr-section">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=ID-${student.student_id}-${encodeURIComponent(student.name)}" class="qr-code">
+            <p style="font-size: 10px; color: #777; margin: 5px 0 0;">Scan to verify student status</p>
         </div>
         <div class="footer">
-            የተማሪ መቆጣጠሪያ ፖርታል - የትምህርት ቤት መታወቂያ
+            This card is property of Amanuel Light and Life School. If found, please return to the office.
         </div>
+        <button onclick="window.print()" class="print-btn">🖨️ አትም / Save as PDF</button>
     </div>
 </body>
 </html>`);
     });
 });
+
 
 app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 }, { name: 'bank_slip_file', maxCount: 1 }]), (req, res) => {
     const lang = req.query.lang || 'am';
