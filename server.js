@@ -794,67 +794,41 @@ app.post('/teacher/save-grade', (req, res) => {
     });
 });
 
-<!DOCTYPE html>
-<html lang="<%= lang %>">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Portal</title>
-    <style>
-        body{font-family:sans-serif; background:#f4f7f6; padding:20px;}
-        .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px; box-shadow:0 2px 4px rgba(0,0,0,0.05); overflow-x:auto;}
-        table{width:100%; border-collapse:collapse; min-width:600px;}
-        th,td{border:1px solid #ccc; padding:8px; text-align:center;}
-        th{background:#2c3e50; color:white;}
-        input,select,textarea{padding:6px; width:100%; box-sizing:border-box;}
-    </style>
-</head>
-<body>
-<div style="max-width:900px; margin:auto;">
-    <h2><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 10px;"> 🎓 የተማሪ መቆጣጠሪያ ፖርታል</h2>
-    
-    <div class="card" style="display:flex; gap:20px; align-items:center; flex-wrap:wrap;">
-        <img src="/uploads/<%= student.photo || 'default.png' %>" onerror="this.src='/uploads/logo.jpg'" style="width:90px; height:90px; border-radius:50%; object-fit:cover; border:3px solid #3498db;">
-        <div>
-            <h3>ሰላም, <%= student.name %></h3>
-            <p><b>መታወቂያ (ID):</b> <%= student.student_id %> | <b>ክፍል:</b> <%= student.class_level %></p>
-            <form action="/student/update-photo" method="POST" enctype="multipart/form-data" style="margin-top:5px;">
-                <input type="file" name="new_photo" accept="image/*" required style="font-size:12px; display:inline-block; width:auto;">
-                <button type="submit" style="background:#3498db; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer;">ፎቶ ቀይር</button>
-            </form>
-        </div>
-    </div>
+app.get('/student-dashboard', (req, res) => {
+    if (!req.session.studentId) return res.redirect('/');
+    db.get('SELECT s.* FROM students s WHERE s.student_id = ?', [req.session.studentId], (err, student) => {
+        db.all('SELECT * FROM courses ORDER BY id', [], (err, allCourses) => {
+            let myCourses = allCourses.filter(c => isClassMatch(c.class_level, student.class_level));
+            db.all('SELECT * FROM course_assessments WHERE student_id = ?', [student.student_id], (err, myGrades) => {
+                db.all('SELECT * FROM notifications ORDER BY id DESC', [], (err, allNotifs) => {
+                    let myNotifs = allNotifs.filter(n => n.target_audience === 'ALL' || isClassMatch(n.target_audience, student.class_level));
+                    db.all('SELECT * FROM absence_requests WHERE student_id = ? ORDER BY id DESC', [student.student_id], (err, myAbsences) => {
+                        
+                        let notiRows = myNotifs.map(n => `<div style="background:#fdf2e9; padding:10px; margin-bottom:10px; border-radius:5px;"><strong>${n.sender_name}</strong><br><div>${n.message}</div></div>`).join('');
+                        
+                        let myAbsRows = myAbsences.map(ab => `<div style="background:#f9f9f9; padding:10px; margin-bottom:10px; border-radius:5px; border-left:4px solid ${ab.teacher_feedback ? '#27ae60' : '#f39c12'};"><strong>ቀን:</strong> ${ab.date}<br><strong>ምክንያት:</strong> ${ab.reason}<br><strong>መልስ:</strong> ${ab.teacher_feedback || 'በመጠበቅ ላይ (Pending)'}</div>`).join('');
 
-    <div class="card">
-        <h3>📊 የትምህርት ውጤቶች (Assessment Grades)</h3>
-        <table>
-            <tr><th>ኮድ</th><th>ትምህርት</th><th>ክሬዲት</th><th>퀴ዝ (20%)</th><th>ሚድ (30%)</th><th>ፋይናል (50%)</th><th>ጠቅላላ</th><th>ደረጃ</th></tr>
-            <%- gradesHtml || '<tr><td colspan="8">ምንም ውጤት አልተመዘገበም</td></tr>' %>
-        </table>
-    </div>
+                        let gradesHtml = myCourses.map(c => {
+                            let asm = myGrades.find(a => a.course_code === c.code) || {};
+                            let total = (asm.quiz || 0) + (asm.mid || 0) + (asm.final || 0);
+                            let gradeLetter = total >= 90 ? 'A+' : total >= 80 ? 'A' : total >= 75 ? 'B+' : total >= 60 ? 'B' : total >= 50 ? 'C' : 'F';
+                            return `<tr><td>${c.code}</td><td style="text-align:left;"><b>${c.title}</b></td><td>${c.credit_hours}</td><td>${asm.quiz || 0}</td><td>${asm.mid || 0}</td><td>${asm.final || 0}</td><td><b>${total}</b></td><td><b>${gradeLetter}</b></td></tr>`;
+                        }).join('');
 
-    <div class="card" style="background:#e8f4fd;">
-        <h3 style="color:#2980b9;">📢 ማስታወቂያዎች</h3>
-        <%- notiRows || '<p style="color:#777;">ምንም ማስታወቂያ የለም</p>' %>
-    </div>
+                        res.render('student', {
+                            lang: 'am',
+                            student,
+                            gradesHtml,
+                            notiRows,
+                            myAbsRows
+                        });
+                    });
+                });
+            });
+        });
+    });
+});
 
-    <div class="card">
-        <h3>✉️ የመቅረት / እረፍት ጥያቄ ማቅረቢያ (Absence Request)</h3>
-        <form action="/student/absence" method="POST" enctype="multipart/form-data" style="display:flex; flex-direction:column; gap:10px;">
-            <input type="hidden" name="target_teacher" value="">
-            <textarea name="reason" rows="3" placeholder="ምክንያትዎን እዚህ ይጻፉ..." required></textarea>
-            <input type="file" name="attachment" accept="image/*,.pdf">
-            <button type="submit" style="background:#27ae60; color:white; border:none; padding:10px; border-radius:5px; font-weight:bold; cursor:pointer;">ጥያቄ ላክ</button>
-        </form>
-        <h4 style="margin-top:20px;">የቀረቧቸው ጥያቄዎች ታሪክ</h4>
-        <%- myAbsRows || '<p style="color:#777;">ምንም ጥያቄ የለም</p>' %>
-    </div>
-
-    <div style="text-align:center; margin-top:20px;">
-        <a href="/logout" style="color:red; font-weight:bold; font-size:18px; text-decoration:none;">🔒 ውጣ (Logout)</a>
-    </div>
-</div>
-</body>
 </html>
 
 
