@@ -1,6 +1,7 @@
 require('dotenv').config(); 
 const express = require('express');
 const session = require('express-session');
+const pgSession = require('connect-pg-simple')(session); // አዲሱ የሴሽን ማስተካከያ
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -53,6 +54,14 @@ const db = {
 
 async function initDB() {
     try {
+        // የሴሽን (Session) ዳታቤዝ ቴብል (ተጠቃሚዎች Log out እንዳይሆኑ)
+        await pool.query(`CREATE TABLE IF NOT EXISTS "session" (
+            "sid" varchar NOT NULL COLLATE "default",
+            "sess" json NOT NULL,
+            "expire" timestamp(6) NOT NULL,
+            CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
+        )`);
+
         await pool.query(`CREATE TABLE IF NOT EXISTS students (
             student_id TEXT PRIMARY KEY, password TEXT, name TEXT, mother_name TEXT,
             gender TEXT, age INTEGER, phone TEXT, emergency_phone TEXT, region TEXT, zone TEXT,
@@ -134,11 +143,13 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// 🌟 አዲሱ የተስተካከለ የ Session አሰራር (Memory leak ይከላከላል)
 app.use(session({
+    store: new pgSession({ pool: pool, tableName: 'session' }),
     secret: process.env.SESSION_SECRET || 'school-full-system-session-fix', 
     resave: false, 
-    saveUninitialized: true, 
-    cookie: { maxAge: 3600000 }
+    saveUninitialized: false, 
+    cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 } // ለ 30 ቀን ሎግ-አውት አያደርግም
 }));
 
 const loginLimiter = rateLimit({
@@ -556,7 +567,7 @@ app.get('/admin', (req, res) => {
 
                         let pRows = pending.map(s => `<tr><td>-</td><td>${s.student_id}</td><td>${s.name}</td><td>${s.payment_type === 'slip_file' ? `<a href="/uploads/${s.bank_slip_val}" target="_blank" style="color:#2980b9;">📄 እይ</a>` : `<b>TXN:</b> ${s.bank_slip_val}`}</td><td><a href="/admin/approve/${s.id}?lang=${lang}" style="color:green; font-weight:bold;">✅ Approve</a></td></tr>`).join('');
 
-                        let secRows = sections.map(sec => `<tr><td><a href="/class-hub/${encodeURIComponent(sec.name)}" style="color:#16a085; font-weight:bold;" target="_blank">📂 ${sec.name}</a></td><td><form action="/admin/edit-section/${sec.id}?lang=${lang}" method="POST" style="display:flex; gap:4px;"><select name="proctor_name" style="width:140px;"><option value="${esc(sec.proctor_name)}">${sec.proctor_name || '-- Select --'}</option>${teachers.map(tc => `<option value="${esc(tc.name)}">${tc.name}</option>`).join('')}</select><button type="submit">Save</button></form></td><td><a href="/admin/delete-section/${sec.id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑️️ Delete</a></td><td><a href="/attendance-sheet/${encodeURIComponent(sec.name)}" style="color:#2980b9; font-weight:bold; margin-right:10px;" target="_blank">📋 Attendance</a><a href="/admin/export-section-students/${encodeURIComponent(sec.name)}" style="background:#27ae60; color:white; padding:4px 8px; border-radius:3px; text-decoration:none; font-weight:bold;">📥 Excel</a></td></tr>`).join('');
+                        let secRows = sections.map(sec => `<tr><td><a href="/class-hub/${encodeURIComponent(sec.name)}" style="color:#16a085; font-weight:bold;" target="_blank">📂 ${sec.name}</a></td><td><form action="/admin/edit-section/${sec.id}?lang=${lang}" method="POST" style="display:flex; gap:4px;"><select name="proctor_name" style="width:140px;"><option value="${esc(sec.proctor_name)}">${sec.proctor_name || '-- Select --'}</option>${teachers.map(tc => `<option value="${esc(tc.name)}">${tc.name}</option>`).join('')}</select><button type="submit">Save</button></form></td><td><a href="/admin/delete-section/${sec.id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑 Delete</a></td><td><a href="/attendance-sheet/${encodeURIComponent(sec.name)}" style="color:#2980b9; font-weight:bold; margin-right:10px;" target="_blank">📋 Attendance</a><a href="/admin/export-section-students/${encodeURIComponent(sec.name)}" style="background:#27ae60; color:white; padding:4px 8px; border-radius:3px; text-decoration:none; font-weight:bold;">📥 Excel</a></td></tr>`).join('');
 
                         let sectionOptions = sections.map(sec => `<option value="${esc(sec.name)}">${sec.name}</option>`).join('');
                         let teacherOptions = teachers.map(tc => `<option value="${tc.id}">${tc.name}</option>`).join('');
@@ -829,7 +840,6 @@ app.get('/teacher-dashboard', (req, res) => {
                                 let classOptions = assignedClasses.map(c => `<option value="${esc(c)}" ${c === selectedClass ? 'selected' : ''}>${c}</option>`).join('');
                                 let courseOptions = classCourses.map(c => `<option value="${c.id}" ${c.id.toString() === (selectedCourseId||'').toString() ? 'selected' : ''}>${c.title} (${c.code})</option>`).join('');
 
-                                // ***************** AJAX FORM MODIFICATION HERE *****************
                                 let studentRows = studentsInClass.map((st, idx) => {
                                     let asm = assessments ? assessments.find(a => a.student_id === st.student_id) || {} : {};
                                     return `<tr>
@@ -870,22 +880,18 @@ app.get('/teacher-dashboard', (req, res) => {
                                 </div>
                                 <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
                                 <script>
-                                    // 1. Notification Editor
                                     var quill = new Quill('#editorTeacher', { theme: 'snow', modules: { toolbar: [ [{ 'font': [] }, { 'size': [] }], ['bold', 'italic', 'underline', 'strike'], [{ 'color': [] }, { 'background': [] }], [{ 'align': [] }], ['link', 'image'] ] }}); 
                                     var form = document.getElementById('teacherNotifForm'); 
                                     if(form) { form.onsubmit = function() { document.getElementById('hiddenMessageTeacher').value = quill.root.innerHTML; }; }
                                     
-                                    // 2. AJAX (Fetch API) for Saving Grades Without Reload
                                     document.querySelectorAll('.ajax-grade-form').forEach(form => {
                                         form.addEventListener('submit', function(e) {
-                                            e.preventDefault(); // ፔጁ ሪፍሬሽ እንዳያደርግ ይከለክላል
-                                            
+                                            e.preventDefault();
                                             let btn = this.querySelector('button');
                                             let originalText = btn.innerHTML;
                                             btn.innerHTML = '⏳...';
                                             btn.disabled = true;
                                             
-                                            // የህፃናቱን ውጤት ማንበብ
                                             let studentId = this.querySelector('input[name="student_id"]').value;
                                             let quiz = document.querySelector('input[form="form_'+studentId+'"][name="quiz"]').value;
                                             let mid = document.querySelector('input[form="form_'+studentId+'"][name="mid"]').value;
@@ -905,18 +911,10 @@ app.get('/teacher-dashboard', (req, res) => {
                                             .then(res => res.json())
                                             .then(res => {
                                                 if(res.success) {
-                                                    // የተሳካ ቆንጆ ፅሁፍ ማሳየት
                                                     btn.innerHTML = '✅ Saved';
                                                     btn.style.background = '#16a085';
-                                                    
-                                                    // ድምር (Total) ውጤቱን በዛው ሰከንድ አፕዴት ማድረግ
                                                     document.getElementById('total_' + studentId).innerText = res.total;
-                                                    
-                                                    setTimeout(() => { 
-                                                        btn.innerHTML = originalText; 
-                                                        btn.style.background = '#27ae60'; 
-                                                        btn.disabled = false; 
-                                                    }, 2000);
+                                                    setTimeout(() => { btn.innerHTML = originalText; btn.style.background = '#27ae60'; btn.disabled = false; }, 2000);
                                                 }
                                             })
                                             .catch(err => {
@@ -986,7 +984,6 @@ app.post('/teacher/give-feedback', (req, res) => {
     db.run(`UPDATE absence_requests SET teacher_feedback = ? WHERE id = ?`, [xss(req.body.feedback), req.body.req_id], () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}`));
 });
 
-// ************** አዲሱ የ AJAX Grade Saving Endpoint **************
 app.post('/teacher/save-grade', (req, res) => {
     if (!req.session.teacherId) return res.json({ error: 'Unauthorized' });
     let courseId = req.query.course_id || '';
