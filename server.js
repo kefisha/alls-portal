@@ -418,9 +418,13 @@ app.get('/student/digital-id', (req, res) => {
         .qr-section { padding: 15px; text-align: center; background: #fafafa; }
         .qr-code { width: 90px; height: 90px; }
         .footer { background: #f1f4f6; padding: 8px; text-align: center; font-size: 11px; color: #555; border-top: 1px solid #ddd; }
-        .print-btn { display: block; width: 100%; background: #27ae60; color: white; border: none; padding: 10px; font-size: 15px; font-weight: bold; cursor: pointer; border-radius: 0 0 10px 10px; }
-        .print-btn:hover { background: #219653; }
-        @media print { .print-btn { display: none; } body { background: white; } .id-card { box-shadow: none; border: 1px solid #000; } }
+        .actions { padding: 10px; background: #fff; display: flex; gap: 10px; }
+        .btn { flex: 1; padding: 10px; font-size: 14px; font-weight: bold; cursor: pointer; border: none; border-radius: 6px; text-align: center; text-decoration: none; }
+        .btn-print { background: #27ae60; color: white; }
+        .btn-print:hover { background: #219653; }
+        .btn-back { background: #7f8c8d; color: white; }
+        .btn-back:hover { background: #707b7c; }
+        @media print { .actions { display: none; } body { background: white; } .id-card { box-shadow: none; border: 1px solid #000; } }
     </style>
 </head>
 <body>
@@ -446,12 +450,16 @@ app.get('/student/digital-id', (req, res) => {
         <div class="footer">
             This card is property of Amanuel Light and Life School. If found, please return to the office.
         </div>
-        <button onclick="window.print()" class="print-btn">🖨️ አትም / Save as PDF</button>
+        <div class="actions">
+            <button onclick="window.print()" class="btn btn-print">🖨️ Print / PDF</button>
+            <a href="/student-dashboard" class="btn btn-back">⬅️ ተመለስ</a>
+        </div>
     </div>
 </body>
 </html>`);
     });
 });
+
 
 
 app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 }, { name: 'bank_slip_file', maxCount: 1 }]), (req, res) => {
@@ -889,8 +897,13 @@ app.get('/student-dashboard', (req, res) => {
 
 app.post('/student/update-photo', upload.single('new_photo'), (req, res) => {
     if (!req.session.studentId) return res.redirect('/');
-    if (req.file) { db.run(`UPDATE students SET photo = ? WHERE student_id = ?`, [req.file.filename, req.session.studentId], () => res.redirect('/student-dashboard')); } 
-    else { res.redirect('/student-dashboard'); }
+    if (req.file) {
+        db.run('UPDATE students SET photo = ? WHERE student_id = ?', [req.file.filename, req.session.studentId], (err) => {
+            res.redirect('/student-dashboard');
+        });
+    } else {
+        res.redirect('/student-dashboard');
+    }
 });
 
 app.post('/student/absence', upload.single('attachment'), (req, res) => {
