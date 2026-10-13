@@ -736,16 +736,6 @@ app.get('/teacher-dashboard', (req, res) => {
     });
 });
 
-                    });
-                });
-            });
-        });
-    });
-});
-
-app.post('/teacher/assign-monitor', (req, res) => {
-    if (!req.session.teacherId) return res.redirect('/');
-    let targetClass = req.query.cls || '';
     db.get(`SELECT * FROM teachers WHERE id = ?`, [req.session.teacherId], (err, teacher) => {
         db.all(`SELECT * FROM sections`, [], (err, sections) => {
             let section = sections.find(sec => isClassMatch(sec.name, targetClass));
