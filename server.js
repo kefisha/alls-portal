@@ -396,6 +396,7 @@ app.get('/student-register', (req, res) => {
     </body></html>`);
 });
 app.get('/student/digital-id', (req, res) => {
+app.get('/student/digital-id', (req, res) => {
     if (!req.session.studentId) return res.redirect('/');
     db.get('SELECT * FROM students WHERE student_id = ?', [req.session.studentId], (err, student) => {
         if (!student) return res.redirect('/');
@@ -421,8 +422,8 @@ app.get('/student/digital-id', (req, res) => {
         .footer { background: #f1f4f6; padding: 6px; text-align: center; font-size: 10px; color: #555; border-top: 1px solid #ddd; }
         .actions { padding: 10px; background: #fff; display: flex; gap: 10px; }
         .btn { flex: 1; padding: 10px; font-size: 14px; font-weight: bold; cursor: pointer; border: none; border-radius: 6px; text-align: center; text-decoration: none; }
-        .btn-print { background: #27ae60; color: white; }
-        .btn-print:hover { background: #219653; }
+        .btn-download { background: #27ae60; color: white; }
+        .btn-download:hover { background: #219653; }
         .btn-back { background: #7f8c8d; color: white; }
         .btn-back:hover { background: #707b7c; }
         @media print { 
@@ -459,7 +460,7 @@ app.get('/student/digital-id', (req, res) => {
             This card is property of Amanuel Light and Life School. If found, please return to the office.
         </div>
         <div class="actions">
-            <button onclick="window.print()" class="btn btn-print">🖨️ Print / PDF</button>
+            <button onclick="window.print()" class="btn btn-download">📥 Download PDF</button>
             <a href="/student-dashboard" class="btn btn-back">⬅️ ተመለስ</a>
         </div>
     </div>
