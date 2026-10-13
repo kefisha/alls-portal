@@ -138,6 +138,43 @@
             },
             options: { responsive: true, scales: { y: { beginAtZero: true } } }
         });
+<!DOCTYPE html>
+<html lang="am">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard - Amanuel Light and Life School</title>
+    <!-- የስታይል ክፍሎች እዚህ አሉ -->
+</head>
+<body>
+<div class="container">
+    <h2>👑 የአድሚን መቆጣጠሪያ ፓነል (Admin Dashboard)</h2>
+
+    <!-- 💡 ማስታወቂያ እና ካላንደር መለጠፊያ ፎርሙን እዚህ ጋር (ከላይ ወይም ከዳሽቦርዱ ካርዶች መሃል) ፔስት ያድርጉት -->
+    <div class="card" style="background: #f9fbfd; border: 1px solid #cbd5e1; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+        <h3 style="color: #1f4e79; margin-top: 0;">📢 አዲስ ማስታወቂያ እና ካላንደር መለጠፊያ (Admin Notice & Calendar)</h3>
+        
+        <form action="/admin/save-notice" method="POST" enctype="multipart/form-data" style="margin-bottom: 20px;">
+            <label style="font-size: 13px; font-weight: bold;">ለማን ይድረስ?</label>
+            <select name="target_audience" style="width: 100%; padding: 8px; margin-top: 4px; margin-bottom: 10px;">
+                <option value="ALL">ለሁሉም (All Students & Teachers)</option>
+                <option value="Grade 1">ለክፍል 1 (Grade 1)</option>
+                <option value="Grade 2">ለክፍል 2 (Grade 2)</option>
+            </select>
+
+            <label style="font-size: 13px; font-weight: bold;">የማስታወቂያ መልዕክት:</label>
+            <textarea name="message" rows="3" placeholder="ማስታወቂያውን እዚህ ይጻፉ..." required style="width: 100%; padding: 8px; margin-top: 4px; margin-bottom: 10px;"></textarea>
+
+            <label style="font-size: 13px; font-weight: bold;">ፋይል ማያያዥ (ካለ):</label>
+            <input type="file" name="attachment" accept="image/*,.pdf" style="margin-bottom: 10px; display: block;">
+
+            <button type="submit" style="background: #27ae60; color: white; border: none; padding: 8px 15px; border-radius: 5px; font-weight: bold; cursor: pointer;">ማስታወቂያ ለቀቅ</button>
+        </form>
+    </div>
+
+    <!-- ቀደም ሲል የነበሩት የአድሚን ዝርዝሮች (ተማሪዎች መመዝገቢያ፣ ወዘተ) እዚህ ይቀጥላሉ -->
+</div>
+</body>
+</html>
 
         const genderCtx = document.getElementById('genderChart').getContext('2d');
         new Chart(genderCtx, {
