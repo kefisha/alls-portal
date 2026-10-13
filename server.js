@@ -408,7 +408,7 @@ app.get('/student/digital-id', (req, res) => {
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eef2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         .id-card { width: 380px; background: white; border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.15); overflow: hidden; border: 2px solid #1f4e79; }
         .header { background: #1f4e79; color: white; padding: 12px 15px; display: flex; align-items: center; gap: 12px; }
-        .school-logo { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; background: white; border: 2px solid white; }
+        .school-logo { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; background: white; border: 2px solid white; flex-shrink: 0; }
         .header-text h3 { margin: 0; font-size: 15px; font-weight: bold; }
         .header-text p { margin: 2px 0 0; font-size: 11px; letter-spacing: 0.5px; }
         .content { padding: 18px; display: flex; gap: 15px; align-items: center; border-bottom: 1px solid #eee; }
@@ -435,14 +435,14 @@ app.get('/student/digital-id', (req, res) => {
 <body>
     <div class="id-card">
         <div class="header">
-            <img src="/uploads/logo.jpg" onerror="this.style.display='none'" class="school-logo">
+            <img src="/uploads/logo.jpg" onerror="this.onerror=null; this.src='/uploads/logo.png';" class="school-logo">
             <div class="header-text">
                 <h3>AMANUEL LIGHT & LIFE SCHOOL</h3>
                 <p>OFFICIAL DIGITAL STUDENT ID CARD</p>
             </div>
         </div>
         <div class="content">
-            <img src="/uploads/${student.photo || 'default.png'}" onerror="this.src='/uploads/logo.jpg'" class="profile-img">
+            <img src="/uploads/${student.photo && student.photo.trim() !== '' ? student.photo : 'default.png'}" onerror="this.src='/uploads/logo.jpg'" class="profile-img">
             <div class="info">
                 <h3 style="margin: 0 0 4px 0; color: #2c3e50; font-size: 15px;">${student.name}</h3>
                 <p><b>ID No:</b> ${student.student_id}</p>
@@ -467,9 +467,6 @@ app.get('/student/digital-id', (req, res) => {
 </html>`);
     });
 });
-
-
-
 
 app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 }, { name: 'bank_slip_file', maxCount: 1 }]), (req, res) => {
     const lang = req.query.lang || 'am';
