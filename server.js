@@ -944,7 +944,7 @@ app.get('/student/digital-id', (req, res) => {
             <h3>AMANUEL LIGHT AND LIFE SCHOOL</h3>
             <p>OFFICIAL DIGITAL STUDENT ID CARD</p>
         </div>
-        <div class="content">
+               <div class="content">
             <img src="/uploads/${student.photo || 'default.png'}" onerror="this.src='/uploads/logo.jpg'" class="profile-img">
             <div class="info">
                 <h3 style="margin: 0 0 5px 0; color: #2c3e50; font-size: 16px;">${student.name}</h3>
