@@ -27,7 +27,8 @@
 <body>
 <div class="container">
     <h2>
-        <img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%;"> 
+        <img src="/uploads/<%= student.photo || 'default.png' %>?v=<%= Date.now() %>" class="profile-img">
+ 
         🎓 የተማሪ መቆጣጠሪያ ፖርታል (Student Portal)
     </h2>
     
