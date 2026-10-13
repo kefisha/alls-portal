@@ -395,6 +395,52 @@ app.get('/student-register', (req, res) => {
         ${alertScript}
     </body></html>`);
 });
+app.get('/student/digital-id', (req, res) => {
+    if (!req.session.studentId) return res.redirect('/');
+    db.get('SELECT * FROM students WHERE student_id = ?', [req.session.studentId], (err, student) => {
+        if (!student) return res.redirect('/');
+        res.send(`<!DOCTYPE html>
+<html lang="am">
+<head>
+    <meta charset="UTF-8">
+    <title>Digital ID - ${student.name}</title>
+    <style>
+        body { font-family: sans-serif; background: #eef2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .id-card { width: 350px; background: white; border-radius: 15px; box-shadow: 0 8px 16px rgba(0,0,0,0.15); overflow: hidden; border: 2px solid #3498db; }
+        .header { background: #1f4e79; color: white; padding: 15px; text-align: center; }
+        .body { padding: 20px; text-align: center; }
+        .profile-img { width: 110px; height: 110px; border-radius: 50%; object-fit: cover; border: 4px solid #3498db; margin-bottom: 15px; }
+        .info { text-align: left; margin-top: 15px; font-size: 15px; line-height: 1.6; }
+        .footer { background: #f4f7f6; padding: 10px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #ddd; }
+        .print-btn { display: block; width: 100%; background: #27ae60; color: white; border: none; padding: 10px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 15px; border-radius: 5px; }
+        @media print { .print-btn { display: none; } body { background: white; } }
+    </style>
+</head>
+<body>
+    <div class="id-card">
+        <div class="header">
+            <h3 style="margin:0;">አማኑኤል ብርሃን እና ሕይወት ት/ቤት</h3>
+            <p style="margin:5px 0 0; font-size:13px;">ኦፊሴላዊ የተማሪ ዲጂታል መታወቂያ</p>
+        </div>
+        <div class="body">
+            <img src="/uploads/${student.photo || 'default.png'}" onerror="this.src='/uploads/logo.jpg'" class="profile-img">
+            <h2 style="margin: 0; color: #2c3e50;">${student.name}</h2>
+            <div class="info">
+                <p><b>መታወቂያ (ID):</b> ${student.student_id}</p>
+                <p><b>ክፍል (Class):</b> ${student.class_level}</p>
+                <p><b>ስልክ ቁጥር:</b> ${student.phone || '-'}</p>
+                <p><b>ፆታ:</b> ${student.gender || '-'}</p>
+            </div>
+            <button onclick="window.print()" class="print-btn">🖨️ አትም / Save as PDF</button>
+        </div>
+        <div class="footer">
+            የተማሪ መቆጣጠሪያ ፖርታል - የትምህርት ቤት መታወቂያ
+        </div>
+    </div>
+</body>
+</html>`);
+    });
+});
 
 app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 }, { name: 'bank_slip_file', maxCount: 1 }]), (req, res) => {
     const lang = req.query.lang || 'am';
