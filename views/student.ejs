@@ -3,59 +3,90 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Portal</title>
+    <title>Student Portal - Amanuel Light and Life School</title>
     <style>
-        body{font-family:sans-serif; background:#f4f7f6; padding:20px;}
-        .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px; box-shadow:0 2px 4px rgba(0,0,0,0.05); overflow-x:auto;}
-        table{width:100%; border-collapse:collapse; min-width:600px;}
-        th,td{border:1px solid #ccc; padding:8px; text-align:center;}
-        th{background:#2c3e50; color:white;}
-        input,select,textarea{padding:6px; width:100%; box-sizing:border-box;}
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f7f6; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 950px; margin: auto; }
+        .card { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow-x: auto; }
+        h2 { color: #2c3e50; display: flex; align-items: center; gap: 10px; }
+        h3 { color: #34495e; border-bottom: 2px solid #ecf0f1; padding-bottom: 8px; margin-top: 0; }
+        table { width: 100%; border-collapse: collapse; min-width: 600px; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; font-size: 14px; }
+        th { background: #1f4e79; color: white; }
+        tr:nth-child(even) { background: #f9f9f9; }
+        input[type="text"], input[type="file"], textarea, select { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button { background: #27ae60; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 8px; }
+        button:hover { background: #219653; }
+        .profile-header { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+        .profile-img { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 3px solid #3498db; }
+        .logout-btn { display: inline-block; text-align: center; margin-top: 20px; color: #c0392b; font-weight: bold; font-size: 16px; text-decoration: none; }
+        .logout-btn:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
-<div style="max-width:900px; margin:auto;">
-    <h2><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 10px;"> 🎓 የተማሪ መቆጣጠሪያ ፖርታል</h2>
+<div class="container">
+    <h2>
+        <img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%;"> 
+        🎓 የተማሪ መቆጣጠሪያ ፖርታል (Student Portal)
+    </h2>
     
-    <div class="card" style="display:flex; gap:20px; align-items:center; flex-wrap:wrap;">
-        <img src="/uploads/<%= student.photo || 'default.png' %>" onerror="this.src='/uploads/logo.jpg'" style="width:90px; height:90px; border-radius:50%; object-fit:cover; border:3px solid #3498db;">
-        <div>
-            <h3>ሰላም, <%= student.name %></h3>
-            <p><b>መታወቂያ (ID):</b> <%= student.student_id %> | <b>ክፍል:</b> <%= student.class_level %></p>
-            <form action="/student/update-photo" method="POST" enctype="multipart/form-data" style="margin-top:5px;">
-                <input type="file" name="new_photo" accept="image/*" required style="font-size:12px; display:inline-block; width:auto;">
-                <button type="submit" style="background:#3498db; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer;">ፎቶ ቀይር</button>
+    <!-- Profile & Photo Update -->
+    <div class="card profile-header">
+        <img src="/uploads/<%= student.photo || 'default.png' %>" onerror="this.src='/uploads/logo.jpg'" class="profile-img">
+        <div style="flex-grow: 1;">
+            <h3 style="margin: 0; border: none; padding: 0;">ሰላም, <%= student.name %></h3>
+            <p style="margin: 5px 0; color: #555;"><b>መታወቂያ (ID):</b> <%= student.student_id %> | <b>ክፍል:</b> <%= student.class_level %> | <b>ስልክ:</b> <%= student.phone %></p>
+            <form action="/student/update-photo" method="POST" enctype="multipart/form-data" style="margin-top: 8px; display: flex; gap: 10px; align-items: center;">
+                <input type="file" name="new_photo" accept="image/*" required style="width: auto; padding: 4px; font-size: 12px;">
+                <button type="submit" style="padding: 5px 12px; margin: 0; background: #3498db;">ፎቶ ቀይር</button>
             </form>
         </div>
     </div>
 
+    <!-- Assessment Grades -->
     <div class="card">
         <h3>📊 የትምህርት ውጤቶች (Assessment Grades)</h3>
         <table>
-            <tr><th>ኮድ</th><th>ትምህርት</th><th>ክሬዲት</th><th>퀴ዝ (20%)</th><th>ሚድ (30%)</th><th>ፋይናል (50%)</th><th>ጠቅላላ</th><th>ደረጃ</th></tr>
-            <%- gradesHtml || '<tr><td colspan="8">ምንም ውጤት አልተመዘገበም</td></tr>' %>
+            <tr>
+                <th>ኮድ</th>
+                <th style="text-align: left;">የትምህርት ስም</th>
+                <th>ክሬዲት</th>
+                <th>Quiz (20%)</th>
+                <th>Mid (30%)</th>
+                <th>Final (50%)</th>
+                <th>ጠቅላላ (Total)</th>
+                <th>ደረጃ (Grade)</th>
+            </tr>
+            <%- gradesHtml || '<tr><td colspan="8" style="color:#777;">ምንም ውጤት አልተመዘገበም</td></tr>' %>
         </table>
     </div>
 
-    <div class="card" style="background:#e8f4fd;">
-        <h3 style="color:#2980b9;">📢 ማስታወቂያዎች</h3>
-        <%- notiRows || '<p style="color:#777;">ምንም ማስታወቂያ የለም</p>' %>
+    <!-- Notifications -->
+    <div class="card" style="background: #e8f4fd;">
+        <h3 style="color: #2980b9;">📢 ማስታወቂያዎች (Notifications)</h3>
+        <%- notiRows || '<p style="color: #777;">ምንም ማስታወቂያ የለም</p>' %>
     </div>
 
+    <!-- Absence / Leave Request -->
     <div class="card">
         <h3>✉️ የመቅረት / እረፍት ጥያቄ ማቅረቢያ (Absence Request)</h3>
-        <form action="/student/absence" method="POST" enctype="multipart/form-data" style="display:flex; flex-direction:column; gap:10px;">
+        <form action="/student/absence" method="POST" enctype="multipart/form-data">
             <input type="hidden" name="target_teacher" value="">
-            <textarea name="reason" rows="3" placeholder="ምክንያትዎን እዚህ ይጻፉ..." required></textarea>
+            <label style="font-weight: bold; font-size: 13px;">ምክንያትዎን ይጻፉ:</label>
+            <textarea name="reason" rows="3" placeholder="ለምን እንደቀሩ ወይም ፈቃድ እንደሚፈልጉ በዝርዝር ይጻፉ..." required></textarea>
+            
+            <label style="font-weight: bold; font-size: 13px; display: block; margin-top: 10px;">የሕክምና ማረጋገጫ ወይም ደብዳቤ (ካለ ፋይል ያያይዙ):</label>
             <input type="file" name="attachment" accept="image/*,.pdf">
-            <button type="submit" style="background:#27ae60; color:white; border:none; padding:10px; border-radius:5px; font-weight:bold; cursor:pointer;">ጥያቄ ላክ</button>
+            
+            <button type="submit">ጥያቄ ላክ</button>
         </form>
-        <h4 style="margin-top:20px;">የቀረቧቸው ጥያቄዎች ታሪክ</h4>
-        <%- myAbsRows || '<p style="color:#777;">ምንም ጥያቄ የለም</p>' %>
+        
+        <h4 style="margin-top: 25px; color: #2c3e50;">የቀረቧቸው ጥያቄዎች ታሪክ (History)</h4>
+        <%- myAbsRows || '<p style="color: #777;">ምንም የቀረበ ጥያቄ የለም</p>' %>
     </div>
 
-    <div style="text-align:center; margin-top:20px;">
-        <a href="/logout" style="color:red; font-weight:bold; font-size:18px; text-decoration:none;">🔒 ውጣ (Logout)</a>
+    <div style="text-align: center;">
+        <a href="/logout" class="logout-btn">🔒 ውጣ (Logout)</a>
     </div>
 </div>
 </body>
