@@ -14,11 +14,11 @@
         th, td { border: 1px solid #ddd; padding: 10px; text-align: center; font-size: 14px; }
         th { background: #1f4e79; color: white; }
         tr:nth-child(even) { background: #f9f9f9; }
-        input[type="text"], input[type="file"], textarea, select { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        input[type="text"], input[type="file"], input[type="date"], textarea, select { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
         button { background: #27ae60; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 8px; }
         button:hover { background: #219653; }
         .profile-header { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
-        .profile-img { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 3px solid #3498db; }
+        .profile-img { width: 95px; height: 95px; border-radius: 8px; object-fit: cover; border: 2px solid #1f4e79; }
         .btn-id { background: #8e44ad; color: white; padding: 8px 15px; border-radius: 5px; text-decoration: none; font-weight: bold; display: inline-block; margin-top: 10px; }
         .btn-id:hover { background: #732d91; }
         .logout-btn { display: inline-block; text-align: center; margin-top: 20px; color: #c0392b; font-weight: bold; font-size: 16px; text-decoration: none; }
@@ -31,23 +31,21 @@
         🎓 የተማሪ መቆጣጠሪያ ፖርታል (Student Portal)
     </h2>
     
-    <!-- Profile & Digital ID -->
     <div class="card profile-header">
-        <img src="/uploads/<%= student.photo || 'default.png' %>" onerror="this.src='/uploads/logo.jpg'" class="profile-img">
+        <img src="/uploads/<%= student.photo || 'default.png' %>?t=<%= Date.now() %>" onerror="this.src='/uploads/logo.jpg'" class="profile-img">
         <div style="flex-grow: 1;">
             <h3 style="margin: 0; border: none; padding: 0;">ሰላም, <%= student.name %></h3>
             <p style="margin: 5px 0; color: #555;"><b>መታወቂያ (ID):</b> <%= student.student_id %> | <b>ክፍል:</b> <%= student.class_level %> | <b>ስልክ:</b> <%= student.phone %></p>
             
             <a href="/student/digital-id" target="_blank" class="btn-id">🆔 ዲጂታል መታወቂያ አውርድ (Digital ID)</a>
 
-            <form action="/student/update-photo" method="POST" enctype="multipart/form-data" style="margin-top: 12px; display: flex; gap: 10px; align-items: center;">
+            <form action="/student/update-photo" method="POST" enctype="multipart/form-data" style="margin-top: 10px; display: flex; gap: 10px; align-items: center;">
                 <input type="file" name="new_photo" accept="image/*" required style="width: auto; padding: 4px; font-size: 12px;">
                 <button type="submit" style="padding: 5px 12px; margin: 0; background: #3498db;">ፎቶ ቀይር</button>
             </form>
         </div>
     </div>
 
-    <!-- Assessment Grades -->
     <div class="card">
         <h3>📊 የትምህርት ውጤቶች (Assessment Grades)</h3>
         <table>
@@ -65,13 +63,11 @@
         </table>
     </div>
 
-    <!-- Notifications -->
     <div class="card" style="background: #e8f4fd;">
         <h3 style="color: #2980b9;">📢 ማስታወቂያዎች (Notifications)</h3>
         <%- notiRows || '<p style="color: #777;">ምንም ማስታወቂያ የለም</p>' %>
     </div>
 
-    <!-- Absence / Leave Request -->
     <div class="card">
         <h3>✉️ የመቅረት / እረፍት ጥያቄ ማቅረቢያ (Absence Request)</h3>
         <form action="/student/absence" method="POST" enctype="multipart/form-data">
