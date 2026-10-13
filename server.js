@@ -877,9 +877,26 @@ app.get('/student-dashboard', (req, res) => {
                     let myNotifs = allNotifs.filter(n => n.target_audience === 'ALL' || isClassMatch(n.target_audience, student.class_level));
                     db.all('SELECT * FROM absence_requests WHERE student_id = ? ORDER BY id DESC', [student.student_id], (err, myAbsences) => {
                         
-                        let notiRows = myNotifs.map(n => `<div style="background:#fdf2e9; padding:10px; margin-bottom:10px; border-radius:5px;"><strong>${n.sender_name}</strong><br><div>${n.message}</div></div>`).join('');
+                        // Real-time Notification Cards with Attachments
+                        let notiRows = myNotifs.map(n => `
+                            <div style="background:#fff; padding:15px; margin-bottom:12px; border-radius:8px; border-left:4px solid #3498db; box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <strong style="color:#2c3e50; font-size:15px;">🔔 ${n.sender_name}</strong>
+                                    <span style="font-size:11px; color:#888;">${n.created_at || 'አዲስ'}</span>
+                                </div>
+                                <div style="margin-top:8px; color:#445; font-size:14px; line-height:1.5;">${n.message}</div>
+                                ${n.attachment ? `<div style="margin-top:10px;"><a href="/uploads/${n.attachment}" target="_blank" style="background:#e8f4fd; color:#2980b9; padding:6px 12px; border-radius:4px; text-decoration:none; font-size:12px; font-weight:bold; display:inline-block;">📎 የተያያዘ ፋይል ክፈት / አውርድ</a></div>` : ''}
+                            </div>
+                        `).join('');
                         
-                        let myAbsRows = myAbsences.map(ab => `<div style="background:#f9f9f9; padding:10px; margin-bottom:10px; border-radius:5px; border-left:4px solid ${ab.teacher_feedback ? '#27ae60' : '#f39c12'};"><strong>ቀን:</strong> ${ab.date}<br><strong>ምክንያት:</strong> ${ab.reason}<br><strong>መልስ:</strong> ${ab.teacher_feedback || 'በመጠበቅ ላይ (Pending)'}</div>`).join('');
+                        let myAbsRows = myAbsences.map(ab => `
+                            <div style="background:#fdfdfd; padding:12px; margin-bottom:10px; border-radius:6px; border:1px solid #eee; border-left:4px solid ${ab.teacher_feedback ? '#27ae60' : '#f39c12'};">
+                                <strong>ቀን:</strong> ${ab.date || 'N/A'}<br>
+                                <strong>ምክንያት:</strong> ${ab.reason}<br>
+                                ${ab.attachment ? `<a href="/uploads/${ab.attachment}" target="_blank" style="color:#2980b9; font-size:13px;">📎 የተያያዘ ፋይል</a><br>` : ''}
+                                <strong style="color: ${ab.teacher_feedback ? '#27ae60' : '#d35400'};">መልስ:</strong> ${ab.teacher_feedback || 'በመጠበቅ ላይ (Pending)'}
+                            </div>
+                        `).join('');
 
                         let gradesHtml = myCourses.map(c => {
                             let asm = myGrades.find(a => a.course_code === c.code) || {};
@@ -901,6 +918,7 @@ app.get('/student-dashboard', (req, res) => {
         });
     });
 });
+
 
 app.post('/student/update-photo', upload.single('new_photo'), (req, res) => {
     if (!req.session.studentId) return res.redirect('/');
