@@ -672,117 +672,70 @@ app.get('/class-hub/:className', (req, res) => {
 
 app.get('/teacher-dashboard', (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
-    db.get(`SELECT * FROM teachers WHERE id = ?`, [req.session.teacherId], (err, teacher) => {
+    db.get('SELECT * FROM teachers WHERE id = ?', [req.session.teacherId], (err, teacher) => {
         let assignedClasses = teacher.assigned_sections ? teacher.assigned_sections.split(',').map(s => s.trim()) : [];
         let selectedClass = (req.query.cls || assignedClasses[0] || '').trim();
 
-        db.all(`SELECT student_id, name, class_level FROM students ORDER BY name ASC`, [], (err, allStudents) => {
+        db.all('SELECT student_id, name, class_level FROM students ORDER BY name ASC', [], (err, allStudents) => {
             let studentsInClass = allStudents.filter(s => isClassMatch(s.class_level, selectedClass));
-            db.all(`SELECT * FROM courses WHERE teacher_id = ?`, [req.session.teacherId], (err, courses) => {
+            db.all('SELECT * FROM courses WHERE teacher_id = ?', [req.session.teacherId], (err, courses) => {
                 let classCourses = courses.filter(c => isClassMatch(c.class_level, selectedClass));
-                let selectedCourseId = req.query.course_id;
-                let selectedCourse = classCourses.find(c => c.id.toString() === (selectedCourseId || '').toString());
-                if (!selectedCourse && classCourses.length > 0) { selectedCourse = classCourses[0]; selectedCourseId = selectedCourse.id; }
+                let selectedCourseId = req.query.course_id || (classCourses[0] ? classCourses[0].id.toString() : '');
+                let selectedCourse = classCourses.find(c => c.id.toString() === selectedCourseId) || '';
 
-                db.all(`SELECT * FROM course_assessments WHERE teacher_id = ? AND course_code = ?`, [req.session.teacherId, selectedCourse ? selectedCourse.code : ''], (err, assessments) => {
-                    db.all(`SELECT * FROM absence_requests ORDER BY id DESC`, [], (err, allAbsences) => {
-                        let classAbsences = allAbsences.filter(ab => isClassMatch(ab.class_level, selectedClass));
-                        db.all(`SELECT * FROM sections`, [], (err, allSections) => {
-                            let currentSection = allSections.find(sec => isClassMatch(sec.name, selectedClass)) || {};
-                            let isProctor = currentSection.proctor_name === teacher.name;
+                db.all('SELECT * FROM course_assessments WHERE teacher_id = ? AND course_code = ?', [req.session.teacherId, selectedCourse ? selectedCourse.code : ''], (err, assessments) => {
+                    db.all('SELECT * FROM absence_requests WHERE class_name = ? ORDER BY id DESC', [selectedClass], (err, classAbsences) => {
+                        db.all('SELECT * FROM sections', [], (err, allSections) => {
+                            let currentSection = allSections.find(sec => isClassMatch(sec.name, selectedClass));
+                            let isProctor = currentSection && currentSection.proctor_name === teacher.name;
 
-                            db.all(`SELECT * FROM notifications WHERE sender_name = ? ORDER BY id DESC`, [teacher.name], (err, mySentNotifs) => {
-                                let classOptions = assignedClasses.map(c => `<option value="${esc(c)}" ${c === selectedClass ? 'selected' : ''}>${c}</option>`).join('');
-                                let courseOptions = classCourses.map(c => `<option value="${c.id}" ${c.id.toString() === (selectedCourseId||'').toString() ? 'selected' : ''}>${c.title} (${c.code})</option>`).join('');
+                            db.all("SELECT * FROM notifications WHERE sender_name = ? ORDER BY id DESC", [teacher.name], (err, mySentNotifs) => {
+                                let classOptions = assignedClasses.map(cls => `<option value="${cls}" ${cls === selectedClass ? 'selected' : ''}>${cls}</option>`).join('');
+                                let courseOptions = classCourses.map(c => `<option value="${c.id}" ${c.id.toString() === selectedCourseId ? 'selected' : ''}>${c.title} (${c.code})</option>`).join('');
 
                                 let studentRows = studentsInClass.map((st, idx) => {
-                                    let asm = assessments ? assessments.find(a => a.student_id === st.student_id) || {} : {};
+                                    let asm = assessments.find(a => a.student_id === st.student_id) || {};
                                     return `<tr>
-                                        <td><b>${idx + 1}</b></td>
+                                        <td>${idx + 1}</td>
                                         <td>${st.student_id}</td>
                                         <td style="text-align:left;">${st.name}</td>
-                                        <td><input form="form_${st.student_id}" type="number" name="quiz" value="${asm.quiz!==undefined?asm.quiz:''}" min="0" max="20" style="width:50px; text-align:center; padding:3px;"></td>
-                                        <td><input form="form_${st.student_id}" type="number" name="mid" value="${asm.mid!==undefined?asm.mid:''}" min="0" max="30" style="width:50px; text-align:center; padding:3px;"></td>
-                                        <td><input form="form_${st.student_id}" type="number" name="final" value="${asm.final!==undefined?asm.final:''}" min="0" max="50" style="width:50px; text-align:center; padding:3px;"></td>
-                                        <td><strong id="total_${st.student_id}" style="color:#2c3e50; font-size:16px;">${asm.total||0}</strong></td>
+                                        <td><input form="form_${st.student_id}" type="number" name="quiz" value="${asm.quiz || 0}" style="width:60px;"></td>
+                                        <td><input form="form_${st.student_id}" type="number" name="mid" value="${asm.mid || 0}" style="width:60px;"></td>
+                                        <td><input form="form_${st.student_id}" type="number" name="final" value="${asm.final || 0}" style="width:60px;"></td>
                                         <td>
-                                            <form id="form_${st.student_id}" class="ajax-grade-form" action="/teacher/save-grade?cls=${encodeURIComponent(selectedClass)}&course_id=${selectedCourseId}" method="POST" style="margin:0;">
+                                            <form id="form_${st.student_id}" class="ajax-grade-form" action="/teacher/save-grade" method="POST">
                                                 <input type="hidden" name="student_id" value="${st.student_id}">
-                                                <button type="submit" style="background:#27ae60;color:white;border:none;padding:5px 10px; border-radius:3px; cursor:pointer; width:90px; transition:0.3s;">💾 Save</button>
+                                                <button type="submit" style="background:#27ae60; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-weight:bold;">💾 Save</button>
                                             </form>
                                         </td>
                                     </tr>`;
                                 }).join('');
 
-                                let absRows = classAbsences.map(ab => `<div style="background:#fdf2e9; padding:10px; border-left:4px solid #e67e22; margin-bottom:10px;"><strong>${ab.student_name} (${ab.student_id})</strong> - <em>${ab.created_at}</em><br>📝 <strong>መልዕክት:</strong> ${ab.reason}<br>${ab.attachment ? `<a href="/uploads/${ab.attachment}" target="_blank" style="color:blue;">📎 ፋይል/ማስረጃ ክፈት</a><br>` : ''}${ab.teacher_feedback ? `<span style="color:green; font-weight:bold;">💬 Your Feedback: ${ab.teacher_feedback}</span>` : `<form action="/teacher/give-feedback?cls=${encodeURIComponent(selectedClass)}" method="POST" style="margin-top:5px; display:flex; gap:5px;"><input type="hidden" name="req_id" value="${ab.id}"><input type="text" name="feedback" placeholder="Reply..." required style="flex:1; padding:4px;"><button type="submit" style="background:#16a085; color:white; border:none; padding:4px 8px; border-radius:3px;">Send</button></form>`}</div>`).join('');
+                                let absRows = classAbsences.map(ab => `<div style="background:#fdf2e9; padding:10px; margin-bottom:10px; border-radius:5px;"><strong>${ab.student_name}</strong> (${ab.date})<br><div>${ab.reason}</div></div>`).join('');
+                                let teacherNotiRows = mySentNotifs.map(n => `<div style="background:#fdf2e9; padding:10px; margin-bottom:10px; border-radius:5px;"><div>${n.message}</div></div>`).join('');
+                                let proctorPanel = isProctor ? `<div class="card" style="background:#f9fcf7; border:1px solid #27ae60;"><h3>🟢 የፕሮክተር (Proctor) ፓነል</h3><a href="/attendance-sheet/${encodeURIComponent(selectedClass)}" target="_blank" style="background:#16a085; color:white; padding:8px 15px; border-radius:5px; text-decoration:none; font-weight:bold; display:inline-block;">📋 የክፍል መገኘት ሰንጠረዥ (Attendance Sheet)</a></div>` : '';
 
-                                let teacherNotiRows = mySentNotifs.map(n => `<div style="background:#e8f4fd; padding:10px; margin-bottom:10px; border-radius:5px;"><strong>🔔 ወደ ${n.target_audience} የተላከ (${n.created_at})</strong><br><div>${n.message}</div>${n.attachment ? `<br><a href="/uploads/${n.attachment}" target="_blank" style="color:blue; font-weight:bold;">📎 ፋይል ክፈት</a>` : ''}<div style="margin-top:10px; border-top:1px solid #ccc; padding-top:5px;"><button onclick="document.getElementById('editNotif_${n.id}').style.display='block'" style="background:orange; color:white; border:none; padding:3px 8px; border-radius:3px; cursor:pointer;">✏️ Edit</button> <a href="/delete-notification/${n.id}" onclick="return confirm('እርግጠኛ ነዎት ይጠፋ?')" style="background:red; color:white; padding:4px 8px; border-radius:3px; text-decoration:none; font-size:13px;">🗑️ Delete</a><form id="editNotif_${n.id}" action="/edit-notification/${n.id}" method="POST" enctype="multipart/form-data" style="display:none; margin-top:10px;"><textarea name="message" rows="3" style="width:100%;">${n.message.replace(/<[^>]+>/g, '')}</textarea><input type="file" name="attachment" style="margin-top:5px;"><button type="submit" style="background:green; color:white; border:none; padding:4px 8px; margin-top:5px;">💾 Save Edit</button></form></div></div>`).join('');
-
-                                let proctorPanel = isProctor ? `<div class="card" style="background:#f9fcf7; border: 1px solid #c3e6cb;"><h3 style="color:#27ae60; margin-top:0;">👑 የክፍል ተቆጣጣሪ (Proctor)</h3><p><b>የአሁኑ የክፍል ተጠሪ (Monitor):</b> ${currentSection.class_monitor || '<span style="color:red;">ያልተመደበ (None)</span>'}</p><form action="/teacher/assign-monitor?cls=${encodeURIComponent(selectedClass)}" method="POST" style="display:flex; gap:10px; max-width:400px; margin-top:10px;"><select name="monitor_name" style="flex:1; padding:8px; border-radius:4px;"><option value="">-- የክፍል ተጠሪ (Monitor) ይምረጡ --</option>${studentsInClass.map(s => `<option value="${esc(s.name)}">${s.name}</option>`).join('')}</select><button type="submit" style="background:#27ae60; color:white; border:none; padding:8px 15px; border-radius:4px; font-weight:bold;">መድብ (Assign)</button></form></div>` : '';
-
-                                res.send(`
-                                <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Teacher Dashboard</title>
-                                <style>body{font-family:sans-serif; background:#f4f7f6; padding:20px;} .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px; box-shadow:0 2px 5px rgba(0,0,0,0.1); overflow-x:auto;} table{width:100%; border-collapse:collapse; margin-top:10px; min-width:400px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#1f4e79; color:white;}</style>
-                                <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
-                                </head>
-                                <body>
-                                <div style="max-width:900px; margin:auto;">
-                                    <h2><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 10px;">👨‍🏫 Teacher Portal: ${teacher.name}</h2>
-                                    <form method="GET" action="/teacher-dashboard" style="background:#eef2f5; padding:15px; border-radius:5px; margin-bottom:15px; display:flex; flex-wrap:wrap; gap:10px; align-items:center;"><div style="flex:1; min-width:200px;"><label style="font-weight:bold;">1. ክፍል ምረጥ (Select Class):</label><br><select name="cls" onchange="this.form.submit()" style="width:100%; padding:8px; border-radius:4px; margin-top:5px;">${classOptions || '<option>No Classes Assigned</option>'}</select></div><div style="flex:1; min-width:200px;"><label style="font-weight:bold;">2. ትምህርት ምረጥ (Select Course):</label><br><select name="course_id" onchange="this.form.submit()" style="width:100%; padding:8px; border-radius:4px; margin-top:5px;">${courseOptions || '<option value="">No Courses Assigned for this Class</option>'}</select></div></form>
-                                    ${proctorPanel}
-                                    ${selectedClass ? `<div style="margin-bottom:15px;"><a href="/attendance-sheet/${encodeURIComponent(selectedClass)}" target="_blank" style="background:#2980b9; color:white; padding:10px; display:inline-block; border-radius:5px; text-decoration:none; margin-right:10px; font-weight:bold;">📋 Daily Attendance Sheet (${selectedClass})</a></div><div style="display:flex; gap:20px; flex-wrap:wrap;"><div class="card" style="flex:1; min-width:300px;"><h3 style="color:#2980b9;">📢 ማስታወቂያ ላክ ወደ ${selectedClass}</h3><form action="/teacher/send-notification?cls=${encodeURIComponent(selectedClass)}" method="POST" enctype="multipart/form-data" id="teacherNotifForm"><div id="editorTeacher" style="height: 100px; background: white; margin-bottom: 10px;"></div><input type="hidden" name="message" id="hiddenMessageTeacher" required><label style="font-size: 13px; font-weight:bold; display:block; margin:10px 0;">📎 ፎቶ ወይም ፋይል አያይዝ:</label><input type="file" name="attachment" accept="image/*,.pdf,.doc,.docx" style="margin-bottom:10px; width:100%;"><button type="submit" style="background:#3498db; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">Send Notification</button></form><hr style="margin:20px 0;"><h3 style="color:#555;">📋 እርስዎ የላኳቸው ማስታወቂያዎች</h3>${teacherNotiRows || '<p style="color:#777;">ምንም መልዕክት አልተላከም</p>'}</div><div class="card" style="flex:1; min-width:300px; max-height: 400px; overflow-y:auto; border:1px solid #ccc;"><h3>📩 Student Requests (${selectedClass})</h3>${absRows || '<p style="color:#777;">No requests.</p>'}</div></div><div style="overflow-x:auto;"><h3 style="background:#1f4e79; color:white; padding:10px; margin:0; border-top-left-radius:5px; border-top-right-radius:5px;">📝 የውጤት መሙያ (Grades) - ${selectedCourse ? selectedCourse.title : 'No Course Selected'}</h3><table border="1" width="100%" style="border-collapse:collapse; text-align:center; min-width:600px; background:white;"><tr style="background:#eef2f5;"><th>No</th><th>ID</th><th>Name</th><th>Quiz(20)</th><th>Mid(30)</th><th>Final(50)</th><th>Total</th><th>Action</th></tr>${selectedCourse ? (studentRows || '<tr><td colspan="8">No students in this class</td></tr>') : '<tr><td colspan="8">Please select a course to enter grades.</td></tr>'}</table></div>` : ''}
-                                    <br><br><a href="/logout" style="color:red; font-weight:bold; font-size:18px;">🔒 Logout</a>
-                                </div>
-                                <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
-                                <script>
-                                    var quill = new Quill('#editorTeacher', { theme: 'snow', modules: { toolbar: [ [{ 'font': [] }, { 'size': [] }], ['bold', 'italic', 'underline', 'strike'], [{ 'color': [] }, { 'background': [] }], [{ 'align': [] }], ['link', 'image'] ] }}); 
-                                    var form = document.getElementById('teacherNotifForm'); 
-                                    if(form) { form.onsubmit = function() { document.getElementById('hiddenMessageTeacher').value = quill.root.innerHTML; }; }
-                                    
-                                    document.querySelectorAll('.ajax-grade-form').forEach(form => {
-                                        form.addEventListener('submit', function(e) {
-                                            e.preventDefault();
-                                            let btn = this.querySelector('button');
-                                            let originalText = btn.innerHTML;
-                                            btn.innerHTML = '⏳...';
-                                            btn.disabled = true;
-                                            
-                                            let studentId = this.querySelector('input[name="student_id"]').value;
-                                            let quiz = document.querySelector('input[form="form_'+studentId+'"][name="quiz"]').value;
-                                            let mid = document.querySelector('input[form="form_'+studentId+'"][name="mid"]').value;
-                                            let final = document.querySelector('input[form="form_'+studentId+'"][name="final"]').value;
-                                            
-                                            let payload = new URLSearchParams();
-                                            payload.append('student_id', studentId);
-                                            payload.append('quiz', quiz);
-                                            payload.append('mid', mid);
-                                            payload.append('final', final);
-                                            
-                                            fetch(this.action, {
-                                                method: 'POST',
-                                                body: payload,
-                                                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-                                            })
-                                            .then(res => res.json())
-                                            .then(res => {
-                                                if(res.success) {
-                                                    btn.innerHTML = '✅ Saved';
-                                                    btn.style.background = '#16a085';
-                                                    document.getElementById('total_' + studentId).innerText = res.total;
-                                                    setTimeout(() => { btn.innerHTML = originalText; btn.style.background = '#27ae60'; btn.disabled = false; }, 2000);
-                                                }
-                                            })
-                                            .catch(err => {
-                                                btn.innerHTML = '❌ Error';
-                                                btn.style.background = '#e74c3c';
-                                                setTimeout(() => { btn.innerHTML = originalText; btn.style.background = '#27ae60'; btn.disabled = false; }, 2000);
-                                            });
-                                        });
-                                    });
-                                </script>
-                                </body></html>`);
+                                res.render('teacher', {
+                                    lang: 'am',
+                                    teacher,
+                                    selectedClass,
+                                    selectedCourseId,
+                                    classOptions,
+                                    courseOptions,
+                                    studentRows,
+                                    absRows,
+                                    teacherNotiRows,
+                                    proctorPanel
+                                });
                             });
                         });
+                    });
+                });
+            });
+        });
+    });
+});
+
                     });
                 });
             });
