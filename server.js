@@ -477,112 +477,47 @@ app.get('/admin', (req, res) => {
                 db.all(`SELECT * FROM sections ORDER BY name`, [], (err, sections) => {
                     db.all(`SELECT * FROM courses ORDER BY class_level, code`, [], (err, courses) => {
                         db.all(`SELECT * FROM notifications WHERE sender_role = 'Admin' ORDER BY id DESC`, [], (err, adminNotifs) => {
-                        db.all(`SELECT * FROM course_assessments`, [], (err, assessments) => {
+                            db.all(`SELECT * FROM course_assessments`, [], (err, assessments) => {
 
-                        let maleCount = students.filter(s => s.gender === 'Male').length;
-                        let femaleCount = students.filter(s => s.gender === 'Female').length;
-                        
-                        let excellent = 0, good = 0, average = 0, poor = 0;
-                        assessments.forEach(a => {
-                            if (a.total >= 90) excellent++;
-                            else if (a.total >= 75) good++;
-                            else if (a.total >= 50) average++;
-                            else poor++;
-                        });
-
-                        let pRows = pending.map(s => `<tr><td>-</td><td>${s.student_id}</td><td>${s.name}</td><td>${s.payment_type === 'slip_file' ? `<a href="/uploads/${s.bank_slip_val}" target="_blank" style="color:#2980b9;">📄 እይ</a>` : `<b>TXN:</b> ${s.bank_slip_val}`}</td><td><a href="/admin/approve/${s.id}?lang=${lang}" style="color:green; font-weight:bold;">✅ Approve</a></td></tr>`).join('');
-
-                        let secRows = sections.map(sec => `<tr><td><a href="/class-hub/${encodeURIComponent(sec.name)}" style="color:#16a085; font-weight:bold;" target="_blank">📂 ${sec.name}</a></td><td><form action="/admin/edit-section/${sec.id}?lang=${lang}" method="POST" style="display:flex; gap:4px;"><select name="proctor_name" style="width:140px;"><option value="${esc(sec.proctor_name)}">${sec.proctor_name || '-- Select --'}</option>${teachers.map(tc => `<option value="${esc(tc.name)}">${tc.name}</option>`).join('')}</select><button type="submit">Save</button></form></td><td><a href="/admin/delete-section/${sec.id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑 Delete</a></td><td><a href="/attendance-sheet/${encodeURIComponent(sec.name)}" style="color:#2980b9; font-weight:bold; margin-right:10px;" target="_blank">📋 Attendance</a><a href="/admin/export-section-students/${encodeURIComponent(sec.name)}" style="background:#27ae60; color:white; padding:4px 8px; border-radius:3px; text-decoration:none; font-weight:bold;">📥 Excel</a></td></tr>`).join('');
-
-                        let sectionOptions = sections.map(sec => `<option value="${esc(sec.name)}">${sec.name}</option>`).join('');
-                        let teacherOptions = teachers.map(tc => `<option value="${tc.id}">${tc.name}</option>`).join('');
-                        let gradeCheckboxes = ''; for(let i=1; i<=12; i++) gradeCheckboxes += `<label style="margin-right:8px;"><input type="checkbox" name="grades" value="Grade ${i}"> Grade ${i}</label>`;
-                        let cRows = courses.map(c => `<tr><td>${c.code}</td><td>${c.title}</td><td>${c.credit_hours}</td><td>${c.class_level}</td><td>${c.teacher_name||'-'}</td><td><a href="/admin/delete-course/${c.id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td></tr>`).join('');
-                        let tRows = teachers.map(tc => `<tr><td>${tc.id}</td><td style="text-align:left;">${tc.name}</td><td>${tc.assigned_grades || 'None'}</td><td>${tc.assigned_sections || 'None'}</td><td>${tc.phone}</td><td><span style="color:red; font-weight:bold;">[Hashed]</span></td><td><a href="/admin/edit-teacher/${tc.id}?lang=${lang}" style="color:#2980b9; font-weight:bold;">✏️ Edit</a></td><td><a href="/admin/delete-teacher/${tc.id}?lang=${lang}" onclick="return confirm('Remove?')" style="color:red; font-weight:bold;">🗑️ Remove</a></td></tr>`).join('');
-
-                        let adminNotiRows = adminNotifs.map(n => `<div style="background:#fdf2e9; padding:10px; margin-bottom:10px; border-radius:5px;"><strong>🔔 ${n.sender_name} (${n.created_at})</strong><br><div>${n.message}</div>${n.attachment ? `<br><a href="/uploads/${n.attachment}" target="_blank" style="color:blue; font-weight:bold;">📎 ፋይል ክፈት</a>` : ''}<div style="margin-top:10px; border-top:1px solid #ccc; padding-top:5px;"><button onclick="document.getElementById('editNotif_${n.id}').style.display='block'" style="background:orange; color:white; border:none; padding:3px 8px; border-radius:3px; cursor:pointer;">✏️ Edit</button> <a href="/delete-notification/${n.id}" onclick="return confirm('እርግጠኛ ነዎት ይጠፋ?')" style="background:red; color:white; padding:4px 8px; border-radius:3px; text-decoration:none; font-size:13px;">🗑️ Delete</a><form id="editNotif_${n.id}" action="/edit-notification/${n.id}" method="POST" enctype="multipart/form-data" style="display:none; margin-top:10px;"><textarea name="message" rows="3" style="width:100%;">${n.message.replace(/<[^>]+>/g, '')}</textarea><input type="file" name="attachment" style="margin-top:5px;"><button type="submit" style="background:green; color:white; border:none; padding:4px 8px; margin-top:5px;">💾 Save</button></form></div></div>`).join('');
-
-                        let groupedStudentsHtml = '';
-                        let uniqueClasses = [...new Set(students.map(s => s.class_level))];
-                        if (uniqueClasses.length === 0) groupedStudentsHtml = '<p style="text-align:center; color:#777;">No students registered yet.</p>';
-                        uniqueClasses.forEach(cls => {
-                            let clsStudents = students.filter(s => s.class_level === cls);
-                            let rows = clsStudents.map(s => `<tr><td>${s.student_id}</td><td style="text-align:left;">${s.name}</td><td>${s.phone}</td><td><span style="color:red; font-weight:bold;">[Hashed]</span></td><td><a href="/admin/edit-student/${s.student_id}?lang=${lang}" style="color:#2980b9; font-weight:bold;">✏️ Edit</a></td><td><form action="/admin/update-pass?lang=${lang}" method="POST" style="display:flex; justify-content:center; gap:4px;"><input type="hidden" name="type" value="student"><input type="hidden" name="id" value="${s.student_id}"><input type="text" name="new_pass" placeholder="New PIN" style="width:70px; padding:4px;"><button type="submit" style="padding:4px; font-size:12px;">Reset</button></form></td><td><a href="/admin/delete-student/${s.student_id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td></tr>`).join('');
-                            groupedStudentsHtml += `<div style="margin-bottom:30px; border:1px solid #ddd; padding:15px; border-radius:8px; background:#fdfdfd;"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;"><h4 style="color:#2c3e50; margin:0;">📂 ${cls} (Total: ${clsStudents.length})</h4><a href="/admin/export-section-students/${encodeURIComponent(cls)}" style="background:#27ae60; color:white; padding:5px 10px; border-radius:3px; text-decoration:none; font-size:12px; font-weight:bold;">📥 Excel</a></div><div style="overflow-x:auto;"><table style="width:100%; min-width:600px; border-collapse:collapse; text-align:center; font-size:14px;"><tr style="background:#1f4e79; color:white;"><th>ID</th><th>Name</th><th>Phone</th><th>Password</th><th>Edit</th><th>Reset Pass</th><th>Delete</th></tr>${rows}</table></div></div>`;
-                        });
-
-                        res.send(`
-                        <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Director Hub</title>
-                        <style>body{font-family:sans-serif; background:#eef2f5; padding:20px;} .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px; overflow-x:auto; box-shadow: 0 2px 4px rgba(0,0,0,0.05);} table{width:100%; border-collapse:collapse; min-width:600px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#2c3e50; color:white;} input,select{padding:6px;} .toggle-btn { background:#2c3e50; color:white; padding:15px 30px; font-size:16px; border:none; border-radius:8px; cursor:pointer; font-weight:bold; width:100%; max-width:400px; margin: 10px auto; display:block;} .charts-container { display: flex; flex-wrap: wrap; gap: 20px; } .chart-box { flex: 1; min-width: 300px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }</style>
-                        <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
-                        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-                        <script>function toggleSection(id) { var el = document.getElementById(id); el.style.display = el.style.display === 'none' ? 'block' : 'none'; }</script>
-                        </head>
-                        <body>
-                            <h2><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 10px;"> 🔐 የዳይሬክተር / አድሚን መቆጣጠሪያ</h2>
-                            
-                            <div class="charts-container mb-20">
-                                <div class="chart-box">
-                                    <h3 style="text-align:center; color:#2c3e50;">የተማሪዎች ውጤት ስርጭት</h3>
-                                    <canvas id="performanceChart"></canvas>
-                                </div>
-                                <div class="chart-box">
-                                    <h3 style="text-align:center; color:#2c3e50;">የተማሪዎች የስርዓተ-ፆታ ስብጥር</h3>
-                                    <canvas id="genderChart"></canvas>
-                                </div>
-                            </div>
-
-                            <div class="card" style="background:#e8f4fd;"><h3 style="color:#2980b9;">📢 አዲስ ማስታወቂያ ላክ</h3><form action="/admin/send-notification" method="POST" enctype="multipart/form-data" id="notifForm"><div id="editor" style="height: 120px; background: white; margin-bottom: 10px;"></div><input type="hidden" name="message" id="hiddenMessage" required><label style="font-size: 13px; font-weight:bold; display:block; margin: 10px 0;">📎 ፎቶ ወይም ፋይል አያይዝ (አማራጭ):</label><input type="file" name="attachment" accept="image/*,.pdf,.doc,.docx" style="margin-bottom:10px;"><br><button type="submit" style="background:#3498db; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">Send Notification</button></form><hr style="margin:20px 0;"><h3 style="color:#555;">📋 የላኳቸው ማስታወቂያዎች</h3>${adminNotiRows || '<p style="color:#777;">ምንም መልዕክት አልተላከም</p>'}</div>
-                            <div class="card"><h3>📁 የዳይሬክተር ሳምንታዊ እና ወርሃዊ ሪፖርት</h3><a href="/director-report" target="_blank" style="background:#8e44ad; color:white; padding:10px 15px; text-decoration:none; border-radius:5px; font-weight:bold; display:inline-block;">📁 View Director Academic Year Report</a></div>
-                            <div class="card"><h3>አዲስ ተመዝጋቢዎች (Pending)</h3><table><tr><th>Photo</th><th>ID</th><th>Name</th><th>Payment</th><th>Action</th></tr>${pRows||'<tr><td colspan="5">None</td></tr>'}</table></div>
-                            <div class="card"><h3>ክፍሎችን እና ተቆጣጣሪዎችን (Proctors) ማስተዳደሪያ</h3><form action="/admin/add-section?lang=${lang}" method="POST" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;"><input type="text" name="name" placeholder="Class Name (e.g. Grade 1 - Section A)" required style="flex:2;"><select name="proctor_name" style="flex:1;"><option value="">-- Select Proctor Teacher --</option>${teachers.map(tc => `<option value="${esc(tc.name)}">${tc.name}</option>`).join('')}</select><button type="submit" style="background:#2980b9; color:white; border:none; padding:8px 14px; border-radius:5px;">➕ Add Section</button></form><table><tr><th>Section Name</th><th>Proctor Name (Teacher)</th><th>Delete</th><th>Sheets & Excel</th></tr>${secRows||'<tr><td colspan="4">None</td></tr>'}</table></div>
-                            <div class="card"><h3>አዲስ መምህር ማካተቻ</h3><form action="/admin/add-teacher?lang=${lang}" method="POST" style="margin-bottom:15px; background:#f9f9f9; padding:15px; border-radius:5px;"><div style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" name="name" placeholder="Teacher Full Name" required style="flex:1;"><input type="text" name="phone" placeholder="Phone Number" required style="flex:1;"><input type="text" name="assigned_sections" placeholder="Assigned Sections" required style="flex:2;"></div><label style="font-weight:bold; font-size:13px;">Assign Grades:</label><br><div style="margin:8px 0; display:flex; flex-wrap:wrap; gap:10px;">${gradeCheckboxes}</div><button type="submit" style="background:#2980b9; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">➕ Add Teacher</button></form></div>
-                            <div class="card"><h3>ትምህርቶችን / Courses ማስተዳደሪያ</h3><form action="/admin/add-course?lang=${lang}" method="POST" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;"><input type="text" name="code" placeholder="Course Code" required><input type="text" name="title" placeholder="Course Title" required><input type="number" name="credit_hours" placeholder="Cr.Hr" required style="width:80px;"><select name="class_level">${sectionOptions}</select><select name="teacher_id"><option value="">-- No Teacher --</option>${teacherOptions}</select><button type="submit" style="background:#2980b9; color:white; border:none; padding:8px 14px; border-radius:5px;">➕ Add Course</button></form><table><tr><th>Code</th><th>Title</th><th>Cr.Hr</th><th>Section</th><th>Teacher</th><th>Delete</th></tr>${cRows||'<tr><td colspan="6">None</td></tr>'}</table></div>
-                            <div style="text-align:center; padding: 40px 0; border-top: 2px dashed #ccc; margin-top:30px;"><h3 style="color:#555;">የተማሪዎች እና መምህራን ዝርዝር መረጃ</h3><button onclick="toggleSection('teachersList')" class="toggle-btn" style="background:#8e44ad;">👨‍🏫 ሁሉንም መምህራን አሳይ</button><button onclick="toggleSection('studentsList')" class="toggle-btn" style="background:#27ae60;">🎓 ሁሉንም ተማሪዎች አሳይ</button></div>
-                            <div id="teachersList" class="card" style="display:none; border:2px solid #8e44ad;"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;"><h3 style="color:#8e44ad; margin:0;">👨‍🏫 የሁሉም መምህራን ዝርዝር</h3><a href="/admin/export-teachers" style="background:#8e44ad; color:white; padding:8px 15px; border-radius:5px; text-decoration:none; font-weight:bold;">📊 Total Teachers (Excel)</a></div><table><tr><th>ID</th><th>Name</th><th>Grades</th><th>Classes</th><th>Phone</th><th>Password</th><th>Edit</th><th>Remove</th></tr>${tRows||'<tr><td colspan="8">None</td></tr>'}</table></div>
-                            <div id="studentsList" class="card" style="display:none; border:2px solid #27ae60;"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;"><h3 style="color:#27ae60; margin:0;">🎓 የሁሉም ተማሪዎች ዝርዝር (በየክፍሉ)</h3><a href="/admin/export-students" style="background:#27ae60; color:white; padding:8px 15px; border-radius:5px; text-decoration:none; font-weight:bold;">📊 Total Students (Excel)</a></div>${groupedStudentsHtml}</div>
-                            <br><div style="text-align:center;"><a href="/logout" style="color:red; font-weight:bold; font-size:18px;">🔒 ውጣ (Logout)</a></div><br><br>
-                            <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
-                            <script>
-                                var quill = new Quill('#editor', { theme: 'snow', modules: { toolbar: [ [{ 'font': [] }, { 'size': [] }], ['bold', 'italic', 'underline', 'strike'], [{ 'color': [] }, { 'background': [] }], [{ 'align': [] }], ['link', 'image'] ] }}); 
-                                document.getElementById('notifForm').onsubmit = function() { document.getElementById('hiddenMessage').value = quill.root.innerHTML; };
+                                let maleCount = students.filter(s => s.gender === 'Male').length;
+                                let femaleCount = students.filter(s => s.gender === 'Female').length;
                                 
-                                const perfCtx = document.getElementById('performanceChart').getContext('2d');
-                                new Chart(perfCtx, {
-                                    type: 'bar',
-                                    data: {
-                                        labels: ['Excellent (>=90)', 'Good (75-89)', 'Average (50-74)', 'Poor (<50)'],
-                                        datasets: [{
-                                            label: 'Students Count',
-                                            data: [${excellent}, ${good}, ${average}, ${poor}],
-                                            backgroundColor: [
-                                                'rgba(39, 174, 96, 0.7)',
-                                                'rgba(41, 128, 185, 0.7)',
-                                                'rgba(241, 196, 15, 0.7)',
-                                                'rgba(231, 76, 60, 0.7)'
-                                            ],
-                                            borderColor: [
-                                                'rgb(39, 174, 96)',
-                                                'rgb(41, 128, 185)',
-                                                'rgb(241, 196, 15)',
-                                                'rgb(231, 76, 60)'
-                                            ],
-                                            borderWidth: 1
-                                        }]
-                                    },
-                                    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+                                let excellent = 0, good = 0, average = 0, poor = 0;
+                                assessments.forEach(a => {
+                                    if (a.total >= 90) excellent++;
+                                    else if (a.total >= 75) good++;
+                                    else if (a.total >= 50) average++;
+                                    else poor++;
                                 });
 
-                                const genderCtx = document.getElementById('genderChart').getContext('2d');
-                        // ይሄኛው ነው የ EJS ጥሪ (ከ res.send(...) ይልቅ)
-                        res.render('admin', {
-                            lang,
-                            excellent, good, average, poor,
-                            maleCount, femaleCount,
-                            pRows, secRows, cRows, tRows,
-                            adminNotiRows, groupedStudentsHtml,
-                            sectionOptions, teacherOptions, gradeCheckboxes
-                        });
+                                let pRows = pending.map(s => `<tr><td>-</td><td>${s.student_id}</td><td>${s.name}</td><td>${s.payment_type === 'slip_file' ? `<a href="/uploads/${s.bank_slip_val}" target="_blank" style="color:#2980b9;">📄 እይ</a>` : `<b>TXN:</b> ${s.bank_slip_val}`}</td><td><a href="/admin/approve/${s.id}?lang=${lang}" style="color:green; font-weight:bold;">✅ Approve</a></td></tr>`).join('');
+
+                                let secRows = sections.map(sec => `<tr><td><a href="/class-hub/${encodeURIComponent(sec.name)}" style="color:#16a085; font-weight:bold;" target="_blank">📂 ${sec.name}</a></td><td><form action="/admin/edit-section/${sec.id}?lang=${lang}" method="POST" style="display:flex; gap:4px;"><select name="proctor_name" style="width:140px;"><option value="${sec.proctor_name || ''}">${sec.proctor_name || '-- Select --'}</option>${teachers.map(tc => `<option value="${tc.name}">${tc.name}</option>`).join('')}</select><button type="submit">Save</button></form></td><td><a href="/admin/delete-section/${sec.id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑 Delete</a></td><td><a href="/attendance-sheet/${encodeURIComponent(sec.name)}" style="color:#2980b9; font-weight:bold; margin-right:10px;" target="_blank">📋 Attendance</a><a href="/admin/export-section-students/${encodeURIComponent(sec.name)}" style="background:#27ae60; color:white; padding:4px 8px; border-radius:3px; text-decoration:none; font-weight:bold;">📥 Excel</a></td></tr>`).join('');
+
+                                let sectionOptions = sections.map(sec => `<option value="${sec.name}">${sec.name}</option>`).join('');
+                                let teacherOptions = teachers.map(tc => `<option value="${tc.id}">${tc.name}</option>`).join('');
+                                let gradeCheckboxes = ''; for(let i=1; i<=12; i++) gradeCheckboxes += `<label style="margin-right:8px;"><input type="checkbox" name="grades" value="Grade ${i}"> Grade ${i}</label>`;
+                                
+                                let cRows = courses.map(c => `<tr><td>${c.code}</td><td>${c.title}</td><td>${c.credit_hours}</td><td>${c.class_level}</td><td>${c.teacher_name||'-'}</td><td><a href="/admin/delete-course/${c.id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td></tr>`).join('');
+                                
+                                let tRows = teachers.map(tc => `<tr><td>${tc.id}</td><td style="text-align:left;">${tc.name}</td><td>${tc.assigned_grades || 'None'}</td><td>${tc.assigned_sections || 'None'}</td><td>${tc.phone}</td><td><span style="color:red; font-weight:bold;">[Hashed]</span></td><td><a href="/admin/edit-teacher/${tc.id}?lang=${lang}" style="color:#2980b9; font-weight:bold;">✏️ Edit</a></td><td><a href="/admin/delete-teacher/${tc.id}?lang=${lang}" onclick="return confirm('Remove?')" style="color:red; font-weight:bold;">🗑️ Remove</a></td></tr>`).join('');
+
+                                let adminNotiRows = adminNotifs.map(n => `<div style="background:#fdf2e9; padding:10px; margin-bottom:10px; border-radius:5px;"><strong>🔔 ${n.sender_name} (${n.created_at})</strong><br><div>${n.message}</div>${n.attachment ? `<br><a href="/uploads/${n.attachment}" target="_blank" style="color:blue; font-weight:bold;">📎 ፋይል ክፈት</a>` : ''}<div style="margin-top:10px; border-top:1px solid #ccc; padding-top:5px;"><button onclick="document.getElementById('editNotif_${n.id}').style.display='block'" style="background:orange; color:white; border:none; padding:3px 8px; border-radius:3px; cursor:pointer;">✏️ Edit</button> <a href="/delete-notification/${n.id}" onclick="return confirm('እርግጠኛ ነዎት ይጠፋ?')" style="background:red; color:white; padding:4px 8px; border-radius:3px; text-decoration:none; font-size:13px;">🗑️ Delete</a><form id="editNotif_${n.id}" action="/edit-notification/${n.id}" method="POST" enctype="multipart/form-data" style="display:none; margin-top:10px;"><textarea name="message" rows="3" style="width:100%;">${n.message.replace(/<[^>]+>/g, '')}</textarea><input type="file" name="attachment" style="margin-top:5px;"><button type="submit" style="background:green; color:white; border:none; padding:4px 8px; margin-top:5px;">💾 Save</button></form></div></div>`).join('');
+
+                                let groupedStudentsHtml = '';
+                                let uniqueClasses = [...new Set(students.map(s => s.class_level))];
+                                if (uniqueClasses.length === 0) groupedStudentsHtml = '<p style="text-align:center; color:#777;">No students registered yet.</p>';
+                                uniqueClasses.forEach(cls => {
+                                    let clsStudents = students.filter(s => s.class_level === cls);
+                                    let rows = clsStudents.map(s => `<tr><td>${s.student_id}</td><td style="text-align:left;">${s.name}</td><td>${s.phone}</td><td><span style="color:red; font-weight:bold;">[Hashed]</span></td><td><a href="/admin/edit-student/${s.student_id}?lang=${lang}" style="color:#2980b9; font-weight:bold;">✏️ Edit</a></td><td><form action="/admin/update-pass?lang=${lang}" method="POST" style="display:flex; justify-content:center; gap:4px;"><input type="hidden" name="type" value="student"><input type="hidden" name="id" value="${s.student_id}"><input type="text" name="new_pass" placeholder="New PIN" style="width:70px; padding:4px;"><button type="submit" style="padding:4px; font-size:12px;">Reset</button></form></td><td><a href="/admin/delete-student/${s.student_id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td></tr>`).join('');
+                                    groupedStudentsHtml += `<div style="margin-bottom:30px; border:1px solid #ddd; padding:15px; border-radius:8px; background:#fdfdfd;"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;"><h4 style="color:#2c3e50; margin:0;">📂 ${cls} (Total: ${clsStudents.length})</h4><a href="/admin/export-section-students/${encodeURIComponent(cls)}" style="background:#27ae60; color:white; padding:5px 10px; border-radius:3px; text-decoration:none; font-size:12px; font-weight:bold;">📥 Excel</a></div><div style="overflow-x:auto;"><table style="width:100%; min-width:600px; border-collapse:collapse; text-align:center; font-size:14px;"><tr style="background:#1f4e79; color:white;"><th>ID</th><th>Name</th><th>Phone</th><th>Password</th><th>Edit</th><th>Reset Pass</th><th>Delete</th></tr>${rows}</table></div></div>`;
+                                });
+
+                                res.render('admin', {
+                                    lang, excellent, good, average, poor, maleCount, femaleCount,
+                                    pRows, secRows, cRows, tRows, adminNotiRows, groupedStudentsHtml,
+                                    sectionOptions, teacherOptions, gradeCheckboxes
+                                });
 
                             });
                         });
@@ -592,6 +527,7 @@ app.get('/admin', (req, res) => {
         });
     });
 });
+
 
 app.get('/admin/approve/:id', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
