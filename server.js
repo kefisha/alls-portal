@@ -832,6 +832,42 @@ app.post('/admin/promote-year', (req, res) => {
     // ለምሳሌ አድሚኑ ከፍ ያለ ክፍል እንዲመርጥ በማድረግ ወይም አውቶማቲክ ማሻሻያ ማድረግ ይቻላል
     res.redirect('/admin');
 });
+// የተመዘገቡ ተማሪዎችን በሌላ ገጽ ለማሳየት የተፈጠረ ራውት
+app.get('/admin/registered-students', async (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    
+    db.all(`SELECT * FROM students ORDER BY class_level ASC, name ASC`, [], (err, allStudents) => {
+        let maleCount = allStudents.filter(s => s.gender === 'Male').length;
+        let femaleCount = allStudents.filter(s => s.gender === 'Female').length;
+        
+        let studentsByClass = {};
+        allStudents.forEach(st => {
+            if (!studentsByClass[st.class_level]) studentsByClass[st.class_level] = [];
+            studentsByClass[st.class_level].push(st);
+        });
+
+        let groupedStudentsHtml = Object.keys(studentsByClass).map(className => {
+            let trs = studentsByClass[className].map(st => `
+                <tr>
+                    <td style="font-weight:bold; color:#2980b9;">${st.student_id}</td>
+                    <td>${st.name}</td>
+                    <td>${st.gender}</td>
+                    <td>${st.phone || '-'}</td>
+                    <td><a href="/uploads/${st.bank_slip_val}" target="_blank" style="color:#27ae60; font-weight:bold;">📄 ክፈት</a></td>
+                    <td><a href="/admin/edit-student/${st.student_id}" style="color:orange;">✏️ Edit</a> | 
+                        <a href="/admin/remove-student/${st.student_id}" onclick="return confirm('እርግጠኛ ነዎት ይህ ተማሪ ይሰረዝ?')" style="color:red;">🗑️ Del</a>
+                    </td>
+                </tr>
+            `).join('');
+            return `<div style="margin-top:20px;"><h4 style="background:#1f4e79; color:white; padding:10px; border-radius:5px;">🏫 ${className} (${studentsByClass[className].length} ተማሪዎች)</h4>
+                    <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse;">
+                    <tr style="background:#f2f2f2;"><th>ID</th><th>Name</th><th>Gender</th><th>Phone</th><th>Bank Slip</th><th>Action</th></tr>
+                    ${trs}</table></div></div>`;
+        }).join('');
+
+        res.render('registered-students', { groupedStudentsHtml, maleCount, femaleCount });
+    });
+});
 
 app.post('/save-attendance', async (req, res) => {
     if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
