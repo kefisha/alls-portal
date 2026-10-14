@@ -853,15 +853,15 @@ app.get('/admin/registered-students', async (req, res) => {
                     <td>${st.name}</td>
                     <td>${st.gender}</td>
                     <td>${st.phone || '-'}</td>
-                    <td><a href="/uploads/${st.bank_slip_val}" target="_blank" style="color:#27ae60; font-weight:bold;">📄 ክፈት</a></td>
+                    <td><a href="/uploads/${st.bank_slip_val}" target="_blank" style="color:#27ae60; font-weight:bold;">📄 ክፈት (Open)</a></td>
                     <td><a href="/admin/edit-student/${st.student_id}" style="color:orange;">✏️ Edit</a> | 
-                        <a href="/admin/remove-student/${st.student_id}" onclick="return confirm('እርግጠኛ ነዎት ይህ ተማሪ ይሰረዝ?')" style="color:red;">🗑️ Del</a>
+                        <a href="/admin/remove-student/${st.student_id}" onclick="return confirm('እርግጠኛ ነዎት ይህ ተማሪ ይሰረዝ? (Are you sure to delete?)')" style="color:red;">🗑️ Del</a>
                     </td>
                 </tr>
             `).join('');
-            return `<div style="margin-top:20px;"><h4 style="background:#1f4e79; color:white; padding:10px; border-radius:5px;">🏫 ${className} (${studentsByClass[className].length} ተማሪዎች)</h4>
+            return `<div style="margin-top:20px;"><h4 style="background:#1f4e79; color:white; padding:10px; border-radius:5px;">🏫 ${className} (${studentsByClass[className].length} ተማሪዎች / Students)</h4>
                     <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse;">
-                    <tr style="background:#f2f2f2;"><th>ID</th><th>Name</th><th>Gender</th><th>Phone</th><th>Bank Slip</th><th>Action</th></tr>
+                    <tr style="background:#f2f2f2;"><th>መታወቂያ (ID)</th><th>ስም (Name)</th><th>ፆታ (Gender)</th><th>ስልክ (Phone)</th><th>ደረሰኝ (Bank Slip)</th><th>ተግባር (Action)</th></tr>
                     ${trs}</table></div></div>`;
         }).join('');
 
