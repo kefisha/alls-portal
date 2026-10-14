@@ -591,12 +591,30 @@ app.get('/admin/edit-student/:id', (req, res) => {
     });
 });
 
-app.post('/admin/edit-student/:id', (req, res) => {
+// ==========================================
+// ✏️ የተማሪ መረጃ ማስተካከያ (Edit Student)
+// ==========================================
+app.post('/admin/edit-student/:id', upload.single('bank_slip'), (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
-    let { name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, status, admin_message } = req.body;
-    db.run(`UPDATE students SET name=?, mother_name=?, gender=?, age=?, phone=?, emergency_phone=?, region=?, zone=?, woreda=?, kebele=?, class_level=?, status=?, admin_message=? WHERE student_id=?`,
-    [name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, status, admin_message, req.params.id], () => res.redirect('/admin'));
+    
+    const studentId = req.params.id;
+    const { name, gender, phone, class_level } = req.body;
+    
+    if (req.file) {
+        // 1. አዲስ ፎቶ (ፋይል) ከተመረጠ ፎቶውንም አብሮ ይቀይራል
+        db.run(`UPDATE students SET name = ?, gender = ?, phone = ?, class_level = ?, bank_slip_val = ? WHERE student_id = ?`, 
+        [name, gender, phone, class_level, req.file.filename, studentId], (err) => {
+            res.redirect('/admin/registered-students');
+        });
+    } else {
+        // 2. አዲስ ፎቶ ካልተመረጠ፣ የድሮውን ፎቶ ሳይነካ ሌላውን መረጃ ብቻ ይቀይራል
+        db.run(`UPDATE students SET name = ?, gender = ?, phone = ?, class_level = ? WHERE student_id = ?`, 
+        [name, gender, phone, class_level, studentId], (err) => {
+            res.redirect('/admin/registered-students');
+        });
+    }
 });
+
 
 app.get('/class-hub/:className', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
