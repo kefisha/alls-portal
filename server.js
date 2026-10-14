@@ -744,6 +744,39 @@ app.get('/student-dashboard', (req, res) => {
         });
     });
 });
+// ================= ACADEMIC YEAR-END REPORT ROUTE =================
+app.get('/admin/export-year-end-report', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    
+    db.all(`SELECT s.*, c.code, c.title, ca.quiz, ca.mid, ca.final, ca.total, ca.remark 
+            FROM students s 
+            LEFT JOIN course_assessments ca ON s.student_id = ca.student_id 
+            LEFT JOIN courses c ON ca.course_code = c.code 
+            ORDER BY s.class_level, s.name`, [], (err, rows) => {
+        
+        const doc = new PDFDocument({ margin: 30, size: 'A4' });
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'attachment; filename=Amanuel_School_Year_End_Report.pdf');
+        doc.pipe(res);
+
+        // Header Styling
+        doc.rect(0, 0, 612, 80).fill('#1f4e79');
+        doc.fontSize(20).fillColor('#ffffff').text('AMANUEL LIGHT AND LIFE SCHOOL', 40, 20, { align: 'center' });
+        doc.fontSize(12).fillColor('#f4d03f').text('Official Academic Year-End Comprehensive Report', 40, 48, { align: 'center' });
+        
+        doc.moveDown(3);
+        doc.fontSize(14).fillColor('#333333').text('Student Performance & Grade Archive Summary', { underline: true });
+        doc.moveDown(1);
+
+        rows.forEach((r, index) => {
+            if (doc.y > 700) doc.addPage();
+            doc.fontSize(10).fillColor('#000000')
+               .text(`${index + 1}. ID: ${r.student_id} | Name: ${r.name} | Class: ${r.class_level} | Course: ${r.title || 'N/A'} | Total: ${r.total || 0} | Status: ${r.remark || 'N/A'}`);
+        });
+
+        doc.end();
+    });
+});
 
 app.post('/student/update-photo', upload.single('new_photo'), (req, res) => {
     if (!req.session.studentId) return res.redirect('/');
