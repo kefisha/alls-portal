@@ -851,17 +851,24 @@ app.get('/admin/registered-students', async (req, res) => {
                 <tr>
                     <td style="font-weight:bold; color:#2980b9;">${st.student_id}</td>
                     <td>${st.name}</td>
-                    <td>${st.gender}</td>
+                    <td><span class="am">${st.gender === 'Male' ? 'ወንድ' : 'ሴት'}</span><span class="en">${st.gender}</span></td>
                     <td>${st.phone || '-'}</td>
-                    <td><a href="/uploads/${st.bank_slip_val}" target="_blank" style="color:#27ae60; font-weight:bold;">📄 ክፈት (Open)</a></td>
+                    <td><a href="/uploads/${st.bank_slip_val}" target="_blank" style="color:#27ae60; font-weight:bold;">📄 <span class="am">ክፈት</span><span class="en">Open</span></a></td>
                     <td><a href="/admin/edit-student/${st.student_id}" style="color:orange;">✏️ Edit</a> | 
-                        <a href="/admin/remove-student/${st.student_id}" onclick="return confirm('እርግጠኛ ነዎት ይህ ተማሪ ይሰረዝ? (Are you sure to delete?)')" style="color:red;">🗑️ Del</a>
+                        <a href="/admin/remove-student/${st.student_id}" onclick="return confirm('Are you sure? / እርግጠኛ ነዎት?')" style="color:red;">🗑️ Del</a>
                     </td>
                 </tr>
             `).join('');
-            return `<div style="margin-top:20px;"><h4 style="background:#1f4e79; color:white; padding:10px; border-radius:5px;">🏫 ${className} (${studentsByClass[className].length} ተማሪዎች / Students)</h4>
+            return `<div style="margin-top:20px;"><h4 style="background:#1f4e79; color:white; padding:10px; border-radius:5px;">🏫 ${className} (${studentsByClass[className].length} <span class="am">ተማሪዎች</span><span class="en">Students</span>)</h4>
                     <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse;">
-                    <tr style="background:#f2f2f2;"><th>መታወቂያ (ID)</th><th>ስም (Name)</th><th>ፆታ (Gender)</th><th>ስልክ (Phone)</th><th>ደረሰኝ (Bank Slip)</th><th>ተግባር (Action)</th></tr>
+                    <tr style="background:#f2f2f2;">
+                        <th><span class="am">መታወቂያ</span><span class="en">ID</span></th>
+                        <th><span class="am">ስም</span><span class="en">Name</span></th>
+                        <th><span class="am">ፆታ</span><span class="en">Gender</span></th>
+                        <th><span class="am">ስልክ</span><span class="en">Phone</span></th>
+                        <th><span class="am">ደረሰኝ</span><span class="en">Slip</span></th>
+                        <th><span class="am">ተግባር</span><span class="en">Action</span></th>
+                    </tr>
                     ${trs}</table></div></div>`;
         }).join('');
 
@@ -869,20 +876,6 @@ app.get('/admin/registered-students', async (req, res) => {
     });
 });
 
-app.post('/save-attendance', async (req, res) => {
-    if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
-    db.all(`SELECT student_id, name, class_level FROM students`, [], async (err, allStudents) => {
-        let studentsInClass = allStudents.filter(s => isClassMatch(s.class_level, req.body.class_level));
-        db.run(`DELETE FROM daily_attendance WHERE class_level = ? AND date = ?`, [req.body.class_level, req.body.date], async () => {
-            try {
-                for(let st of studentsInClass) {
-                    await pool.query(`INSERT INTO daily_attendance (student_id, student_name, class_level, date, status) VALUES ($1, $2, $3, $4, $5)`, [st.student_id, st.name, req.body.class_level, req.body.date, req.body[`status_${st.student_id}`] || 'Absent']);
-                }
-                res.redirect('/teacher-dashboard');
-            } catch(e) { res.redirect('/teacher-dashboard'); }
-        });
-    });
-});
 // 1. የዓመቱን ውጤት ፒዲኤፍ ማውረድ (Year-End PDF)
 app.get('/admin/export-year-end-pdf/:className', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
