@@ -817,6 +817,11 @@ app.get('/attendance-sheet/:secName', (req, res) => {
         });
     });
 });
+app.post('/admin/promote-year', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    // ለምሳሌ አድሚኑ ከፍ ያለ ክፍል እንዲመርጥ በማድረግ ወይም አውቶማቲክ ማሻሻያ ማድረግ ይቻላል
+    res.redirect('/admin');
+});
 
 app.post('/save-attendance', async (req, res) => {
     if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
