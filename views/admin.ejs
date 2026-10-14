@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - Amanuel Light and Life School</title>
     
-    <!-- Quill Rich Text Editor (ለማስታወቂያ መጻፊያው ፎንት እና ከለር) -->
+    <!-- Quill Rich Text Editor -->
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
     <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
 
@@ -40,59 +40,58 @@
 
         <h2>👑 የዲሬክተር / አድሚን መቆጣጠሪያ (Admin Dashboard)</h2>
 
-        <!-- 🎓 Academic Year Management Panel (የአዲሱ ዓመት ማጠቃለያ) -->
+        <!-- 🎓 Academic Year Management Panel -->
         <div class="card" style="background: #fffcf5; border-color: #f39c12;">
-            <h3 style="color: #d35400; border-bottom-color: #fce8cd;">🎓 የአካዳሚክ ዓመት ማጠቃለያ (Year-End Actions)</h3>
-            <p style="font-size: 13px; color: #555;">ማሳሰቢያ፦ እነዚህን ተግባራት ከማድረግዎ በፊት እባክዎ የክፍል ውጤቶችን (PDF/Excel) ዳውንሎድ ማድረጎን ያረጋግጡ።</p>
+            <h3 style="color: #d35400; border-bottom-color: #fce8cd;">🎓 የአካዳሚክ ዓመት ማጠቃለያ (Academic Year-End Actions)</h3>
+            <p style="font-size: 13px; color: #555;">ማሳሰቢያ (Note)፦ እነዚህን ተግባራት ከማድረግዎ በፊት እባክዎ የክፍል ውጤቶችን ዳውንሎድ ማድረጎን ያረጋግጡ (Please ensure you have downloaded class reports before proceeding).</p>
             
             <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 15px;">
-                <form action="/admin/archive-year" method="POST" onsubmit="return confirm('እርግጠኛ ነዎት? ይህ የዘንድሮን ውጤት ወደ ማህደር (Archive) አዛውሮ ፖርታሉን ለቀጣይ ዓመት ዜሮ ያደርገዋል!');">
+                <form action="/admin/archive-year" method="POST" onsubmit="return confirm('እርግጠኛ ነዎት? ይህ የዘንድሮን ውጤት ወደ ማህደር ያዛውራል! (Are you sure? This will archive the current academic year!)');">
                     <button type="submit" class="btn-orange">🗂️ 1. የዓመቱን ውጤት ቋጥሮ ያዝ (Archive Year)</button>
                 </form>
 
-                <form action="/admin/promote-students" method="POST" onsubmit="return confirm('እርግጠኛ ነዎት? ሁሉም ተማሪዎች ወደ ቀጣይ ክፍል (ለምሳሌ 1ኛ ክፍል ወደ 2ኛ ክፍል) ያድጋሉ!');">
-                    <button type="submit" class="btn-green">🚀 2. ተማሪዎችን ወደ ቀጣይ ክፍል አሳድግ (Promote All)</button>
+                <form action="/admin/promote-students" method="POST" onsubmit="return confirm('እርግጠኛ ነዎት? ሁሉም ተማሪዎች ወደ ቀጣይ ክፍል ያድጋሉ! (Are you sure? All students will be promoted to the next grade!)');">
+                    <button type="submit" class="btn-green">🚀 2. ተማሪዎችን ወደ ቀጣይ ክፍል አሳድግ (Promote All Students)</button>
                 </form>
             </div>
         </div>
 
-        <!-- 📢 ማስታወቂያ መላኪያ (ከነ Quill Editor) -->
+        <!-- 📢 ማስታወቂያ መላኪያ -->
         <div class="card">
-            <h3>📢 አዲስ ማስታወቂያ መላኪያ (Send Notification)</h3>
+            <h3>📢 አዲስ ማስታወቂያ መላኪያ (Send New Notification)</h3>
             <form id="notifForm" action="/admin/save-notice" method="POST" enctype="multipart/form-data">
-                <label>ለማን ይላክ?</label>
+                <label>ለማን ይላክ? (To Whom?)</label>
                 <select name="target_audience" style="width: 100%; max-width: 300px; display: block; margin-bottom: 15px;">
-                    <option value="ALL">ለማንኛውም ሰው (ALL)</option>
-                    <%- gradeCheckboxes %> <!-- ክፍል ለመምረጥ የሚረዳ (server.js ከሚያመጣው) -->
+                    <option value="ALL">ለማንኛውም ሰው (To All / Everyone)</option>
+                    <%- gradeCheckboxes %>
                 </select>
 
-                <label>መልዕክትዎን ይጻፉ፦</label>
-                <!-- የ Quill Editor መያዣ -->
+                <label>መልዕክትዎን ይጻፉ (Write your message)፦</label>
                 <div id="editor"></div>
                 <input type="hidden" name="message" id="hiddenMessage">
 
-                <label style="display: block; margin-top: 15px;">📎 ፋይል ወይም ፎቶ አያይዝ (አማራጭ):</label>
+                <label style="display: block; margin-top: 15px;">📎 ፋይል ወይም ፎቶ አያይዝ - አማራጭ (Attach File/Photo - Optional):</label>
                 <input type="file" name="attachment" style="max-width: 300px; display: block;">
 
-                <button type="submit" style="margin-top: 15px; width: 100%; max-width: 300px;">📩 ማስታወቂያውን ላክ</button>
+                <button type="submit" style="margin-top: 15px; width: 100%; max-width: 300px;">📩 ማስታወቂያውን ላክ (Send Notification)</button>
             </form>
         </div>
 
         <!-- 🔔 የተላኩ ማስታወቂያዎች ማሳያ -->
         <div class="card">
-            <h3>🔔 ቀደም ሲል የተላኩ ማስታወቂያዎች</h3>
+            <h3>🔔 ቀደም ሲል የተላኩ ማስታወቂያዎች (Previously Sent Notifications)</h3>
             <div style="max-height: 400px; overflow-y: auto;">
                 <%- adminNotiRows %>
             </div>
         </div>
 
         <div class="grid-2">
-            <!-- 👨‍🎓 አዲስ ተማሪዎች (Pending) -->
+            <!-- 👨‍🎓 አዲስ ተማሪዎች -->
             <div class="card" style="border-color: #27ae60;">
                 <h3 style="color: #27ae60; border-bottom-color: #d5f5e3;">🟢 አዲስ አመልካቾች (Pending Approvals)</h3>
                 <div style="overflow-x: auto;">
                     <table>
-                        <tr><th>#</th><th>ID</th><th>Name</th><th>Payment</th><th>Action</th></tr>
+                        <tr><th>#</th><th>መታወቂያ (ID)</th><th>ስም (Name)</th><th>ክፍያ (Payment)</th><th>ተግባር (Action)</th></tr>
                         <%- pRows %>
                     </table>
                 </div>
@@ -100,22 +99,22 @@
 
             <!-- 👩‍🏫 መምህራን አስተዳደር -->
             <div class="card" style="border-color: #8e44ad;">
-                <h3 style="color: #8e44ad; border-bottom-color: #f4ecf7;">👩‍🏫 መምህራን አስተዳደር (Teachers)</h3>
+                <h3 style="color: #8e44ad; border-bottom-color: #f4ecf7;">👩‍🏫 መምህራን አስተዳደር (Teachers Management)</h3>
                 <form action="/admin/add-teacher" method="POST" style="margin-bottom: 15px; background: #fafafa; padding: 15px; border-radius: 8px;">
-                    <input type="text" name="name" placeholder="Full Name" required>
-                    <input type="text" name="phone" placeholder="Phone Number" required>
-                    <label style="display:block; margin-bottom:5px;">የሚያስተምሩት ክፍል (ክፍልና ሴክሽን በኮማ ለይተው ይጻፉ):</label>
-                    <input type="text" name="assigned_sections" placeholder="ምሳሌ: Grade 1 - Section A, Grade 2 - Section B">
-                    <label style="display:block; margin-bottom:5px;">የክፍል ደረጃ (ለማስታወቂያዎች):</label>
+                    <input type="text" name="name" placeholder="ሙሉ ስም (Full Name)" required>
+                    <input type="text" name="phone" placeholder="ስልክ ቁጥር (Phone Number)" required>
+                    <label style="display:block; margin-bottom:5px;">የሚያስተምሩት ክፍል እና ሴክሽን (Assigned Sections):</label>
+                    <input type="text" name="assigned_sections" placeholder="ምሳሌ (e.g.): Grade 1 - Section A, Grade 2 - Section B">
+                    <label style="display:block; margin-bottom:5px;">የክፍል ደረጃ ለማስታወቂያዎች (Grade Levels for Notifications):</label>
                     <div style="margin-bottom: 10px; font-size: 13px;">
                         <%- gradeCheckboxes %>
                     </div>
-                    <button type="submit" class="btn-green" style="width: 100%;">➕ አዲስ መምህር መዝግብ</button>
+                    <button type="submit" class="btn-green" style="width: 100%;">➕ አዲስ መምህር መዝግብ (Register New Teacher)</button>
                 </form>
-                <a href="/admin/export-teachers" class="btn-orange" style="text-decoration:none; display:inline-block; margin-bottom:15px; padding: 8px 15px;">📥 ሁሉንም መምህራን አውርድ (Excel)</a>
+                <a href="/admin/export-teachers" class="btn-orange" style="text-decoration:none; display:inline-block; margin-bottom:15px; padding: 8px 15px;">📥 ሁሉንም መምህራን አውርድ (Download Teachers - Excel)</a>
                 <div style="overflow-x: auto;">
                     <table>
-                        <tr><th>ID</th><th>Name</th><th>Grades</th><th>Sections</th><th>Phone</th><th>Pass</th><th>Edit</th><th>Remove</th></tr>
+                        <tr><th>መታወቂያ (ID)</th><th>ስም (Name)</th><th>ክፍሎች (Grades)</th><th>ሴክሽኖች (Sections)</th><th>ስልክ (Phone)</th><th>የይለፍ ቃል (Pass)</th><th>አስተካክል (Edit)</th><th>አጥፋ (Remove)</th></tr>
                         <%- tRows %>
                     </table>
                 </div>
@@ -125,14 +124,14 @@
         <div class="grid-2">
             <!-- 🏫 ክፍሎች (Sections) አስተዳደር -->
             <div class="card">
-                <h3>🏫 የክፍል ሴክሽኖች (Sections)</h3>
+                <h3>🏫 የክፍል ሴክሽኖች (Class Sections)</h3>
                 <form action="/admin/add-section" method="POST" style="display: flex; gap: 10px; margin-bottom: 15px;">
-                    <input type="text" name="name" placeholder="ምሳሌ: Grade 1 - Section A" required style="margin-bottom: 0;">
-                    <button type="submit">➕ ጨምር</button>
+                    <input type="text" name="name" placeholder="ምሳሌ (e.g.): Grade 1 - Section A" required style="margin-bottom: 0;">
+                    <button type="submit">➕ ጨምር (Add)</button>
                 </form>
                 <div style="overflow-x: auto;">
                     <table>
-                        <tr><th>Section Name</th><th>Proctor (ተቆጣጣሪ)</th><th>Delete</th><th>Actions</th></tr>
+                        <tr><th>የሴክሽን ስም (Section Name)</th><th>ተቆጣጣሪ (Proctor)</th><th>አጥፋ (Delete)</th><th>ተግባር (Actions)</th></tr>
                         <%- secRows %>
                     </table>
                 </div>
@@ -140,26 +139,26 @@
 
             <!-- 📚 የትምህርት አይነቶች (Courses) -->
             <div class="card">
-                <h3>📚 የትምህርት አይነቶች (Courses)</h3>
+                <h3>📚 የትምህርት አይነቶች (Courses Management)</h3>
                 <form action="/admin/add-course" method="POST" style="background: #fafafa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                        <input type="text" name="code" placeholder="Course Code (e.g. MATH101)" required>
-                        <input type="text" name="title" placeholder="Course Title (e.g. Mathematics)" required>
-                        <input type="number" name="credit_hours" placeholder="Credit Hours" required>
+                        <input type="text" name="code" placeholder="የኮርስ ኮድ (Course Code)" required>
+                        <input type="text" name="title" placeholder="የትምህርት ስም (Course Title)" required>
+                        <input type="number" name="credit_hours" placeholder="ክሬዲት ሰዓት (Credit Hours)" required>
                         <select name="class_level" required>
-                            <option value="">የትኛውን ክፍል ይምረጡ...</option>
+                            <option value="">የትኛውን ክፍል ይምረጡ... (Select Class...)</option>
                             <%- sectionOptions %>
                         </select>
                     </div>
                     <select name="teacher_id" style="margin-top: 10px;">
-                        <option value="">መምህር ይምረጡ (አማራጭ)</option>
+                        <option value="">መምህር ይምረጡ - አማራጭ (Select Teacher - Optional)</option>
                         <%- teacherOptions %>
                     </select>
-                    <button type="submit" class="btn-green" style="width: 100%;">➕ የትምህርት አይነት ጨምር</button>
+                    <button type="submit" class="btn-green" style="width: 100%;">➕ የትምህርት አይነት ጨምር (Add Course)</button>
                 </form>
                 <div style="overflow-x: auto; max-height: 400px;">
                     <table>
-                        <tr><th>Code</th><th>Title</th><th>Cr.Hr</th><th>Class</th><th>Teacher</th><th>Delete</th></tr>
+                        <tr><th>ኮድ (Code)</th><th>ትምህርት (Title)</th><th>ሰዓት (Cr.Hr)</th><th>ክፍል (Class)</th><th>መምህር (Teacher)</th><th>አጥፋ (Delete)</th></tr>
                         <%- cRows %>
                     </table>
                 </div>
@@ -168,33 +167,29 @@
 
         <!-- 📂 አጠቃላይ የዲሬክተር ሪፖርት -->
         <div class="card" style="text-align: center; background: #fdf2e9; border-color: #e67e22;">
-            <h3 style="color: #d35400;">📁 የዲሬክተር ሳምንታዊ እና ወርሃዊ ሪፖርት</h3>
-            <p>የሁሉም ክፍሎች የመገኘት (Attendance) ሪፖርቶችን በአንድ ላይ ለማየት</p>
+            <h3 style="color: #d35400;">📁 የዲሬክተር ሳምንታዊ እና ወርሃዊ ሪፖርት (Director Weekly & Monthly Report)</h3>
+            <p>የሁሉም ክፍሎች የመገኘት (Attendance) ሪፖርቶችን በአንድ ላይ ለማየት (View overall attendance reports for all classes)</p>
             <a href="/director-report" target="_blank" style="display: inline-block; background: #8e44ad; color: white; padding: 12px 25px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
-                📂 ሪፖርቱን ክፈት (View Director Report)
+                📂 ሪፖርቱን ክፈት (Open Director Report)
             </a>
         </div>
 
-                        <!-- 👨‍🎓 ወደ የተመዘገቡ ተማሪዎች ገጽ መሄጃ አዝራር -->
+        <!-- 👨‍🎓 ወደ የተመዘገቡ ተማሪዎች ገጽ መሄጃ አዝራር -->
         <div class="card" style="text-align: center; background: #e8f8f5; border-color: #1abc9c;">
-            <h3 style="color: #16a085;">👨‍🎓 የተመዘገቡ ተማሪዎች ማህደር (Registered Students)</h3>
-            <p style="color: #555;">የተመዘገቡ ተማሪዎችን ዝርዝር በየክፍሉ እና በየሴክሽኑ ለማየት፣ እንዲሁም የ ID ፍለጋ ለማድረግ እዚህ ይጫኑ።</p>
+            <h3 style="color: #16a085;">👨‍🎓 የተመዘገቡ ተማሪዎች ማህደር (Registered Students Database)</h3>
+            <p style="color: #555;">የተመዘገቡ ተማሪዎችን ዝርዝር በየክፍሉ እና በየሴክሽኑ ለማየት፣ እንዲሁም የ ID ፍለጋ ለማድረግ እዚህ ይጫኑ።<br>(Click here to view the categorized list of registered students and search by ID/Name.)</p>
             <a href="/admin/registered-students" target="_blank" style="display: inline-block; background: #1abc9c; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 18px; margin-top: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                📂 የተማሪዎችን ዝርዝር ክፈት (View Students)
+                📂 የተማሪዎችን ዝርዝር ክፈት (Open Students List)
             </a>
         </div>
 
-            
-            
-        </div>
+    </div>
 
-        
-
-    <!-- የ Quill Editor ስክሪፕት (ማስታወቂያው ፎርም submit ሲደረግ ጽሁፉን ለማንበብ) -->
+    <!-- የ Quill Editor ስክሪፕት -->
     <script>
         var quill = new Quill('#editor', {
             theme: 'snow',
-            placeholder: 'መልዕክትዎን እዚህ ይጻፉ...',
+            placeholder: 'መልዕክትዎን እዚህ ይጻፉ... (Write your message here...)',
             modules: {
                 toolbar: [
                     [{ 'font': [] }, { 'size': [] }],
@@ -210,7 +205,6 @@
             }
         });
 
-        // ፎርሙ ሲላክ የ Quill ውበት ያለው ጽሁፍ ወደ hidden input እንዲገባ
         document.getElementById('notifForm').onsubmit = function() {
             var html = document.querySelector('#editor .ql-editor').innerHTML;
             document.getElementById('hiddenMessage').value = html;
