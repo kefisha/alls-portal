@@ -400,6 +400,69 @@ app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 },
         res.redirect(`/student-register?lang=${lang}&error=db`);
     }
 });
+// ==========================================
+// 📝 አዲስ ተማሪ መመዝገቢያ (ከዋናው ገጽ የሚመጣውን መቀበያ)
+// ==========================================
+const extraCols = ["mother_name TEXT", "region TEXT", "zone TEXT", "woreda TEXT", "kebele TEXT", "emergency_name TEXT", "emergency_phone TEXT"];
+extraCols.forEach(col => {
+    db.run(`ALTER TABLE students ADD COLUMN ${col}`, () => {});
+    db.run(`ALTER TABLE pending_students ADD COLUMN ${col}`, () => {});
+});
+
+app.post('/register-student', upload.single('bank_slip'), (req, res) => {
+    const { name, mother_name, gender, phone, class_level, region, zone, woreda, kebele, emergency_name, emergency_phone, transaction_id } = req.body;
+    
+    // ፎቶ ከተላከ ፎቶውን፣ የትራንዛክሽን ቁጥር ከተጻፈ ደግሞ ቁጥሩን ይይዛል
+    const paymentProof = req.file ? req.file.filename : (transaction_id ? transaction_id.trim() : '');
+
+    const autoID = generateStudentID();
+    const autoPIN = generate4DigitPIN();
+    const hashedPIN = bcrypt.hashSync(autoPIN, 10);
+
+    assignClassSection(class_level, (assignedSection) => {
+        const finalClass = assignedSection || class_level;
+        db.run(
+            `INSERT INTO pending_students (student_id, password, name, gender, phone, class_level, bank_slip_val) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [autoID, hashedPIN, name, gender, phone, finalClass, paymentProof],
+            function(err) {
+                if (err) {
+                    console.error(err);
+                    return res.redirect('/?error=db');
+                }
+                db.run(
+                    `UPDATE pending_students SET mother_name = ?, region = ?, zone = ?, woreda = ?, kebele = ?, emergency_name = ?, emergency_phone = ? WHERE student_id = ?`,
+                    [mother_name || '', region || '', zone || '', woreda || '', kebele || '', emergency_name || '', emergency_phone || '', autoID],
+                    () => {
+                        res.send(`
+                            <!DOCTYPE html>
+                            <html lang="am">
+                            <head>
+                                <meta charset="UTF-8">
+                                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                                <title>Registration Successful</title>
+                            </head>
+                            <body style="font-family:sans-serif; background:#eef2f5; display:flex; justify-content:center; align-items:center; min-height:100vh; margin:0;">
+                                <div style="background:white; padding:30px; border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,0.15); max-width:420px; width:90%; text-align:center; border-top:6px solid #27ae60;">
+                                    <h2 style="color:#27ae60; margin-top:0;">✅ ምዝገባው ተሳክቷል!<br><span style="font-size:16px; color:#555;">Registration Submitted!</span></h2>
+                                    <p style="color:#333; font-size:15px;">እባክዎ የሚከተሉትን መረጃዎች ጽፈው ይያዙ (አድሚኑ ሲያጸድቅልዎ በዚህ ይገባሉ)፦</p>
+                                    <div style="background:#f8f9fa; padding:15px; border-radius:8px; border:1px solid #ddd; margin:20px 0; text-align:left; font-size:16px; line-height:1.8;">
+                                        <b>👤 ስም (Name):</b> ${name}<br>
+                                        <b>🆔 መታወቂያ (ID):</b> <span style="color:#2980b9; font-weight:bold;">${autoID}</span><br>
+                                        <b>🔑 የይለፍ ቃል (PIN):</b> <span style="color:#e74c3c; font-weight:bold;">${autoPIN}</span><br>
+                                        <b>🏫 ክፍል (Class):</b> ${finalClass}
+                                    </div>
+                                    <a href="/" style="display:inline-block; background:#2980b9; color:white; padding:12px 25px; text-decoration:none; border-radius:6px; font-weight:bold;">⬅️ ወደ መግቢያ ገጽ ተመለስ (Back to Login)</a>
+                                </div>
+                            </body>
+                            </html>
+                        `);
+                    }
+                );
+            }
+        );
+    });
+});
+
 
 app.get('/download-pending-slip/:id', (req, res) => {
     function generatePDF(st, res) {
