@@ -4,114 +4,91 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Amanuel Light and Life School - Portal</title>
+    <!-- SweetAlert ለቆንጆ ማሳወቂያዎች -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
-        /* 🎨 አጠቃላይ የጀርባ ቀለም እና ፎንት */
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            background: linear-gradient(135deg, #1f4e79 0%, #3498db 100%);
-            min-height: 100vh; 
-            margin: 0; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            color: #333; 
-        }
-
-        /* 🏫 የትምህርት ቤቱ ርዕስ ንድፍ */
-        .header-text { 
-            text-align: center; color: white; margin-top: 50px; margin-bottom: 20px;
-            text-shadow: 2px 2px 5px rgba(0,0,0,0.3); 
-        }
-        .header-text h1 { margin: 0; font-size: 2.5em; }
-
-        /* 📦 የካርዶች አጠቃላይ ንድፍ */
-        .card { 
-            background: white; border-radius: 12px; padding: 30px; 
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2); 
-            width: 100%; max-width: 450px; margin-bottom: 30px;
-        }
-
-        .card h2 { text-align: center; margin-top: 0; color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; margin-bottom: 20px; }
-
-        /* ✍️ የፎርም መጻፊያ ሳጥኖች */
-        input[type="text"], input[type="password"], input[type="number"], select { 
-            width: 100%; padding: 12px; margin-bottom: 15px; 
-            border: 1px solid #ccd1d9; border-radius: 6px; 
-            box-sizing: border-box; font-size: 15px; background: #fdfdfd;
-        }
-        input:focus, select:focus { border-color: #3498db; outline: none; background: white; }
-
-        /* 🔘 ራዲዮ በተን (የተጠቃሚ አይነት መምረጫ) */
-        .role-selector {
-            display: flex; justify-content: space-around; margin-bottom: 20px; 
-            background: #f4f6f9; padding: 10px; border-radius: 8px; border: 1px solid #e0e6ed;
-        }
-        .role-selector label { font-weight: bold; color: #1f4e79; cursor: pointer; }
-
-        /* 🔘 አዝራሮች (Buttons) */
-        button.action-btn { 
-            width: 100%; padding: 14px; border: none; border-radius: 6px; 
-            color: white; font-weight: bold; font-size: 16px; cursor: pointer; 
-            transition: background 0.3s ease;
-        }
-        .btn-login { background: #e67e22; }
-        .btn-login:hover { background: #d35400; }
+        /* 🎨 አጠቃላይ የጀርባ ቀለም */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #1f4e79 0%, #3498db 100%); min-height: 100vh; margin: 0; display: flex; flex-direction: column; align-items: center; color: #333; }
         
-        .btn-register { background: #27ae60; }
-        .btn-register:hover { background: #219653; }
+        /* 🌍 የቋንቋ መቀየሪያ ንድፍ */
+        .lang-toggle { position: absolute; top: 15px; right: 15px; background: rgba(255,255,255,0.9); padding: 5px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        body.lang-am .en { display: none !important; }
+        body.lang-en .am { display: none !important; }
 
-        /* 📂 ፋይል ማያያዣ */
+        .header-text { text-align: center; color: white; margin-top: 60px; margin-bottom: 20px; text-shadow: 2px 2px 5px rgba(0,0,0,0.3); }
+        .header-text h1 { margin: 0; font-size: 2.5em; }
+        .card { background: white; border-radius: 12px; padding: 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); width: 100%; max-width: 450px; margin-bottom: 30px; }
+        .card h2 { text-align: center; margin-top: 0; color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; margin-bottom: 20px; }
+        input[type="text"], input[type="password"], select { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ccd1d9; border-radius: 6px; box-sizing: border-box; font-size: 15px; background: #fdfdfd; }
+        input:focus, select:focus { border-color: #3498db; outline: none; background: white; }
+        .role-selector { display: flex; justify-content: space-around; margin-bottom: 20px; background: #f4f6f9; padding: 10px; border-radius: 8px; border: 1px solid #e0e6ed; }
+        .role-selector label { font-weight: bold; color: #1f4e79; cursor: pointer; }
+        button.action-btn { width: 100%; padding: 14px; border: none; border-radius: 6px; color: white; font-weight: bold; font-size: 16px; cursor: pointer; transition: background 0.3s ease; }
+        .btn-login { background: #e67e22; } .btn-login:hover { background: #d35400; }
+        .btn-register { background: #27ae60; } .btn-register:hover { background: #219653; }
         .file-upload { border: 2px dashed #bdc3c7; padding: 10px; text-align: center; border-radius: 6px; margin-bottom: 15px; background: #fafafa; }
+        .forgot-btn { background: none; border: none; color: #3498db; text-decoration: underline; cursor: pointer; font-size: 14px; margin-top: 10px; width: 100%; text-align: center; }
     </style>
 </head>
-<body>
+<body class="lang-am">
     
-    <!-- 🏫 የትምህርት ቤቱ ርዕስ -->
+    <!-- 🌍 ቋንቋ መምረጫ (Language Toggle) -->
+    <div class="lang-toggle">
+        <button onclick="setLang('am')" id="btn-am" style="background:#27ae60; color:white; padding:5px 15px; border-radius:5px; border:none; cursor:pointer; font-weight:bold;">🇪🇹 አማርኛ</button>
+        <button onclick="setLang('en')" id="btn-en" style="background:transparent; color:#333; padding:5px 15px; border-radius:5px; border:none; cursor:pointer; font-weight:bold;">🇬🇧 English</button>
+    </div>
+
+    <!-- 🏫 ርዕስ -->
     <div class="header-text">
         <h1>🎓 Amanuel Light and Life School</h1>
-        <p>ወደ ትምህርት ቤታችን ፖርታል በሰላም መጡ!</p>
+        <p><span class="am">ወደ ትምህርት ቤታችን ፖርታል በሰላም መጡ!</span><span class="en">Welcome to our School Portal!</span></p>
     </div>
 
-    <!-- 🔐 1. መግቢያ ካርድ (Login Section) - ከላይ -->
+    <!-- 🔐 1. መግቢያ ካርድ -->
     <div class="card" style="border-top: 5px solid #e67e22;">
-        <h2>🔐 ወደ ፖርታል መግቢያ (Login)</h2>
+        <h2>🔐 <span class="am">ወደ ፖርታል መግቢያ</span><span class="en">Login to Portal</span></h2>
         <form action="/login" method="POST">
             
-            <!-- የተጠቃሚ አይነት መምረጫ (Role Selector) -->
             <div class="role-selector">
-                <label><input type="radio" name="role" value="student" checked> ተማሪ</label>
-                <label><input type="radio" name="role" value="teacher"> መምህር</label>
-                <label><input type="radio" name="role" value="admin"> አድሚን</label>
+                <label><input type="radio" name="role" value="student" checked> <span class="am">ተማሪ</span><span class="en">Student</span></label>
+                <label><input type="radio" name="role" value="teacher"> <span class="am">መምህር</span><span class="en">Teacher</span></label>
+                <label><input type="radio" name="role" value="admin"> <span class="am">አድሚን</span><span class="en">Admin</span></label>
             </div>
 
-            <label style="font-weight:bold; color:#555; display:block; margin-bottom:5px;">👤 መታወቂያ ቁጥር (ID):</label>
+            <label style="font-weight:bold; color:#555; display:block; margin-bottom:5px;">👤 <span class="am">መታወቂያ ቁጥር (ID):</span><span class="en">ID Number:</span></label>
             <input type="text" name="username" placeholder="ALLS-1234 / ADMIN" required>
-
-            <label style="font-weight:bold; color:#555; display:block; margin-bottom:5px;">🔑 የይለፍ ቃል (Password):</label>
+            
+            <label style="font-weight:bold; color:#555; display:block; margin-bottom:5px;">🔑 <span class="am">የይለፍ ቃል (Password):</span><span class="en">Password:</span></label>
             <input type="password" name="password" placeholder="••••••••" required>
             
-            <button type="submit" class="action-btn btn-login">ግባ (Login)</button>
+            <button type="submit" class="action-btn btn-login"><span class="am">ግባ (Login)</span><span class="en">Sign In</span></button>
         </form>
+        
+        <!-- ❓ ፓስወርድ ረስተዋል ቁልፍ -->
+        <button class="forgot-btn" onclick="recoverPassword()">
+            <span class="am">የይለፍ ቃል ረስተዋል? (ፓስወርድ ለማግኘት እዚህ ይጫኑ)</span>
+            <span class="en">Forgot Password? (Click here to recover)</span>
+        </button>
     </div>
 
-    <!-- 📝 2. የአዲስ ተማሪ መመዝገቢያ (Registration Section) - ከታች -->
+    <!-- 📝 2. አዲስ ተማሪ መመዝገቢያ -->
     <div class="card" style="border-top: 5px solid #27ae60;">
-        <h2>📝 አዲስ ተማሪ ምዝገባ (Register)</h2>
+        <h2>📝 <span class="am">አዲስ ተማሪ ምዝገባ</span><span class="en">New Student Registration</span></h2>
         <form action="/register-student" method="POST" enctype="multipart/form-data">
             
-            <input type="text" name="name" placeholder="👤 የተማሪው ሙሉ ስም" required>
+            <input type="text" name="name" placeholder="👤 የተማሪው ሙሉ ስም / Full Name" required>
             
             <div style="display:flex; gap:10px;">
                 <select name="gender" required>
-                    <option value="">⚧ ፆታ ይምረጡ</option>
-                    <option value="Male">ወንድ</option>
-                    <option value="Female">ሴት</option>
+                    <option value="">⚧ ፆታ / Gender</option>
+                    <option value="Male">ወንድ / Male</option>
+                    <option value="Female">ሴት / Female</option>
                 </select>
-                <input type="text" name="phone" placeholder="📞 ስልክ ቁጥር" required>
+                <input type="text" name="phone" placeholder="📞 ስልክ / Phone Number" required>
             </div>
 
             <select name="class_level" required>
-                <option value="">🏫 የሚገቡበትን ክፍል ይምረጡ</option>
+                <option value="">🏫 የሚገቡበትን ክፍል ይምረጡ / Select Class</option>
                 <option value="KG 1">KG 1</option>
                 <option value="KG 2">KG 2</option>
                 <option value="KG 3">KG 3</option>
@@ -126,13 +103,77 @@
             </select>
 
             <div class="file-upload">
-                <label style="font-weight:bold; color:#555; display:block; margin-bottom:5px;">🧾 የባንክ ክፍያ ደረሰኝ ያያይዙ</label>
+                <label style="font-weight:bold; color:#555; display:block; margin-bottom:5px;">🧾 <span class="am">የባንክ ክፍያ ደረሰኝ ያያይዙ</span><span class="en">Attach Bank Slip</span></label>
                 <input type="file" name="bank_slip" required style="border:none; padding:0; background:transparent;">
             </div>
 
-            <button type="submit" class="action-btn btn-register">አሁን ተመዝገብ</button>
+            <button type="submit" class="action-btn btn-register"><span class="am">አሁን ተመዝገብ</span><span class="en">Register Now</span></button>
         </form>
     </div>
 
+    <script>
+        // የቋንቋ ማስተካከያ
+        function setLang(lang) {
+            document.body.className = 'lang-' + lang;
+            localStorage.setItem('prefLang', lang);
+            document.getElementById('btn-am').style.background = lang === 'am' ? '#27ae60' : 'transparent';
+            document.getElementById('btn-am').style.color = lang === 'am' ? 'white' : '#333';
+            document.getElementById('btn-en').style.background = lang === 'en' ? '#2980b9' : 'transparent';
+            document.getElementById('btn-en').style.color = lang === 'en' ? 'white' : '#333';
+        }
+        document.addEventListener("DOMContentLoaded", function() {
+            let savedLang = localStorage.getItem('prefLang') || 'am';
+            setLang(savedLang);
+        });
+
+        // 🚨 የፓስወርድ ማግኛ (Forgot Password Logic)
+        async function recoverPassword() {
+            const isAm = document.body.classList.contains('lang-am');
+            const { value: formValues } = await Swal.fire({
+                title: isAm ? 'የይለፍ ቃል ማግኛ' : 'Password Recovery',
+                html:
+                    `<p style="font-size:14px; color:#555;">${isAm ? 'እባክዎ የተማሪውን/መምህሩን መታወቂያ እና ሲመዘገቡ የሰጡትን ስልክ ቁጥር በትክክል ያስገቡ።' : 'Please enter your ID and registered phone number.'}</p>` +
+                    `<input id="swal-id" class="swal2-input" placeholder="${isAm ? 'መታወቂያ (ID)' : 'ID Number'}">` +
+                    `<input id="swal-phone" class="swal2-input" placeholder="${isAm ? 'ስልክ ቁጥር (Phone)' : 'Phone Number'}">`,
+                focusConfirm: false,
+                confirmButtonText: isAm ? 'ፈልግ (Search)' : 'Recover',
+                confirmButtonColor: '#3498db',
+                preConfirm: () => {
+                    return {
+                        id: document.getElementById('swal-id').value.toUpperCase(),
+                        phone: document.getElementById('swal-phone').value
+                    }
+                }
+            });
+
+            if (formValues && formValues.id && formValues.phone) {
+                // መረጃውን ወደ ሰርቨሩ መላክ
+                const response = await fetch('/api/recover-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formValues)
+                });
+                
+                const result = await response.json();
+                
+                if(result.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: isAm ? 'ተሳክቷል!' : 'Success!',
+                        html: `<div style="font-size: 18px; margin-top:10px;">${isAm ? 'አዲሱ የይለፍ ቃልዎ:' : 'Your New Password:'} <br><br><b style="font-size:24px; color:#e74c3c; background:#f4f6f9; padding:10px; border-radius:5px;">${result.newPassword}</b></div><br><p style="color:#27ae60; font-size:14px;">${isAm ? 'እባክዎ ይህንን የይለፍ ቃል ጽፈው ይያዙት!' : 'Please write this down and keep it safe!'}</p>`,
+                        confirmButtonText: 'OK',
+                        confirmButtonColor: '#27ae60'
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: isAm ? 'ስህተት' : 'Error',
+                        text: isAm ? 'ያስገቡት መታወቂያ ወይም ስልክ ቁጥር ትክክል አይደለም።' : 'Invalid ID or Phone number.',
+                        confirmButtonColor: '#e74c3c'
+                    });
+                }
+            }
+        }
+    </script>
 </body>
 </html>
