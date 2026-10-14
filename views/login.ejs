@@ -26,18 +26,20 @@
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         .section-divider { background: #f0f4f8; padding: 8px 12px; border-left: 4px solid #3498db; border-radius: 4px; font-weight: bold; color: #1f4e79; margin: 10px 0 15px 0; font-size: 14px; }
 
-        .role-selector { display: flex; justify-content: space-around; margin-bottom: 20px; background: #f4f6f9; padding: 10px; border-radius: 8px; border: 1px solid #e0e6ed; }
-        .role-selector label { font-weight: bold; color: #1f4e79; cursor: pointer; }
+        .role-selector, .payment-selector { display: flex; justify-content: space-around; margin-bottom: 15px; background: #f4f6f9; padding: 10px; border-radius: 8px; border: 1px solid #e0e6ed; gap: 10px; }
+        .role-selector label, .payment-selector label { font-weight: bold; color: #1f4e79; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 5px; }
         
         button.action-btn { width: 100%; padding: 14px; border: none; border-radius: 6px; color: white; font-weight: bold; font-size: 16px; cursor: pointer; transition: background 0.3s ease; }
         .btn-login { background: #e67e22; } .btn-login:hover { background: #d35400; }
         .btn-register { background: #27ae60; } .btn-register:hover { background: #219653; }
         
-        .file-upload { border: 2px dashed #bdc3c7; padding: 12px; text-align: center; border-radius: 6px; margin-bottom: 15px; background: #fafafa; }
+        .file-upload { border: 2px dashed #bdc3c7; padding: 14px; text-align: center; border-radius: 6px; margin-bottom: 15px; background: #fafafa; }
+        .trans-box { border: 2px solid #3498db; padding: 14px; border-radius: 6px; margin-bottom: 15px; background: #f4f9fd; display: none; }
         .forgot-btn { background: none; border: none; color: #3498db; text-decoration: underline; cursor: pointer; font-size: 14px; margin-top: 12px; width: 100%; text-align: center; }
 
         @media (max-width: 480px) {
             .grid-2 { grid-template-columns: 1fr; gap: 0; }
+            .payment-selector { flex-direction: column; align-items: flex-start; }
         }
     </style>
 </head>
@@ -52,11 +54,11 @@
     <!-- 🏫 ርዕስ እና ሎጎ -->
     <div class="header-text">
         <img src="/uploads/logo.jpg" alt="Amanuel Logo" style="width: 115px; height: 115px; border-radius: 50%; object-fit: cover; border: 4px solid white; box-shadow: 0 5px 15px rgba(0,0,0,0.3); margin-bottom: 10px; background: white;">
-        <h1> Amanuel Light and Life School</h1>
+        <h1>🎓 Amanuel Light and Life School</h1>
         <p><span class="am">ወደ ትምህርት ቤታችን ፖርታል በሰላም መጡ!</span><span class="en">Welcome to our School Portal!</span></p>
     </div>
 
-    <!--  1. መግቢያ ካርድ (Login) -->
+    <!-- 🔐 1. መግቢያ ካርድ (Login) -->
     <div class="card" style="border-top: 5px solid #e67e22;">
         <h2>🔐 <span class="am">ወደ ፖርታል መግቢያ</span><span class="en">Login to Portal</span></h2>
         <form action="/login" method="POST">
@@ -176,12 +178,36 @@
                 </div>
             </div>
 
-            <!-- መ. የባንክ ደረሰኝ -->
-            <div class="file-upload">
-                <label style="font-weight:bold; color:#555; display:block; margin-bottom:5px;">
-                    🧾 <span class="am">የባንክ ክፍያ ደረሰኝ / ፎቶ ያያይዙ *</span><span class="en">Attach Bank Slip / Photo *</span>
+            <!-- መ. የባንክ ክፍያ ማረጋገጫ (Slip or Transaction Option) -->
+            <div class="section-divider" style="border-left-color: #27ae60;">
+                💳 <span class="am">የባንክ ክፍያ ማረጋገጫ</span><span class="en">Bank Payment Verification</span>
+            </div>
+
+            <div class="payment-selector">
+                <label>
+                    <input type="radio" name="payment_method" value="slip" checked onchange="togglePaymentOption('slip')">
+                    🧾 <span class="am">በደረሰኝ ፎቶ (Bank Slip)</span><span class="en">Upload Bank Slip</span>
                 </label>
-                <input type="file" name="bank_slip" required style="border:none; padding:0; background:transparent; width: 100%;">
+                <label>
+                    <input type="radio" name="payment_method" value="transaction" onchange="togglePaymentOption('transaction')">
+                    🔢 <span class="am">በትራንዛክሽን ቁጥር (Transaction ID)</span><span class="en">Transaction ID / Ref</span>
+                </label>
+            </div>
+
+            <!-- አማራጭ 1፡ የደረሰኝ ፎቶ መላኪያ -->
+            <div id="slipUploadBox" class="file-upload">
+                <label style="font-weight:bold; color:#555; display:block; margin-bottom:8px;">
+                    📷 <span class="am">የባንክ ክፍያ ደረሰኝ ፎቶ ያያይዙ *</span><span class="en">Attach Bank Receipt Photo *</span>
+                </label>
+                <input type="file" name="bank_slip" id="bankSlipInput" accept="image/*,.pdf" required style="border:none; padding:0; background:transparent; width: 100%;">
+            </div>
+
+            <!-- አማራጭ 2፡ የትራንዛክሽን ቁጥር መጻፊያ -->
+            <div id="transactionTextBox" class="trans-box">
+                <label class="field-label" style="color:#1f4e79;">
+                    🔢 <span class="am">የባንክ ትራንዛክሽን / Reference ቁጥር ያስገቡ *</span><span class="en">Enter Bank Transaction / Reference ID *</span>
+                </label>
+                <input type="text" name="transaction_id" id="transactionIdInput" data-am="ምሳሌ: FT24105... (CBE / Telebirr / ሌላ ባንክ)" data-en="e.g. FT24105... (CBE / Telebirr / Other Bank)" style="margin-bottom:0;">
             </div>
 
             <button type="submit" class="action-btn btn-register">
@@ -191,7 +217,29 @@
     </div>
 
     <script>
-        // 🌍 የቋንቋ መቀየሪያ (Labels, Placeholders እና Dropdown Options ይቀይራል)
+        // 💳 የክፍያ ማረጋገጫ አማራጭ መቀያየሪያ (Slip vs Transaction ID)
+        function togglePaymentOption(method) {
+            const slipBox = document.getElementById('slipUploadBox');
+            const transBox = document.getElementById('transactionTextBox');
+            const slipInput = document.getElementById('bankSlipInput');
+            const transInput = document.getElementById('transactionIdInput');
+
+            if (method === 'slip') {
+                slipBox.style.display = 'block';
+                transBox.style.display = 'none';
+                slipInput.required = true;
+                transInput.required = false;
+                transInput.value = '';
+            } else {
+                slipBox.style.display = 'none';
+                transBox.style.display = 'block';
+                slipInput.required = false;
+                transInput.required = true;
+                slipInput.value = '';
+            }
+        }
+
+        // 🌍 የቋንቋ መቀየሪያ
         function setLang(lang) {
             document.body.className = 'lang-' + lang;
             localStorage.setItem('prefLang', lang);
@@ -201,12 +249,10 @@
             document.getElementById('btn-en').style.background = lang === 'en' ? '#2980b9' : 'transparent';
             document.getElementById('btn-en').style.color = lang === 'en' ? 'white' : '#333';
 
-            // የ Input Placeholders መቀየር
             document.querySelectorAll('input[data-am]').forEach(inp => {
                 inp.placeholder = lang === 'am' ? inp.getAttribute('data-am') : inp.getAttribute('data-en');
             });
 
-            // የ Select Options ጽሁፍ መቀየር
             document.querySelectorAll('option.lang-opt').forEach(opt => {
                 opt.textContent = lang === 'am' ? opt.getAttribute('data-am') : opt.getAttribute('data-en');
             });
