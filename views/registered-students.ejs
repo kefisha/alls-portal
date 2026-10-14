@@ -4,13 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Registered Students - Admin</title>
+    <!-- ቆንጆ ፖፕ-አፕ ለማሳየት -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; color: #333; }
-        
-        /* Language Toggle Magic */
         body.lang-am .en { display: none !important; }
         body.lang-en .am { display: none !important; }
-
         .container { max-width: 1200px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-top: 5px solid #2980b9; }
         h2 { color: #2c3e50; text-align: center; border-bottom: 2px solid #ecf0f1; padding-bottom: 15px; }
         .stats-box { background: #fdfdfd; padding: 15px; border-radius: 8px; border-left: 5px solid #2ecc71; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center; flex: 1; }
@@ -18,12 +17,18 @@
         .search-bar { background: #e8f4fd; padding: 20px; border-radius: 8px; border: 1px solid #3498db; margin: 20px 0; }
         .search-bar input { width: 100%; border: 1px solid #3498db; padding: 12px; font-size: 16px; border-radius: 5px; box-sizing: border-box; }
         .btn-orange { background: #f39c12; color: white; text-decoration: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; display: inline-block; }
+        
+        /* የባርኮድ ስካነር ንድፍ */
+        .barcode-section { background: #e8f8f5; padding: 25px; border-radius: 8px; border: 2px dashed #1abc9c; margin-bottom: 20px; text-align: center; animation: pulse 2s infinite; }
+        .barcode-section input { width: 100%; max-width: 400px; padding: 15px; font-size: 22px; text-align: center; border: 2px solid #1abc9c; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-weight: bold; color: #2c3e50; }
+        .barcode-section input:focus { outline: none; border-color: #16a085; background: #fff; }
+        @keyframes pulse { 0% { border-color: #1abc9c; } 50% { border-color: #a3e4d7; } 100% { border-color: #1abc9c; } }
     </style>
 </head>
 <body class="lang-am">
     <div class="container" id="studentsContainer">
         
-        <!-- Top Navigation -->
+        <!-- 🌍 Top Navigation -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <a href="/admin" style="background: #7f8c8d; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;">
                 ⬅️ <span class="am">ወደ ኋላ ተመለስ</span><span class="en">Back to Dashboard</span>
@@ -37,6 +42,18 @@
         
         <h2>👨‍🎓 <span class="am">የተመዘገቡ ተማሪዎች ዝርዝር</span><span class="en">Registered Students List</span></h2>
         
+        <!-- 📷 አዲሱ የባርኮድ ስካነር ሣጥን -->
+        <div class="barcode-section">
+            <label style="font-weight: bold; color: #16a085; font-size: 18px; display: block; margin-bottom: 10px;">
+                📷 <span class="am">የተማሪ መታወቂያ (Barcode) እዚህ ስካን ያድርጉ</span><span class="en">Scan Student Barcode Here</span>
+            </label>
+            <input type="text" id="barcodeInput" placeholder="ALLS-1234" autofocus autocomplete="off">
+            <p style="font-size: 13px; color: #7f8c8d; margin-top: 10px;">
+                <span class="am">ስካነሩን ተጠቅመው ሲያነቡ የተማሪው ሙሉ መረጃ ወዲያውኑ ይመጣል::</span>
+                <span class="en">Scan the barcode and the student's info will pop up instantly.</span>
+            </p>
+        </div>
+
         <div style="margin-bottom: 20px;">
             <a href="/admin/export-students" class="btn-orange">📥 <span class="am">ሁሉንም ዳውንሎድ አድርግ</span><span class="en">Download All (Excel)</span></a>
         </div>
@@ -46,6 +63,7 @@
             <div class="stats-box" style="border-left-color: #e74c3c;"><div style="font-size:24px; font-weight:bold; color:#2c3e50;"><%= femaleCount || 0 %></div><div><span class="am">ሴት ተማሪዎች</span><span class="en">Female Students</span></div></div>
         </div>
 
+        <!-- 🔍 መፈለጊያ -->
         <div class="search-bar">
             <label style="font-weight: bold; color: #2980b9;">🔍 <span class="am">በተማሪ ID ወይም ስም መፈለጊያ፡</span><span class="en">Search by Student ID or Name:</span></label>
             <input type="text" id="searchInput" onkeyup="searchStudent()" placeholder="ID / መታወቂያ: ALLS-1234">
@@ -57,14 +75,12 @@
     </div>
 
     <script>
-        // Language Toggle Script
+        // 🌍 የቋንቋ ማስተካከያ
         function setLang(lang) {
             document.body.className = 'lang-' + lang;
             localStorage.setItem('prefLang', lang);
-            
             document.getElementById('btn-am').style.background = lang === 'am' ? '#27ae60' : 'transparent';
             document.getElementById('btn-am').style.color = lang === 'am' ? 'white' : '#333';
-            
             document.getElementById('btn-en').style.background = lang === 'en' ? '#2980b9' : 'transparent';
             document.getElementById('btn-en').style.color = lang === 'en' ? 'white' : '#333';
         }
@@ -72,9 +88,64 @@
         document.addEventListener("DOMContentLoaded", function() {
             let savedLang = localStorage.getItem('prefLang') || 'am';
             setLang(savedLang);
+            // ገጹ ሲከፈት ኮርሰሩ በቀጥታ ባርኮድ ስካነሩ ላይ እንዲቀመጥ
+            document.getElementById('barcodeInput').focus();
         });
 
-        // Search Script
+        // 📷 የባርኮድ ስካነር ጃቫስክሪፕት (Magic Logic)
+        document.getElementById('barcodeInput').addEventListener('keypress', async function (e) {
+            // ባርኮድ ስካነር ካነበበ በኋላ ሁልጊዜ 'Enter' ነው የሚነካው
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                let studentId = this.value.trim();
+                this.value = ''; // ለቀጣይ ስካን ሣጥኑን ባዶ ያደርገዋል
+                
+                if (!studentId) return;
+
+                const isAm = document.body.classList.contains('lang-am');
+
+                try {
+                    let response = await fetch('/api/student/' + studentId);
+                    let result = await response.json();
+
+                    if (result.success) {
+                        let st = result.student;
+                        // ውብ የሆነ ፖፕ-አፕ በተማሪው መረጃ
+                        Swal.fire({
+                            title: isAm ? '👨‍🎓 የተማሪ መረጃ' : '👨‍🎓 Student Information',
+                            html: `
+                                <div style="text-align: left; font-size: 16px; line-height: 1.8; background: #f4f6f9; padding: 20px; border-radius: 10px; border: 1px solid #ccd1d9;">
+                                    <b>🆔 መታወቂያ (ID):</b> <span style="color:#2980b9; font-weight:bold; font-size:18px;">${st.student_id}</span><br>
+                                    <b>👤 ሙሉ ስም (Name):</b> <span style="font-weight:bold;">${st.name}</span><br>
+                                    <b>⚧ ፆታ (Gender):</b> ${st.gender === 'Male' && isAm ? 'ወንድ' : (st.gender === 'Female' && isAm ? 'ሴት' : st.gender)}<br>
+                                    <b>🏫 ክፍል (Class):</b> <span style="color:#27ae60; font-weight:bold;">${st.class_level}</span><br>
+                                    <b>📞 ስልክ (Phone):</b> ${st.phone || '-'}<br>
+                                </div>
+                            `,
+                            icon: 'info',
+                            confirmButtonText: isAm ? 'ዝጋ (Close)' : 'Close',
+                            confirmButtonColor: '#3498db'
+                        }).then(() => {
+                            // ፖፕ-አፑ ሲዘጋ ኮርሰሩ መልሶ ስካነሩ ላይ እንዲቀመጥ
+                            document.getElementById('barcodeInput').focus();
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: isAm ? 'አልተገኘም!' : 'Not Found!',
+                            text: isAm ? 'በዚህ መታወቂያ የተመዘገበ ተማሪ የለም።' : 'No student found with this ID.',
+                            confirmButtonColor: '#e74c3c'
+                        }).then(() => {
+                            document.getElementById('barcodeInput').focus();
+                        });
+                    }
+                } catch (err) {
+                    console.error("Error fetching student:", err);
+                }
+            }
+        });
+
+        // 🔍 መፈለጊያ (Search)
         function searchStudent() {
             var input = document.getElementById("searchInput");
             var filter = input.value.toUpperCase();
