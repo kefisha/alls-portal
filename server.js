@@ -1045,6 +1045,22 @@ app.get('/api/student/:id', (req, res) => {
         res.json({ success: true, student: student });
     });
 });
+// ==========================================
+// 🗄️ አዲሶቹን የተማሪ መረጃ አምዶች (Columns) ወደ ዳታቤዝ መጨመሪያ
+// ==========================================
+const newStudentCols = [
+    "mother_name TEXT",
+    "region TEXT",
+    "zone TEXT",
+    "woreda TEXT",
+    "kebele TEXT",
+    "emergency_name TEXT",
+    "emergency_phone TEXT"
+];
+newStudentCols.forEach(col => {
+    db.run(`ALTER TABLE students ADD COLUMN ${col}`, () => {});
+    db.run(`ALTER TABLE pending_students ADD COLUMN ${col}`, () => {});
+});
 
 app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
