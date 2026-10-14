@@ -1,212 +1,222 @@
 <!DOCTYPE html>
-<html lang="<%= lang %>">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Director Hub</title>
-    <style>
-        body{font-family:sans-serif; background:#eef2f5; padding:20px;} 
-        .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px; overflow-x:auto; box-shadow: 0 2px 4px rgba(0,0,0,0.05);} 
-        table{width:100%; border-collapse:collapse; min-width:600px;} 
-        th,td{border:1px solid #ccc; padding:8px; text-align:center;} 
-        th{background:#2c3e50; color:white;} 
-        input,select{padding:6px;} 
-        .toggle-btn { background:#2c3e50; color:white; padding:15px 30px; font-size:16px; border:none; border-radius:8px; cursor:pointer; font-weight:bold; width:100%; max-width:400px; margin: 10px auto; display:block;} 
-        .charts-container { display: flex; flex-wrap: wrap; gap: 20px; } 
-        .chart-box { flex: 1; min-width: 300px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    </style>
-    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script>function toggleSection(id) { var el = document.getElementById(id); el.style.display = el.style.display === 'none' ? 'block' : 'none'; }</script>
-</head>
-<body>
-    <h2><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 10px;"> 🔐 የዳይሬክተር / አድሚን መቆጣጠሪያ</h2>
-    
-    <div class="charts-container mb-20">
-        <div class="chart-box">
-            <h3 style="text-align:center; color:#2c3e50;">የተማሪዎች ውጤት ስርጭት</h3>
-            <canvas id="performanceChart"></canvas>
-        </div>
-        <div class="chart-box">
-            <h3 style="text-align:center; color:#2c3e50;">የተማሪዎች የስርዓተ-ፆታ ስብጥር</h3>
-            <canvas id="genderChart"></canvas>
-        </div>
-    </div>
-
-    <div class="card" style="background:#e8f4fd;">
-        <h3 style="color:#2980b9;">📢 አዲስ ማስታወቂያ ላክ</h3>
-        <form action="/admin/send-notification" method="POST" enctype="multipart/form-data" id="notifForm">
-            <div id="editor" style="height: 120px; background: white; margin-bottom: 10px;"></div>
-            <input type="hidden" name="message" id="hiddenMessage" required>
-            <label style="font-size: 13px; font-weight:bold; display:block; margin: 10px 0;">📎 ፎቶ ወይም ፋይል አያይዝ (አማራጭ):</label>
-            <input type="file" name="attachment" accept="image/*,.pdf,.doc,.docx" style="margin-bottom:10px;"><br>
-            <button type="submit" style="background:#3498db; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">Send Notification</button>
-        </form>
-        <hr style="margin:20px 0;">
-        <h3 style="color:#555;">📋 የላኳቸው ማስታወቂያዎች</h3>
-        <%- adminNotiRows || '<p style="color:#777;">ምንም መልዕክት አልተላከም</p>' %>
-    </div>
-    
-    <div class="card">
-        <h3>📁 የዳይሬክተር ሳምንታዊ እና ወርሃዊ ሪፖርት</h3>
-        <a href="/director-report" target="_blank" style="background:#8e44ad; color:white; padding:10px 15px; text-decoration:none; border-radius:5px; font-weight:bold; display:inline-block;">📁 View Director Academic Year Report</a>
-    </div>
-    
-    <div class="card">
-        <h3>አዲስ ተመዝጋቢዎች (Pending)</h3>
-        <table><tr><th>Photo</th><th>ID</th><th>Name</th><th>Payment</th><th>Action</th></tr><%- pRows || '<tr><td colspan="5">None</td></tr>' %></table>
-    </div>
-    
-    <div class="card">
-        <h3>ክፍሎችን እና ተቆጣጣሪዎችን (Proctors) ማስተዳደሪያ</h3>
-        <form action="/admin/add-section?lang=<%= lang %>" method="POST" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-            <input type="text" name="name" placeholder="Class Name (e.g. Grade 1 - Section A)" required style="flex:2;">
-            <select name="proctor_name" style="flex:1;"><option value="">-- Select Proctor Teacher --</option><%- teacherOptions %></select>
-            <button type="submit" style="background:#2980b9; color:white; border:none; padding:8px 14px; border-radius:5px;">➕ Add Section</button>
-        </form>
-        <table><tr><th>Section Name</th><th>Proctor Name (Teacher)</th><th>Delete</th><th>Sheets & Excel</th></tr><%- secRows || '<tr><td colspan="4">None</td></tr>' %></table>
-    </div>
-    
-    <div class="card">
-        <h3>አዲስ መምህር ማካተቻ</h3>
-        <form action="/admin/add-teacher?lang=<%= lang %>" method="POST" style="margin-bottom:15px; background:#f9f9f9; padding:15px; border-radius:5px;">
-            <div style="display:flex; gap:10px; margin-bottom:10px;">
-                <input type="text" name="name" placeholder="Teacher Full Name" required style="flex:1;">
-                <input type="text" name="phone" placeholder="Phone Number" required style="flex:1;">
-                <input type="text" name="assigned_sections" placeholder="Assigned Sections" required style="flex:2;">
-            </div>
-            <label style="font-weight:bold; font-size:13px;">Assign Grades:</label><br>
-            <div style="margin:8px 0; display:flex; flex-wrap:wrap; gap:10px;"><%- gradeCheckboxes %></div>
-            <button type="submit" style="background:#2980b9; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">➕ Add Teacher</button>
-        </form>
-    </div>
-    
-    <div class="card">
-        <h3>ትምህርቶችን / Courses ማስተዳደሪያ</h3>
-        <form action="/admin/add-course?lang=<%= lang %>" method="POST" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-            <input type="text" name="code" placeholder="Course Code" required>
-            <input type="text" name="title" placeholder="Course Title" required>
-            <input type="number" name="credit_hours" placeholder="Cr.Hr" required style="width:80px;">
-            <select name="class_level"><%- sectionOptions %></select>
-            <select name="teacher_id"><option value="">-- No Teacher --</option><%- teacherOptions %></select>
-            <button type="submit" style="background:#2980b9; color:white; border:none; padding:8px 14px; border-radius:5px;">➕ Add Course</button>
-        </form>
-        <table><tr><th>Code</th><th>Title</th><th>Cr.Hr</th><th>Section</th><th>Teacher</th><th>Delete</th></tr><%- cRows || '<tr><td colspan="6">None</td></tr>' %></table>
-    </div>
-    
-    <div style="text-align:center; padding: 40px 0; border-top: 2px dashed #ccc; margin-top:30px;">
-        <h3 style="color:#555;">የተማሪዎች እና መምህራን ዝርዝር መረጃ</h3>
-        <button onclick="toggleSection('teachersList')" class="toggle-btn" style="background:#8e44ad;">👨‍🏫 ሁሉንም መምህራን አሳይ</button>
-        <button onclick="toggleSection('studentsList')" class="toggle-btn" style="background:#27ae60;">🎓 ሁሉንም ተማሪዎች አሳይ</button>
-    </div>
-    
-    <div id="teachersList" class="card" style="display:none; border:2px solid #8e44ad;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-            <h3 style="color:#8e44ad; margin:0;">👨‍🏫 የሁሉም መምህራን ዝርዝር</h3>
-            <a href="/admin/export-teachers" style="background:#8e44ad; color:white; padding:8px 15px; border-radius:5px; text-decoration:none; font-weight:bold;">📊 Total Teachers (Excel)</a>
-        </div>
-        <table><tr><th>ID</th><th>Name</th><th>Grades</th><th>Classes</th><th>Phone</th><th>Password</th><th>Edit</th><th>Remove</th></tr><%- tRows || '<tr><td colspan="8">None</td></tr>' %></table>
-    </div>
-    
-    <div id="studentsList" class="card" style="display:none; border:2px solid #27ae60;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-            <h3 style="color:#27ae60; margin:0;">🎓 የሁሉም ተማሪዎች ዝርዝር (በየክፍሉ)</h3>
-            <a href="/admin/export-students" style="background:#27ae60; color:white; padding:8px 15px; border-radius:5px; text-decoration:none; font-weight:bold;">📊 Total Students (Excel)</a>
-        </div>
-        <%- groupedStudentsHtml %>
-    </div>
-    
-    <br><div style="text-align:center;"><a href="/logout" style="color:red; font-weight:bold; font-size:18px;">🔒 ውጣ (Logout)</a></div><br><br>
-    
-    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
-    <script>
-        var quill = new Quill('#editor', { theme: 'snow', modules: { toolbar: [ [{ 'font': [] }, { 'size': [] }], ['bold', 'italic', 'underline', 'strike'], [{ 'color': [] }, { 'background': [] }], [{ 'align': [] }], ['link', 'image'] ] }}); 
-        document.getElementById('notifForm').onsubmit = function() { document.getElementById('hiddenMessage').value = quill.root.innerHTML; };
-        
-        const perfCtx = document.getElementById('performanceChart').getContext('2d');
-        new Chart(perfCtx, {
-            type: 'bar',
-            data: {
-                labels: ['Excellent (>=90)', 'Good (75-89)', 'Average (50-74)', 'Poor (<50)'],
-                datasets: [{
-                    label: 'Students Count',
-                    data: [<%= excellent %>, <%= good %>, <%= average %>, <%= poor %>],
-                    backgroundColor: ['rgba(39, 174, 96, 0.7)', 'rgba(41, 128, 185, 0.7)', 'rgba(241, 196, 15, 0.7)', 'rgba(231, 76, 60, 0.7)'],
-                    borderColor: ['rgb(39, 174, 96)', 'rgb(41, 128, 185)', 'rgb(241, 196, 15)', 'rgb(231, 76, 60)'],
-                    borderWidth: 1
-                }]
-            },
-            options: { responsive: true, scales: { y: { beginAtZero: true } } }
-        });
-<!DOCTYPE html>
 <html lang="am">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - Amanuel Light and Life School</title>
-    <!-- የስታይል ክፍሎች እዚህ አሉ -->
+    
+    <!-- Quill Rich Text Editor (ለማስታወቂያ መጻፊያው ፎንት እና ከለር) -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eef2f5; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 1200px; margin: auto; }
+        h2 { color: #2c3e50; text-align: center; margin-bottom: 30px; font-size: 28px; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 25px; border-top: 4px solid #2980b9; }
+        .card h3 { color: #1f4e79; margin-top: 0; margin-bottom: 20px; font-size: 20px; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
+        th, td { border: 1px solid #e0e0e0; padding: 12px; text-align: center; font-size: 14px; }
+        th { background: #1f4e79; color: white; font-weight: 600; position: sticky; top: 0; }
+        tr:nth-child(even) { background: #f8f9fa; }
+        tr:hover { background: #e8f4fd; }
+        input[type="text"], input[type="number"], select, input[type="file"] { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccd1d9; border-radius: 6px; box-sizing: border-box; font-family: inherit; }
+        button { background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: background 0.3s; }
+        button:hover { background: #2980b9; }
+        .btn-green { background: #27ae60; } .btn-green:hover { background: #219653; }
+        .btn-red { background: #e74c3c; } .btn-red:hover { background: #c0392b; }
+        .btn-orange { background: #f39c12; } .btn-orange:hover { background: #d68910; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .stats-box { background: #fdfdfd; padding: 15px; border-radius: 8px; border-left: 5px solid #2ecc71; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center; }
+        .logout-btn { display: inline-block; background: #e74c3c; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-bottom: 20px; }
+        #editor { height: 150px; background: white; border-radius: 0 0 6px 6px; }
+    </style>
 </head>
 <body>
-<div class="container">
-    <h2>👑 የአድሚን መቆጣጠሪያ ፓነል (Admin Dashboard)</h2>
-    <!-- Academic Year Management Panel -->
-    <div class="card" style="background: #fffcf5; border: 1px solid #f39c12; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-        <h3 style="color: #d35400; margin-top: 0;">🎓 የአካዳሚክ ዓመት ማጠቃለያ (Year-End Actions)</h3>
-        <p style="font-size: 13px; color: #555;">ማሳሰቢያ፦ እነዚህን ተግባራት ከማድረግዎ በፊት እባክዎ የክፍል ውጤቶችን (PDF/Excel) ዳውንሎድ ማድረጎን ያረጋግጡ።</p>
-        
-        <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 15px;">
-            <form action="/admin/archive-year" method="POST" onsubmit="return confirm('እርግጠኛ ነዎት? ይህ የዘንድሮን ውጤት ወደ ማህደር (Archive) አዛውሮ ፖርታሉን ለቀጣይ ዓመት ዜሮ ያደርገዋል!');">
-                <button type="submit" style="background: #e67e22; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-weight: bold; cursor: pointer;">
-                    🗂️ 1. የዓመቱን ውጤት ቋጥሮ ያዝ (Archive Year)
-                </button>
-            </form>
+    <div class="container">
+        <div style="text-align: right;">
+            <a href="/logout" class="logout-btn">🚪 ውጣ (Logout)</a>
+        </div>
 
-            <form action="/admin/promote-students" method="POST" onsubmit="return confirm('እርግጠኛ ነዎት? ሁሉም ተማሪዎች ወደ ቀጣይ ክፍል (ለምሳሌ 1ኛ ክፍል ወደ 2ኛ ክፍል) ያድጋሉ!');">
-                <button type="submit" style="background: #27ae60; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-weight: bold; cursor: pointer;">
-                    🚀 2. ተማሪዎችን ወደ ቀጣይ ክፍል አሳድግ (Promote All)
-                </button>
+        <h2>👑 የዲሬክተር / አድሚን መቆጣጠሪያ (Admin Dashboard)</h2>
+
+        <!-- 🎓 Academic Year Management Panel (የአዲሱ ዓመት ማጠቃለያ) -->
+        <div class="card" style="background: #fffcf5; border-color: #f39c12;">
+            <h3 style="color: #d35400; border-bottom-color: #fce8cd;">🎓 የአካዳሚክ ዓመት ማጠቃለያ (Year-End Actions)</h3>
+            <p style="font-size: 13px; color: #555;">ማሳሰቢያ፦ እነዚህን ተግባራት ከማድረግዎ በፊት እባክዎ የክፍል ውጤቶችን (PDF/Excel) ዳውንሎድ ማድረጎን ያረጋግጡ።</p>
+            
+            <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 15px;">
+                <form action="/admin/archive-year" method="POST" onsubmit="return confirm('እርግጠኛ ነዎት? ይህ የዘንድሮን ውጤት ወደ ማህደር (Archive) አዛውሮ ፖርታሉን ለቀጣይ ዓመት ዜሮ ያደርገዋል!');">
+                    <button type="submit" class="btn-orange">🗂️ 1. የዓመቱን ውጤት ቋጥሮ ያዝ (Archive Year)</button>
+                </form>
+
+                <form action="/admin/promote-students" method="POST" onsubmit="return confirm('እርግጠኛ ነዎት? ሁሉም ተማሪዎች ወደ ቀጣይ ክፍል (ለምሳሌ 1ኛ ክፍል ወደ 2ኛ ክፍል) ያድጋሉ!');">
+                    <button type="submit" class="btn-green">🚀 2. ተማሪዎችን ወደ ቀጣይ ክፍል አሳድግ (Promote All)</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 📢 ማስታወቂያ መላኪያ (ከነ Quill Editor) -->
+        <div class="card">
+            <h3>📢 አዲስ ማስታወቂያ መላኪያ (Send Notification)</h3>
+            <form id="notifForm" action="/admin/save-notice" method="POST" enctype="multipart/form-data">
+                <label>ለማን ይላክ?</label>
+                <select name="target_audience" style="width: 100%; max-width: 300px; display: block; margin-bottom: 15px;">
+                    <option value="ALL">ለማንኛውም ሰው (ALL)</option>
+                    <%- gradeCheckboxes %> <!-- ክፍል ለመምረጥ የሚረዳ (server.js ከሚያመጣው) -->
+                </select>
+
+                <label>መልዕክትዎን ይጻፉ፦</label>
+                <!-- የ Quill Editor መያዣ -->
+                <div id="editor"></div>
+                <input type="hidden" name="message" id="hiddenMessage">
+
+                <label style="display: block; margin-top: 15px;">📎 ፋይል ወይም ፎቶ አያይዝ (አማራጭ):</label>
+                <input type="file" name="attachment" style="max-width: 300px; display: block;">
+
+                <button type="submit" style="margin-top: 15px; width: 100%; max-width: 300px;">📩 ማስታወቂያውን ላክ</button>
             </form>
         </div>
+
+        <!-- 🔔 የተላኩ ማስታወቂያዎች ማሳያ -->
+        <div class="card">
+            <h3>🔔 ቀደም ሲል የተላኩ ማስታወቂያዎች</h3>
+            <div style="max-height: 400px; overflow-y: auto;">
+                <%- adminNotiRows %>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <!-- 👨‍🎓 አዲስ ተማሪዎች (Pending) -->
+            <div class="card" style="border-color: #27ae60;">
+                <h3 style="color: #27ae60; border-bottom-color: #d5f5e3;">🟢 አዲስ አመልካቾች (Pending Approvals)</h3>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <tr><th>#</th><th>ID</th><th>Name</th><th>Payment</th><th>Action</th></tr>
+                        <%- pRows %>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 👩‍🏫 መምህራን አስተዳደር -->
+            <div class="card" style="border-color: #8e44ad;">
+                <h3 style="color: #8e44ad; border-bottom-color: #f4ecf7;">👩‍🏫 መምህራን አስተዳደር (Teachers)</h3>
+                <form action="/admin/add-teacher" method="POST" style="margin-bottom: 15px; background: #fafafa; padding: 15px; border-radius: 8px;">
+                    <input type="text" name="name" placeholder="Full Name" required>
+                    <input type="text" name="phone" placeholder="Phone Number" required>
+                    <label style="display:block; margin-bottom:5px;">የሚያስተምሩት ክፍል (ክፍልና ሴክሽን በኮማ ለይተው ይጻፉ):</label>
+                    <input type="text" name="assigned_sections" placeholder="ምሳሌ: Grade 1 - Section A, Grade 2 - Section B">
+                    <label style="display:block; margin-bottom:5px;">የክፍል ደረጃ (ለማስታወቂያዎች):</label>
+                    <div style="margin-bottom: 10px; font-size: 13px;">
+                        <%- gradeCheckboxes %>
+                    </div>
+                    <button type="submit" class="btn-green" style="width: 100%;">➕ አዲስ መምህር መዝግብ</button>
+                </form>
+                <a href="/admin/export-teachers" class="btn-orange" style="text-decoration:none; display:inline-block; margin-bottom:15px; padding: 8px 15px;">📥 ሁሉንም መምህራን አውርድ (Excel)</a>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <tr><th>ID</th><th>Name</th><th>Grades</th><th>Sections</th><th>Phone</th><th>Pass</th><th>Edit</th><th>Remove</th></tr>
+                        <%- tRows %>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <!-- 🏫 ክፍሎች (Sections) አስተዳደር -->
+            <div class="card">
+                <h3>🏫 የክፍል ሴክሽኖች (Sections)</h3>
+                <form action="/admin/add-section" method="POST" style="display: flex; gap: 10px; margin-bottom: 15px;">
+                    <input type="text" name="name" placeholder="ምሳሌ: Grade 1 - Section A" required style="margin-bottom: 0;">
+                    <button type="submit">➕ ጨምር</button>
+                </form>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <tr><th>Section Name</th><th>Proctor (ተቆጣጣሪ)</th><th>Delete</th><th>Actions</th></tr>
+                        <%- secRows %>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 📚 የትምህርት አይነቶች (Courses) -->
+            <div class="card">
+                <h3>📚 የትምህርት አይነቶች (Courses)</h3>
+                <form action="/admin/add-course" method="POST" style="background: #fafafa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <input type="text" name="code" placeholder="Course Code (e.g. MATH101)" required>
+                        <input type="text" name="title" placeholder="Course Title (e.g. Mathematics)" required>
+                        <input type="number" name="credit_hours" placeholder="Credit Hours" required>
+                        <select name="class_level" required>
+                            <option value="">የትኛውን ክፍል ይምረጡ...</option>
+                            <%- sectionOptions %>
+                        </select>
+                    </div>
+                    <select name="teacher_id" style="margin-top: 10px;">
+                        <option value="">መምህር ይምረጡ (አማራጭ)</option>
+                        <%- teacherOptions %>
+                    </select>
+                    <button type="submit" class="btn-green" style="width: 100%;">➕ የትምህርት አይነት ጨምር</button>
+                </form>
+                <div style="overflow-x: auto; max-height: 400px;">
+                    <table>
+                        <tr><th>Code</th><th>Title</th><th>Cr.Hr</th><th>Class</th><th>Teacher</th><th>Delete</th></tr>
+                        <%- cRows %>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 📂 አጠቃላይ የዲሬክተር ሪፖርት -->
+        <div class="card" style="text-align: center; background: #fdf2e9; border-color: #e67e22;">
+            <h3 style="color: #d35400;">📁 የዲሬክተር ሳምንታዊ እና ወርሃዊ ሪፖርት</h3>
+            <p>የሁሉም ክፍሎች የመገኘት (Attendance) ሪፖርቶችን በአንድ ላይ ለማየት</p>
+            <a href="/director-report" target="_blank" style="display: inline-block; background: #8e44ad; color: white; padding: 12px 25px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+                📂 ሪፖርቱን ክፈት (View Director Report)
+            </a>
+        </div>
+
+        <!-- 👨‍🎓 የተማሪዎች ዝርዝር (Grouped by Class) -->
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; margin-bottom: 20px;">
+                <h3 style="margin: 0; border: none; padding: 0;">👨‍🎓 የነባር ተማሪዎች ዝርዝር (All Students)</h3>
+                <a href="/admin/export-students" class="btn-orange" style="text-decoration:none; padding: 8px 15px; border-radius: 5px;">📥 ሁሉንም ዳውንሎድ አድርግ (Excel)</a>
+            </div>
+            <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+                <div class="stats-box"><div style="font-size:24px; font-weight:bold; color:#2c3e50;"><%= maleCount || 0 %></div><div>ወንድ ተማሪዎች</div></div>
+                <div class="stats-box" style="border-left-color: #e74c3c;"><div style="font-size:24px; font-weight:bold; color:#2c3e50;"><%= femaleCount || 0 %></div><div>ሴት ተማሪዎች</div></div>
+            </div>
+            
+            <!-- ከ server.js የሚመጣው የተማሪዎች ሊስት በክፍል ተከፋፍሎ -->
+            <%- groupedStudentsHtml %>
+        </div>
+
     </div>
 
-    <!-- 💡 ማስታወቂያ እና ካላንደር መለጠፊያ ፎርሙን እዚህ ጋር (ከላይ ወይም ከዳሽቦርዱ ካርዶች መሃል) ፔስት ያድርጉት -->
-    <div class="card" style="background: #f9fbfd; border: 1px solid #cbd5e1; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-        <h3 style="color: #1f4e79; margin-top: 0;">📢 አዲስ ማስታወቂያ እና ካላንደር መለጠፊያ (Admin Notice & Calendar)</h3>
-        
-        <form action="/admin/save-notice" method="POST" enctype="multipart/form-data" style="margin-bottom: 20px;">
-            <label style="font-size: 13px; font-weight: bold;">ለማን ይድረስ?</label>
-            <select name="target_audience" style="width: 100%; padding: 8px; margin-top: 4px; margin-bottom: 10px;">
-                <option value="ALL">ለሁሉም (All Students & Teachers)</option>
-                <option value="Grade 1">ለክፍል 1 (Grade 1)</option>
-                <option value="Grade 2">ለክፍል 2 (Grade 2)</option>
-            </select>
-
-            <label style="font-size: 13px; font-weight: bold;">የማስታወቂያ መልዕክት:</label>
-            <textarea name="message" rows="3" placeholder="ማስታወቂያውን እዚህ ይጻፉ..." required style="width: 100%; padding: 8px; margin-top: 4px; margin-bottom: 10px;"></textarea>
-
-            <label style="font-size: 13px; font-weight: bold;">ፋይል ማያያዥ (ካለ):</label>
-            <input type="file" name="attachment" accept="image/*,.pdf" style="margin-bottom: 10px; display: block;">
-
-            <button type="submit" style="background: #27ae60; color: white; border: none; padding: 8px 15px; border-radius: 5px; font-weight: bold; cursor: pointer;">ማስታወቂያ ለቀቅ</button>
-        </form>
-    </div>
-
-    <!-- ቀደም ሲል የነበሩት የአድሚን ዝርዝሮች (ተማሪዎች መመዝገቢያ፣ ወዘተ) እዚህ ይቀጥላሉ -->
-</div>
-</body>
-</html>
-
-        const genderCtx = document.getElementById('genderChart').getContext('2d');
-        new Chart(genderCtx, {
-            type: 'pie',
-            data: {
-                labels: ['Male', 'Female'],
-                datasets: [{
-                    data: [<%= maleCount %>, <%= femaleCount %>],
-                    backgroundColor: ['rgba(52, 152, 219, 0.8)', 'rgba(233, 30, 99, 0.8)']
-                }]
-            },
-            options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+    <!-- የ Quill Editor ስክሪፕት (ማስታወቂያው ፎርም submit ሲደረግ ጽሁፉን ለማንበብ) -->
+    <script>
+        var quill = new Quill('#editor', {
+            theme: 'snow',
+            placeholder: 'መልዕክትዎን እዚህ ይጻፉ...',
+            modules: {
+                toolbar: [
+                    [{ 'font': [] }, { 'size': [] }],
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [{ 'color': [] }, { 'background': [] }],
+                    [{ 'script': 'super' }, { 'script': 'sub' }],
+                    [{ 'header': '1' }, { 'header': '2' }, 'blockquote', 'code-block'],
+                    [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
+                    [{ 'direction': 'rtl' }, { 'align': [] }],
+                    ['link', 'image', 'video', 'formula'],
+                    ['clean']
+                ]
+            }
         });
+
+        // ፎርሙ ሲላክ የ Quill ውበት ያለው ጽሁፍ ወደ hidden input እንዲገባ
+        document.getElementById('notifForm').onsubmit = function() {
+            var html = document.querySelector('#editor .ql-editor').innerHTML;
+            document.getElementById('hiddenMessage').value = html;
+        };
     </script>
 </body>
 </html>
