@@ -101,6 +101,16 @@ async function initDB() {
         await pool.query(`CREATE TABLE IF NOT EXISTS daily_attendance (
             id SERIAL PRIMARY KEY, student_id TEXT, student_name TEXT, class_level TEXT, date TEXT, status TEXT
         )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS academic_archives (
+            id SERIAL PRIMARY KEY,
+            academic_year TEXT,
+            student_id TEXT,
+            student_name TEXT,
+            class_level TEXT,
+            courses_summary TEXT,
+            total_score REAL,
+            archived_date TEXT
+        )`);
 
         try { await pool.query(`ALTER TABLE sections ADD COLUMN class_monitor TEXT`); } catch(e) {}
         try { await pool.query(`ALTER TABLE notifications ADD COLUMN attachment TEXT`); } catch(e) {}
@@ -835,6 +845,107 @@ app.post('/save-attendance', async (req, res) => {
                 res.redirect('/teacher-dashboard');
             } catch(e) { res.redirect('/teacher-dashboard'); }
         });
+    });
+});
+// 1. የዓመቱን ውጤት ፒዲኤፍ ማውረድ (Year-End PDF)
+app.get('/admin/export-year-end-pdf/:className', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    let className = decodeURIComponent(req.params.className);
+
+    db.all(`SELECT * FROM students WHERE class_level = ?`, [className], (err, students) => {
+        db.all(`SELECT * FROM courses WHERE class_level = ?`, [className], (err, courses) => {
+            db.all(`SELECT * FROM course_assessments`, [], (err, assessments) => {
+                
+                const doc = new PDFDocument({ margin: 30, size: 'A4' });
+                res.setHeader('Content-Type', 'application/pdf');
+                res.setHeader('Content-Disposition', `attachment; filename=Year-End-Report-${className.replace(/\s+/g, '_')}.pdf`);
+                doc.pipe(res);
+
+                doc.fontSize(20).fillColor('#1f4e79').text('AMANUEL LIGHT AND LIFE SCHOOL', { align: 'center' });
+                doc.fontSize(12).fillColor('#27ae60').text(`Official Year-End Academic Report & Grade Summary - ${className}`, { align: 'center' });
+                doc.moveDown();
+
+                students.forEach((st, idx) => {
+                    doc.fontSize(12).fillColor('#000').font('Helvetica-Bold').text(`${idx + 1}. Student Name: ${st.name} (ID: ${st.student_id})`);
+                    doc.font('Helvetica').fontSize(10);
+                    
+                    let stAssessments = assessments.filter(a => a.student_id === st.student_id);
+                    let totalSum = 0;
+
+                    courses.forEach(c => {
+                        let asm = stAssessments.find(a => a.course_code === c.code) || {};
+                        let tot = (asm.quiz || 0) + (asm.mid || 0) + (asm.final || 0);
+                        totalSum += tot;
+                        doc.text(`   - ${c.title} (${c.code}): Quiz=${asm.quiz||0}, Mid=${asm.mid||0}, Final=${asm.final||0} | Total = ${tot}`);
+                    });
+
+                    doc.fillColor('#8e44ad').text(`   * Cumulative Total Score: ${totalSum}`, { bold: true });
+                    doc.moveDown(0.5);
+                });
+
+                doc.end();
+            });
+        });
+    });
+});
+
+// 2. የዓመቱን ውጤት በማህደር ማስቀመጥ (Archive Year)
+app.post('/admin/archive-year', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    let currentYear = new Date().getFullYear(); 
+    let archiveDate = new Date().toISOString().split('T')[0];
+
+    db.all(`SELECT * FROM students`, [], (err, students) => {
+        db.all(`SELECT * FROM course_assessments`, [], (err, assessments) => {
+            students.forEach(st => {
+                let stAss = assessments.filter(a => a.student_id === st.student_id);
+                let totalScore = 0;
+                let summary = stAss.map(a => {
+                    let tot = (a.quiz || 0) + (a.mid || 0) + (a.final || 0);
+                    totalScore += tot;
+                    return `${a.course_code}: ${tot}`;
+                }).join(' | ');
+
+                if (totalScore > 0) { 
+                    db.run(`INSERT INTO academic_archives (academic_year, student_id, student_name, class_level, courses_summary, total_score, archived_date) VALUES (?,?,?,?,?,?,?)`,
+                    [currentYear.toString(), st.student_id, st.name, st.class_level, summary, totalScore, archiveDate]);
+                }
+            });
+            
+            // በማህደር ከተቀመጠ በኋላ የአሁኑን ውጤት ማጽዳት (ለአዲሱ ዓመት)
+            db.run(`DELETE FROM course_assessments`, [], () => {
+                db.run(`DELETE FROM daily_attendance`, [], () => res.redirect('/admin'));
+            });
+        });
+    });
+});
+
+// 3. ተማሪዎችን ወደ ቀጣይ ክፍል ማሳደግ (Bulk Promotion)
+app.post('/admin/promote-students', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    
+    const gradeMap = {
+        "Grade 1": "Grade 2", "Grade 2": "Grade 3", "Grade 3": "Grade 4",
+        "Grade 4": "Grade 5", "Grade 5": "Grade 6", "Grade 6": "Grade 7",
+        "Grade 7": "Grade 8", "Grade 8": "Grade 9", "Grade 9": "Grade 10",
+        "Grade 10": "Grade 11", "Grade 11": "Grade 12", "Grade 12": "Graduated"
+    };
+
+    db.all(`SELECT student_id, class_level FROM students`, [], (err, students) => {
+        students.forEach(st => {
+            let match = st.class_level.match(/(Grade \d+)/i);
+            if (match && gradeMap[match[0]]) {
+                let newGrade = gradeMap[match[0]];
+                let newClassLevel = st.class_level.replace(match[0], newGrade);
+                
+                if (newGrade === "Graduated") {
+                    db.run(`UPDATE students SET status = 'Graduated' WHERE student_id = ?`, [st.student_id]);
+                } else {
+                    db.run(`UPDATE students SET class_level = ? WHERE student_id = ?`, [newClassLevel, st.student_id]);
+                }
+            }
+        });
+        res.redirect('/admin');
     });
 });
 
