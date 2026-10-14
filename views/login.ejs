@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Amanuel Light and Life School - Portal</title>
     <style>
-        /* 🎨 እጅግ ማራኪ የሆነ አጠቃላይ የጀርባ ቀለም (Beautiful Gradient Background) */
+        /* 🎨 አጠቃላይ የጀርባ ቀለም እና ፎንት */
         body { 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            background: linear-gradient(135deg, #1f4e79 0%, #2980b9 50%, #6dd5ed 100%);
+            background: linear-gradient(135deg, #1f4e79 0%, #3498db 100%);
             min-height: 100vh; 
             margin: 0; 
             display: flex; 
@@ -17,193 +17,122 @@
             color: #333; 
         }
 
-        /* 🌍 የቋንቋ መቀየሪያ ንድፍ (Language Toggle Style) */
-        .lang-toggle { 
-            position: absolute; top: 20px; right: 20px; 
-            background: rgba(255, 255, 255, 0.95); 
-            padding: 5px; border-radius: 8px; 
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2); 
-            z-index: 100;
-        }
-        body.lang-am .en { display: none !important; }
-        body.lang-en .am { display: none !important; }
-
-        /* 🏢 የትምህርት ቤቱ ርዕስ ንድፍ */
+        /* 🏫 የትምህርት ቤቱ ርዕስ ንድፍ */
         .header-text { 
-            text-align: center; color: white; margin-top: 60px; margin-bottom: 20px;
-            text-shadow: 2px 2px 8px rgba(0,0,0,0.4); 
-            animation: fadeInDown 1s ease;
+            text-align: center; color: white; margin-top: 50px; margin-bottom: 20px;
+            text-shadow: 2px 2px 5px rgba(0,0,0,0.3); 
         }
-        .header-text h1 { margin: 0; font-size: 2.8em; letter-spacing: 1px; }
-        .header-text p { font-size: 1.3em; margin-top: 10px; opacity: 0.9; }
+        .header-text h1 { margin: 0; font-size: 2.5em; }
 
-        /* 📦 የካርዶች መያዣ (Cards Container) */
-        .main-container { 
-            max-width: 1000px; width: 95%; margin: 0 auto 50px; 
-            display: flex; flex-wrap: wrap; gap: 30px; justify-content: center; 
-            animation: fadeInUp 1s ease;
-        }
-
-        /* 🃏 የካርዶቹ ንድፍ (Modern Cards Design) */
+        /* 📦 የካርዶች አጠቃላይ ንድፍ */
         .card { 
-            background: white; border-radius: 15px; padding: 35px 30px; 
-            box-shadow: 0 15px 35px rgba(0,0,0,0.2); 
-            flex: 1; min-width: 320px; max-width: 450px; 
-            position: relative; overflow: hidden;
+            background: white; border-radius: 12px; padding: 30px; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2); 
+            width: 100%; max-width: 450px; margin-bottom: 30px;
         }
-        
-        /* 🔵 የመግቢያ ካርድ (Login Card) ጌጥ */
-        .login-card { border-top: 6px solid #f39c12; }
-        
-        /* 🟢 የመመዝገቢያ ካርድ (Register Card) ጌጥ */
-        .register-card { border-top: 6px solid #27ae60; }
 
-        .card h2 { text-align: center; margin-top: 0; margin-bottom: 25px; color: #2c3e50; font-size: 24px;}
-        
-        /* ✍️ የፎርም መጻፊያ ሳጥኖች (Input Fields) */
-        input, select { 
-            width: 100%; padding: 14px; margin-bottom: 18px; 
-            border: 2px solid #e0e6ed; border-radius: 8px; 
-            box-sizing: border-box; font-size: 15px; font-family: inherit;
-            background-color: #f8fafc; transition: all 0.3s ease; 
+        .card h2 { text-align: center; margin-top: 0; color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; margin-bottom: 20px; }
+
+        /* ✍️ የፎርም መጻፊያ ሳጥኖች */
+        input[type="text"], input[type="password"], input[type="number"], select { 
+            width: 100%; padding: 12px; margin-bottom: 15px; 
+            border: 1px solid #ccd1d9; border-radius: 6px; 
+            box-sizing: border-box; font-size: 15px; background: #fdfdfd;
         }
-        input:focus, select:focus { 
-            border-color: #3498db; background-color: #fff; outline: none; 
-            box-shadow: 0 0 10px rgba(52, 152, 219, 0.2); 
+        input:focus, select:focus { border-color: #3498db; outline: none; background: white; }
+
+        /* 🔘 ራዲዮ በተን (የተጠቃሚ አይነት መምረጫ) */
+        .role-selector {
+            display: flex; justify-content: space-around; margin-bottom: 20px; 
+            background: #f4f6f9; padding: 10px; border-radius: 8px; border: 1px solid #e0e6ed;
         }
+        .role-selector label { font-weight: bold; color: #1f4e79; cursor: pointer; }
 
         /* 🔘 አዝራሮች (Buttons) */
         button.action-btn { 
-            width: 100%; padding: 15px; border: none; border-radius: 8px; 
-            color: white; font-weight: bold; font-size: 17px; cursor: pointer; 
-            transition: all 0.3s ease; text-transform: uppercase; letter-spacing: 1px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            width: 100%; padding: 14px; border: none; border-radius: 6px; 
+            color: white; font-weight: bold; font-size: 16px; cursor: pointer; 
+            transition: background 0.3s ease;
         }
-        button.action-btn:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
+        .btn-login { background: #e67e22; }
+        .btn-login:hover { background: #d35400; }
         
-        .btn-login { background: linear-gradient(135deg, #f39c12, #d35400); }
-        .btn-register { background: linear-gradient(135deg, #27ae60, #219653); }
-        
-        /* 📂 ፋይል ማያያዣ (File Upload Box) */
-        .file-upload { 
-            border: 2px dashed #bdc3c7; padding: 15px; text-align: center; 
-            border-radius: 8px; margin-bottom: 20px; background: #fdfdfd; transition: 0.3s;
-        }
-        .file-upload:hover { border-color: #27ae60; background: #f4fbf7; }
+        .btn-register { background: #27ae60; }
+        .btn-register:hover { background: #219653; }
 
-        /* 🎬 መግቢያ አኒሜሽን (Animations) */
-        @keyframes fadeInDown { from { opacity: 0; transform: translateY(-30px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        /* 📂 ፋይል ማያያዣ */
+        .file-upload { border: 2px dashed #bdc3c7; padding: 10px; text-align: center; border-radius: 6px; margin-bottom: 15px; background: #fafafa; }
     </style>
 </head>
-<body class="lang-am">
+<body>
     
-    <!-- 🌍 ቋንቋ መቀየሪያ (Language Toggle) -->
-    <div class="lang-toggle">
-        <button onclick="setLang('am')" id="btn-am" style="background:#27ae60; color:white; padding:8px 20px; border-radius:5px; border:none; cursor:pointer; font-weight:bold;">🇪🇹 አማርኛ</button>
-        <button onclick="setLang('en')" id="btn-en" style="background:transparent; color:#333; padding:8px 20px; border-radius:5px; border:none; cursor:pointer; font-weight:bold;">🇬🇧 English</button>
-    </div>
-
     <!-- 🏫 የትምህርት ቤቱ ርዕስ -->
     <div class="header-text">
         <h1>🎓 Amanuel Light and Life School</h1>
-        <p>
-            <span class="am">ወደ ትምህርት ቤታችን ፖርታል በሰላም መጡ!</span>
-            <span class="en">Welcome to our School Portal!</span>
-        </p>
+        <p>ወደ ትምህርት ቤታችን ፖርታል በሰላም መጡ!</p>
     </div>
 
-    <div class="main-container">
-        
-        <!-- 🔐 1. የነባር ተማሪ/መምህር/አድሚን መግቢያ ካርድ (Login Card) -->
-        <div class="card login-card">
-            <h2>🔐 <span class="am">ወደ ፖርታል ግባ</span><span class="en">Login to Portal</span></h2>
-            <form action="/login" method="POST">
-                <label style="font-weight:bold; color:#555; display:block; margin-bottom:8px;">
-                    <span class="am">👤 መታወቂያ ቁጥር (ID):</span><span class="en">👤 ID Number:</span>
-                </label>
-                <input type="text" name="user_id" placeholder="ALLS-1234 / ADMIN" required>
-                
-                <label style="font-weight:bold; color:#555; display:block; margin-bottom:8px;">
-                    <span class="am">🔑 የይለፍ ቃል (Password):</span><span class="en">🔑 Password:</span>
-                </label>
-                <input type="password" name="password" placeholder="••••••••" required>
-                
-                <button type="submit" class="action-btn btn-login">
-                    <span class="am">ግባ (Login)</span><span class="en">Sign In</span>
-                </button>
-            </form>
-            <p style="text-align: center; margin-top: 20px; font-size: 13px; color: #7f8c8d;">
-                <span class="am">መታወቂያዎ ከጠፋብዎ ትምህርት ቤቱን ያነጋግሩ።</span>
-                <span class="en">Contact the school if you lost your ID.</span>
-            </p>
-        </div>
+    <!-- 🔐 1. መግቢያ ካርድ (Login Section) - ከላይ -->
+    <div class="card" style="border-top: 5px solid #e67e22;">
+        <h2>🔐 ወደ ፖርታል መግቢያ (Login)</h2>
+        <form action="/login" method="POST">
+            
+            <!-- የተጠቃሚ አይነት መምረጫ (Role Selector) -->
+            <div class="role-selector">
+                <label><input type="radio" name="role" value="student" checked> ተማሪ</label>
+                <label><input type="radio" name="role" value="teacher"> መምህር</label>
+                <label><input type="radio" name="role" value="admin"> አድሚን</label>
+            </div>
 
-        <!-- 📝 2. የአዲስ ተማሪ መመዝገቢያ ካርድ (Registration Card) -->
-        <div class="card register-card">
-            <h2>📝 <span class="am">አዲስ ተማሪ ምዝገባ</span><span class="en">New Student Registration</span></h2>
-            <form action="/register-student" method="POST" enctype="multipart/form-data">
-                
-                <input type="text" name="name" placeholder="👤 ሙሉ ስም (Full Name)" required>
-                
-                <div style="display:flex; gap:10px;">
-                    <select name="gender" required>
-                        <option value=""><span class="am">⚧ ፆታ / Gender</span><span class="en">⚧ Select Gender</span></option>
-                        <option value="Male">ወንድ / Male</option>
-                        <option value="Female">ሴት / Female</option>
-                    </select>
-                    <input type="text" name="phone" placeholder="📞 ስልክ (Phone Number)" required>
-                </div>
+            <label style="font-weight:bold; color:#555; display:block; margin-bottom:5px;">👤 መታወቂያ ቁጥር (ID):</label>
+            <input type="text" name="user_id" placeholder="ALLS-1234 / ADMIN" required>
+            
+            <label style="font-weight:bold; color:#555; display:block; margin-bottom:5px;">🔑 የይለፍ ቃል (Password):</label>
+            <input type="password" name="password" placeholder="••••••••" required>
+            
+            <button type="submit" class="action-btn btn-login">ግባ (Login)</button>
+        </form>
+    </div>
 
-                <select name="class_level" required>
-                    <option value=""><span class="am">🏫 የሚገቡበትን ክፍል ይምረጡ / Class Level</span><span class="en">🏫 Select Class Level</span></option>
-                    <option value="KG 1">KG 1</option>
-                    <option value="KG 2">KG 2</option>
-                    <option value="KG 3">KG 3</option>
-                    <option value="Grade 1">1ኛ ክፍል (Grade 1)</option>
-                    <option value="Grade 2">2ኛ ክፍል (Grade 2)</option>
-                    <option value="Grade 3">3ኛ ክፍል (Grade 3)</option>
-                    <option value="Grade 4">4ኛ ክፍል (Grade 4)</option>
-                    <option value="Grade 5">5ኛ ክፍል (Grade 5)</option>
-                    <option value="Grade 6">6ኛ ክፍል (Grade 6)</option>
-                    <option value="Grade 7">7ኛ ክፍል (Grade 7)</option>
-                    <option value="Grade 8">8ኛ ክፍል (Grade 8)</option>
+    <!-- 📝 2. የአዲስ ተማሪ መመዝገቢያ (Registration Section) - ከታች -->
+    <div class="card" style="border-top: 5px solid #27ae60;">
+        <h2>📝 አዲስ ተማሪ ምዝገባ (Register)</h2>
+        <form action="/register-student" method="POST" enctype="multipart/form-data">
+            
+            <input type="text" name="name" placeholder="👤 የተማሪው ሙሉ ስም" required>
+            
+            <div style="display:flex; gap:10px;">
+                <select name="gender" required>
+                    <option value="">⚧ ፆታ ይምረጡ</option>
+                    <option value="Male">ወንድ</option>
+                    <option value="Female">ሴት</option>
                 </select>
+                <input type="text" name="phone" placeholder="📞 ስልክ ቁጥር" required>
+            </div>
 
-                <div class="file-upload">
-                    <label style="font-weight:bold; color:#555; display:block; margin-bottom:8px;">
-                        🧾 <span class="am">የባንክ ክፍያ ደረሰኝ ያያይዙ</span><span class="en">Attach Bank Receipt (Slip)</span>
-                    </label>
-                    <input type="file" name="bank_slip" required style="border:none; padding:0; background:transparent; width: 100%;">
-                </div>
+            <select name="class_level" required>
+                <option value="">🏫 የሚገቡበትን ክፍል ይምረጡ</option>
+                <option value="KG 1">KG 1</option>
+                <option value="KG 2">KG 2</option>
+                <option value="KG 3">KG 3</option>
+                <option value="Grade 1">1ኛ ክፍል (Grade 1)</option>
+                <option value="Grade 2">2ኛ ክፍል (Grade 2)</option>
+                <option value="Grade 3">3ኛ ክፍል (Grade 3)</option>
+                <option value="Grade 4">4ኛ ክፍል (Grade 4)</option>
+                <option value="Grade 5">5ኛ ክፍል (Grade 5)</option>
+                <option value="Grade 6">6ኛ ክፍል (Grade 6)</option>
+                <option value="Grade 7">7ኛ ክፍል (Grade 7)</option>
+                <option value="Grade 8">8ኛ ክፍል (Grade 8)</option>
+            </select>
 
-                <button type="submit" class="action-btn btn-register">
-                    <span class="am">አሁን ተመዝገብ</span><span class="en">Register Now</span>
-                </button>
-            </form>
-        </div>
+            <div class="file-upload">
+                <label style="font-weight:bold; color:#555; display:block; margin-bottom:5px;">🧾 የባንክ ክፍያ ደረሰኝ ያያይዙ</label>
+                <input type="file" name="bank_slip" required style="border:none; padding:0; background:transparent;">
+            </div>
 
+            <button type="submit" class="action-btn btn-register">አሁን ተመዝገብ</button>
+        </form>
     </div>
 
-    <!-- ⚙️ የቋንቋ እና አኒሜሽን ጃቫስክሪፕት -->
-    <script>
-        function setLang(lang) {
-            document.body.className = 'lang-' + lang;
-            localStorage.setItem('prefLang', lang);
-            
-            // የቋንቋ አዝራሮቹ ቀለም መቀየሪያ
-            document.getElementById('btn-am').style.background = lang === 'am' ? '#27ae60' : 'transparent';
-            document.getElementById('btn-am').style.color = lang === 'am' ? 'white' : '#333';
-            
-            document.getElementById('btn-en').style.background = lang === 'en' ? '#2980b9' : 'transparent';
-            document.getElementById('btn-en').style.color = lang === 'en' ? 'white' : '#333';
-        }
-
-        // ገጹ ሲከፈት ከዚህ በፊት የተመረጠውን ቋንቋ ያስታውሳል
-        document.addEventListener("DOMContentLoaded", function() {
-            let savedLang = localStorage.getItem('prefLang') || 'am';
-            setLang(savedLang);
-        });
-    </script>
 </body>
 </html>
