@@ -148,6 +148,25 @@
 <body>
 <div class="container">
     <h2>👑 የአድሚን መቆጣጠሪያ ፓነል (Admin Dashboard)</h2>
+    <!-- Academic Year Management Panel -->
+    <div class="card" style="background: #fffcf5; border: 1px solid #f39c12; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+        <h3 style="color: #d35400; margin-top: 0;">🎓 የአካዳሚክ ዓመት ማጠቃለያ (Year-End Actions)</h3>
+        <p style="font-size: 13px; color: #555;">ማሳሰቢያ፦ እነዚህን ተግባራት ከማድረግዎ በፊት እባክዎ የክፍል ውጤቶችን (PDF/Excel) ዳውንሎድ ማድረጎን ያረጋግጡ።</p>
+        
+        <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 15px;">
+            <form action="/admin/archive-year" method="POST" onsubmit="return confirm('እርግጠኛ ነዎት? ይህ የዘንድሮን ውጤት ወደ ማህደር (Archive) አዛውሮ ፖርታሉን ለቀጣይ ዓመት ዜሮ ያደርገዋል!');">
+                <button type="submit" style="background: #e67e22; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-weight: bold; cursor: pointer;">
+                    🗂️ 1. የዓመቱን ውጤት ቋጥሮ ያዝ (Archive Year)
+                </button>
+            </form>
+
+            <form action="/admin/promote-students" method="POST" onsubmit="return confirm('እርግጠኛ ነዎት? ሁሉም ተማሪዎች ወደ ቀጣይ ክፍል (ለምሳሌ 1ኛ ክፍል ወደ 2ኛ ክፍል) ያድጋሉ!');">
+                <button type="submit" style="background: #27ae60; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-weight: bold; cursor: pointer;">
+                    🚀 2. ተማሪዎችን ወደ ቀጣይ ክፍል አሳድግ (Promote All)
+                </button>
+            </form>
+        </div>
+    </div>
 
     <!-- 💡 ማስታወቂያ እና ካላንደር መለጠፊያ ፎርሙን እዚህ ጋር (ከላይ ወይም ከዳሽቦርዱ ካርዶች መሃል) ፔስት ያድርጉት -->
     <div class="card" style="background: #f9fbfd; border: 1px solid #cbd5e1; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
