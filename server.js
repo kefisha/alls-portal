@@ -977,6 +977,42 @@ app.post('/admin/promote-students', (req, res) => {
         res.redirect('/admin');
     });
 });
+// ==========================================
+// 🚨 FORGOT PASSWORD API (Password Recovery)
+// ==========================================
+app.post('/api/recover-password', (req, res) => {
+    const { id, phone } = req.body;
+    
+    // መጀመሪያ የተማሪዎችን ዳታቤዝ ይፈልጋል
+    db.get(`SELECT * FROM students WHERE student_id = ? AND phone = ?`, [id, phone], (err, student) => {
+        if (student) {
+            // ተማሪው ከተገኘ 4 ዲጂት አዲስ ፓስወርድ ይፈጥራል
+            let newPassword = Math.floor(1000 + Math.random() * 9000).toString(); 
+            let hashedPassword = bcrypt.hashSync(newPassword, 10);
+            
+            // ፓስወርዱን ዳታቤዝ ላይ ያሳድሳል
+            db.run(`UPDATE students SET password = ? WHERE student_id = ?`, [hashedPassword, id], (updateErr) => {
+                if (updateErr) return res.json({ success: false });
+                res.json({ success: true, newPassword: newPassword });
+            });
+        } else {
+            // ተማሪው ካልተገኘ ደግሞ ለመምህራን ይፈልጋል
+            db.get(`SELECT * FROM teachers WHERE id = ? AND phone = ?`, [id, phone], (err2, teacher) => {
+                if (teacher) {
+                    let newPassword = Math.floor(1000 + Math.random() * 9000).toString(); 
+                    let hashedPassword = bcrypt.hashSync(newPassword, 10);
+                    
+                    db.run(`UPDATE teachers SET password = ? WHERE id = ?`, [hashedPassword, id], (updateErr) => {
+                        if (updateErr) return res.json({ success: false });
+                        res.json({ success: true, newPassword: newPassword });
+                    });
+                } else {
+                    res.json({ success: false });
+                }
+            });
+        }
+    });
+});
 
 app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
