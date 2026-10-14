@@ -1013,6 +1013,20 @@ app.post('/api/recover-password', (req, res) => {
         }
     });
 });
+// ==========================================
+// 📷 BARCODE SCANNER API (Get Student Info)
+// ==========================================
+app.get('/api/student/:id', (req, res) => {
+    const studentId = req.params.id.toUpperCase().trim();
+    
+    // የተማሪውን መረጃ ከዳታቤዝ ይፈልጋል
+    db.get(`SELECT * FROM students WHERE student_id = ?`, [studentId], (err, student) => {
+        if (err || !student) {
+            return res.json({ success: false, message: 'Student not found' });
+        }
+        res.json({ success: true, student: student });
+    });
+});
 
 app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
