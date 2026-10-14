@@ -21,20 +21,20 @@
             <a href="/admin" style="background: #7f8c8d; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;">⬅️ ወደ ኋላ ተመለስ (Back to Dashboard)</a>
         </div>
         
-        <h2>👨‍🎓 የተመዘገቡ ተማሪዎች ዝርዝር (Registered Students)</h2>
+        <h2>👨‍🎓 የተመዘገቡ ተማሪዎች ዝርዝር (Registered Students List)</h2>
         
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <a href="/admin/export-students" class="btn-orange">📥 ሁሉንም ዳውንሎድ አድርግ (Excel)</a>
+            <a href="/admin/export-students" class="btn-orange">📥 ሁሉንም ዳውንሎድ አድርግ (Download All - Excel)</a>
         </div>
 
         <div style="display: flex; gap: 20px; margin-bottom: 20px;">
-            <div class="stats-box"><div style="font-size:24px; font-weight:bold; color:#2c3e50;"><%= maleCount || 0 %></div><div>ወንድ ተማሪዎች (Male)</div></div>
-            <div class="stats-box" style="border-left-color: #e74c3c;"><div style="font-size:24px; font-weight:bold; color:#2c3e50;"><%= femaleCount || 0 %></div><div>ሴት ተማሪዎች (Female)</div></div>
+            <div class="stats-box"><div style="font-size:24px; font-weight:bold; color:#2c3e50;"><%= maleCount || 0 %></div><div>ወንድ ተማሪዎች (Male Students)</div></div>
+            <div class="stats-box" style="border-left-color: #e74c3c;"><div style="font-size:24px; font-weight:bold; color:#2c3e50;"><%= femaleCount || 0 %></div><div>ሴት ተማሪዎች (Female Students)</div></div>
         </div>
 
         <div class="search-bar">
-            <label style="font-weight: bold; color: #2980b9;">🔍 በተማሪ ID ወይም ስም መፈለጊያ:</label>
-            <input type="text" id="searchInput" onkeyup="searchStudent()" placeholder="የተማሪውን መታወቂያ ቁጥር (ID) ወይም ስም ያስገቡ... ምሳሌ: ALLS-1234">
+            <label style="font-weight: bold; color: #2980b9;">🔍 በተማሪ ID ወይም ስም መፈለጊያ (Search by Student ID or Name):</label>
+            <input type="text" id="searchInput" onkeyup="searchStudent()" placeholder="የተማሪውን መታወቂያ (ID) ወይም ስም ያስገቡ (Enter ID or Name)... ምሳሌ (e.g.): ALLS-1234">
         </div>
 
         <div>
