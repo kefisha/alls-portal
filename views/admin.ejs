@@ -5,13 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - Amanuel Light and Life School</title>
     
-    <!-- Quill Rich Text Editor -->
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
     <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
 
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eef2f5; margin: 0; padding: 20px; color: #333; }
         .container { max-width: 1200px; margin: auto; }
+        
+        /* Language Toggle Magic */
+        body.lang-am .en { display: none !important; }
+        body.lang-en .am { display: none !important; }
+
         h2 { color: #2c3e50; text-align: center; margin-bottom: 30px; font-size: 28px; }
         .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 25px; border-top: 4px solid #2980b9; }
         .card h3 { color: #1f4e79; margin-top: 0; margin-bottom: 20px; font-size: 20px; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; }
@@ -27,94 +31,106 @@
         .btn-red { background: #e74c3c; } .btn-red:hover { background: #c0392b; }
         .btn-orange { background: #f39c12; } .btn-orange:hover { background: #d68910; }
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .stats-box { background: #fdfdfd; padding: 15px; border-radius: 8px; border-left: 5px solid #2ecc71; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center; }
-        .logout-btn { display: inline-block; background: #e74c3c; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-bottom: 20px; }
+        .logout-btn { background: #e74c3c; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; }
         #editor { height: 150px; background: white; border-radius: 0 0 6px 6px; }
     </style>
 </head>
-<body>
+<body class="lang-am">
     <div class="container">
-        <div style="text-align: right;">
-            <a href="/logout" class="logout-btn">🚪 ውጣ (Logout)</a>
+        
+        <!-- Top Navigation (Language & Logout) -->
+        <div style="display: flex; justify-content: flex-end; gap: 15px; align-items: center; margin-bottom: 20px;">
+            <div style="background: white; padding: 5px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                <button onclick="setLang('am')" id="btn-am" style="background:#27ae60; color:white; padding:5px 15px; border-radius:5px; border:none; cursor:pointer; font-weight:bold;">🇪🇹 አማርኛ</button>
+                <button onclick="setLang('en')" id="btn-en" style="background:transparent; color:#333; padding:5px 15px; border-radius:5px; border:none; cursor:pointer; font-weight:bold;">🇬🇧 English</button>
+            </div>
+            <a href="/logout" class="logout-btn">🚪 <span class="am">ውጣ</span><span class="en">Logout</span></a>
         </div>
 
-        <h2>👑 የዲሬክተር / አድሚን መቆጣጠሪያ (Admin Dashboard)</h2>
+        <h2>👑 <span class="am">የዲሬክተር / አድሚን መቆጣጠሪያ</span><span class="en">Admin Dashboard</span></h2>
 
-        <!-- 🎓 Academic Year Management Panel -->
+        <!-- Academic Year -->
         <div class="card" style="background: #fffcf5; border-color: #f39c12;">
-            <h3 style="color: #d35400; border-bottom-color: #fce8cd;">🎓 የአካዳሚክ ዓመት ማጠቃለያ (Academic Year-End Actions)</h3>
-            <p style="font-size: 13px; color: #555;">ማሳሰቢያ (Note)፦ እነዚህን ተግባራት ከማድረግዎ በፊት እባክዎ የክፍል ውጤቶችን ዳውንሎድ ማድረጎን ያረጋግጡ (Please ensure you have downloaded class reports before proceeding).</p>
-            
+            <h3 style="color: #d35400; border-bottom-color: #fce8cd;">🎓 <span class="am">የአካዳሚክ ዓመት ማጠቃለያ</span><span class="en">Academic Year-End Actions</span></h3>
+            <p style="font-size: 13px; color: #555;">
+                <span class="am">ማሳሰቢያ፦ እነዚህን ተግባራት ከማድረግዎ በፊት እባክዎ የክፍል ውጤቶችን ዳውንሎድ ማድረጎን ያረጋግጡ።</span>
+                <span class="en">Note: Please ensure you have downloaded all class reports before proceeding.</span>
+            </p>
             <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 15px;">
-                <form action="/admin/archive-year" method="POST" onsubmit="return confirm('እርግጠኛ ነዎት? ይህ የዘንድሮን ውጤት ወደ ማህደር ያዛውራል! (Are you sure? This will archive the current academic year!)');">
-                    <button type="submit" class="btn-orange">🗂️ 1. የዓመቱን ውጤት ቋጥሮ ያዝ (Archive Year)</button>
+                <form action="/admin/archive-year" method="POST" onsubmit="return confirm('እርግጠኛ ነዎት? / Are you sure?');">
+                    <button type="submit" class="btn-orange">🗂️ <span class="am">1. የዓመቱን ውጤት ቋጥሮ ያዝ</span><span class="en">1. Archive Academic Year</span></button>
                 </form>
-
-                <form action="/admin/promote-students" method="POST" onsubmit="return confirm('እርግጠኛ ነዎት? ሁሉም ተማሪዎች ወደ ቀጣይ ክፍል ያድጋሉ! (Are you sure? All students will be promoted to the next grade!)');">
-                    <button type="submit" class="btn-green">🚀 2. ተማሪዎችን ወደ ቀጣይ ክፍል አሳድግ (Promote All Students)</button>
+                <form action="/admin/promote-students" method="POST" onsubmit="return confirm('እርግጠኛ ነዎት? / Are you sure?');">
+                    <button type="submit" class="btn-green">🚀 <span class="am">2. ተማሪዎችን ወደ ቀጣይ ክፍል አሳድግ</span><span class="en">2. Promote All Students</span></button>
                 </form>
             </div>
         </div>
 
-        <!-- 📢 ማስታወቂያ መላኪያ -->
+        <!-- Notification -->
         <div class="card">
-            <h3>📢 አዲስ ማስታወቂያ መላኪያ (Send New Notification)</h3>
+            <h3>📢 <span class="am">አዲስ ማስታወቂያ መላኪያ</span><span class="en">Send New Notification</span></h3>
             <form id="notifForm" action="/admin/save-notice" method="POST" enctype="multipart/form-data">
-                <label>ለማን ይላክ? (To Whom?)</label>
+                <label><span class="am">ለማን ይላክ?</span><span class="en">To Whom?</span></label>
                 <select name="target_audience" style="width: 100%; max-width: 300px; display: block; margin-bottom: 15px;">
                     <option value="ALL">ለማንኛውም ሰው (To All / Everyone)</option>
                     <%- gradeCheckboxes %>
                 </select>
 
-                <label>መልዕክትዎን ይጻፉ (Write your message)፦</label>
+                <label><span class="am">መልዕክትዎን ይጻፉ፦</span><span class="en">Write your message:</span></label>
                 <div id="editor"></div>
                 <input type="hidden" name="message" id="hiddenMessage">
 
-                <label style="display: block; margin-top: 15px;">📎 ፋይል ወይም ፎቶ አያይዝ - አማራጭ (Attach File/Photo - Optional):</label>
+                <label style="display: block; margin-top: 15px;">📎 <span class="am">ፋይል ወይም ፎቶ አያይዝ (አማራጭ)</span><span class="en">Attach File/Photo (Optional)</span>:</label>
                 <input type="file" name="attachment" style="max-width: 300px; display: block;">
 
-                <button type="submit" style="margin-top: 15px; width: 100%; max-width: 300px;">📩 ማስታወቂያውን ላክ (Send Notification)</button>
+                <button type="submit" style="margin-top: 15px; width: 100%; max-width: 300px;">📩 <span class="am">ማስታወቂያውን ላክ</span><span class="en">Send Notification</span></button>
             </form>
         </div>
 
-        <!-- 🔔 የተላኩ ማስታወቂያዎች ማሳያ -->
         <div class="card">
-            <h3>🔔 ቀደም ሲል የተላኩ ማስታወቂያዎች (Previously Sent Notifications)</h3>
+            <h3>🔔 <span class="am">ቀደም ሲል የተላኩ ማስታወቂያዎች</span><span class="en">Previously Sent Notifications</span></h3>
             <div style="max-height: 400px; overflow-y: auto;">
                 <%- adminNotiRows %>
             </div>
         </div>
 
         <div class="grid-2">
-            <!-- 👨‍🎓 አዲስ ተማሪዎች -->
+            <!-- Pending Students -->
             <div class="card" style="border-color: #27ae60;">
-                <h3 style="color: #27ae60; border-bottom-color: #d5f5e3;">🟢 አዲስ አመልካቾች (Pending Approvals)</h3>
+                <h3 style="color: #27ae60; border-bottom-color: #d5f5e3;">🟢 <span class="am">አዲስ አመልካቾች</span><span class="en">Pending Approvals</span></h3>
                 <div style="overflow-x: auto;">
                     <table>
-                        <tr><th>#</th><th>መታወቂያ (ID)</th><th>ስም (Name)</th><th>ክፍያ (Payment)</th><th>ተግባር (Action)</th></tr>
+                        <tr>
+                            <th>#</th>
+                            <th><span class="am">መታወቂያ</span><span class="en">ID</span></th>
+                            <th><span class="am">ስም</span><span class="en">Name</span></th>
+                            <th><span class="am">ክፍያ</span><span class="en">Payment</span></th>
+                            <th><span class="am">ተግባር</span><span class="en">Action</span></th>
+                        </tr>
                         <%- pRows %>
                     </table>
                 </div>
             </div>
 
-            <!-- 👩‍🏫 መምህራን አስተዳደር -->
+            <!-- Teachers -->
             <div class="card" style="border-color: #8e44ad;">
-                <h3 style="color: #8e44ad; border-bottom-color: #f4ecf7;">👩‍🏫 መምህራን አስተዳደር (Teachers Management)</h3>
+                <h3 style="color: #8e44ad; border-bottom-color: #f4ecf7;">👩‍🏫 <span class="am">መምህራን አስተዳደር</span><span class="en">Teachers Management</span></h3>
                 <form action="/admin/add-teacher" method="POST" style="margin-bottom: 15px; background: #fafafa; padding: 15px; border-radius: 8px;">
-                    <input type="text" name="name" placeholder="ሙሉ ስም (Full Name)" required>
-                    <input type="text" name="phone" placeholder="ስልክ ቁጥር (Phone Number)" required>
-                    <label style="display:block; margin-bottom:5px;">የሚያስተምሩት ክፍል እና ሴክሽን (Assigned Sections):</label>
-                    <input type="text" name="assigned_sections" placeholder="ምሳሌ (e.g.): Grade 1 - Section A, Grade 2 - Section B">
-                    <label style="display:block; margin-bottom:5px;">የክፍል ደረጃ ለማስታወቂያዎች (Grade Levels for Notifications):</label>
-                    <div style="margin-bottom: 10px; font-size: 13px;">
-                        <%- gradeCheckboxes %>
-                    </div>
-                    <button type="submit" class="btn-green" style="width: 100%;">➕ አዲስ መምህር መዝግብ (Register New Teacher)</button>
+                    <input type="text" name="name" placeholder="ሙሉ ስም / Full Name" required>
+                    <input type="text" name="phone" placeholder="ስልክ ቁጥር / Phone Number" required>
+                    <label style="display:block; margin-bottom:5px;"><span class="am">የሚያስተምሩት ክፍል</span><span class="en">Assigned Sections</span>:</label>
+                    <input type="text" name="assigned_sections" placeholder="Grade 1 - Section A">
+                    <button type="submit" class="btn-green" style="width: 100%;">➕ <span class="am">አዲስ መምህር መዝግብ</span><span class="en">Register Teacher</span></button>
                 </form>
-                <a href="/admin/export-teachers" class="btn-orange" style="text-decoration:none; display:inline-block; margin-bottom:15px; padding: 8px 15px;">📥 ሁሉንም መምህራን አውርድ (Download Teachers - Excel)</a>
                 <div style="overflow-x: auto;">
                     <table>
-                        <tr><th>መታወቂያ (ID)</th><th>ስም (Name)</th><th>ክፍሎች (Grades)</th><th>ሴክሽኖች (Sections)</th><th>ስልክ (Phone)</th><th>የይለፍ ቃል (Pass)</th><th>አስተካክል (Edit)</th><th>አጥፋ (Remove)</th></tr>
+                        <tr>
+                            <th><span class="am">መታወቂያ</span><span class="en">ID</span></th>
+                            <th><span class="am">ስም</span><span class="en">Name</span></th>
+                            <th><span class="am">ክፍሎች</span><span class="en">Sections</span></th>
+                            <th><span class="am">ይለፍ ቃል</span><span class="en">Pass</span></th>
+                            <th><span class="am">አስተካክል</span><span class="en">Edit</span></th>
+                        </tr>
                         <%- tRows %>
                     </table>
                 </div>
@@ -122,92 +138,88 @@
         </div>
 
         <div class="grid-2">
-            <!-- 🏫 ክፍሎች (Sections) አስተዳደር -->
+            <!-- Sections -->
             <div class="card">
-                <h3>🏫 የክፍል ሴክሽኖች (Class Sections)</h3>
+                <h3>🏫 <span class="am">የክፍል ሴክሽኖች</span><span class="en">Class Sections</span></h3>
                 <form action="/admin/add-section" method="POST" style="display: flex; gap: 10px; margin-bottom: 15px;">
-                    <input type="text" name="name" placeholder="ምሳሌ (e.g.): Grade 1 - Section A" required style="margin-bottom: 0;">
-                    <button type="submit">➕ ጨምር (Add)</button>
+                    <input type="text" name="name" placeholder="Grade 1 - Section A" required style="margin-bottom: 0;">
+                    <button type="submit">➕ <span class="am">ጨምር</span><span class="en">Add</span></button>
                 </form>
                 <div style="overflow-x: auto;">
                     <table>
-                        <tr><th>የሴክሽን ስም (Section Name)</th><th>ተቆጣጣሪ (Proctor)</th><th>አጥፋ (Delete)</th><th>ተግባር (Actions)</th></tr>
+                        <tr>
+                            <th><span class="am">የሴክሽን ስም</span><span class="en">Section Name</span></th>
+                            <th><span class="am">ተቆጣጣሪ</span><span class="en">Proctor</span></th>
+                            <th><span class="am">አጥፋ</span><span class="en">Delete</span></th>
+                        </tr>
                         <%- secRows %>
                     </table>
                 </div>
             </div>
 
-            <!-- 📚 የትምህርት አይነቶች (Courses) -->
+            <!-- Courses -->
             <div class="card">
-                <h3>📚 የትምህርት አይነቶች (Courses Management)</h3>
+                <h3>📚 <span class="am">የትምህርት አይነቶች</span><span class="en">Courses</span></h3>
                 <form action="/admin/add-course" method="POST" style="background: #fafafa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                        <input type="text" name="code" placeholder="የኮርስ ኮድ (Course Code)" required>
-                        <input type="text" name="title" placeholder="የትምህርት ስም (Course Title)" required>
-                        <input type="number" name="credit_hours" placeholder="ክሬዲት ሰዓት (Credit Hours)" required>
+                        <input type="text" name="code" placeholder="Course Code" required>
+                        <input type="text" name="title" placeholder="Course Title" required>
+                        <input type="number" name="credit_hours" placeholder="Credit Hours" required>
                         <select name="class_level" required>
-                            <option value="">የትኛውን ክፍል ይምረጡ... (Select Class...)</option>
+                            <option value="">የትኛውን ክፍል? / Which Class?</option>
                             <%- sectionOptions %>
                         </select>
                     </div>
-                    <select name="teacher_id" style="margin-top: 10px;">
-                        <option value="">መምህር ይምረጡ - አማራጭ (Select Teacher - Optional)</option>
-                        <%- teacherOptions %>
-                    </select>
-                    <button type="submit" class="btn-green" style="width: 100%;">➕ የትምህርት አይነት ጨምር (Add Course)</button>
+                    <button type="submit" class="btn-green" style="width: 100%; margin-top: 10px;">➕ <span class="am">የትምህርት አይነት ጨምር</span><span class="en">Add Course</span></button>
                 </form>
-                <div style="overflow-x: auto; max-height: 400px;">
-                    <table>
-                        <tr><th>ኮድ (Code)</th><th>ትምህርት (Title)</th><th>ሰዓት (Cr.Hr)</th><th>ክፍል (Class)</th><th>መምህር (Teacher)</th><th>አጥፋ (Delete)</th></tr>
-                        <%- cRows %>
-                    </table>
-                </div>
             </div>
         </div>
 
-        <!-- 📂 አጠቃላይ የዲሬክተር ሪፖርት -->
+        <!-- Director Report -->
         <div class="card" style="text-align: center; background: #fdf2e9; border-color: #e67e22;">
-            <h3 style="color: #d35400;">📁 የዲሬክተር ሳምንታዊ እና ወርሃዊ ሪፖርት (Director Weekly & Monthly Report)</h3>
-            <p>የሁሉም ክፍሎች የመገኘት (Attendance) ሪፖርቶችን በአንድ ላይ ለማየት (View overall attendance reports for all classes)</p>
+            <h3 style="color: #d35400;">📁 <span class="am">የዲሬክተር ሳምንታዊ እና ወርሃዊ ሪፖርት</span><span class="en">Director Weekly & Monthly Report</span></h3>
             <a href="/director-report" target="_blank" style="display: inline-block; background: #8e44ad; color: white; padding: 12px 25px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
-                📂 ሪፖርቱን ክፈት (Open Director Report)
+                📂 <span class="am">ሪፖርቱን ክፈት</span><span class="en">Open Director Report</span>
             </a>
         </div>
 
-        <!-- 👨‍🎓 ወደ የተመዘገቡ ተማሪዎች ገጽ መሄጃ አዝራር -->
+        <!-- Registered Students Link -->
         <div class="card" style="text-align: center; background: #e8f8f5; border-color: #1abc9c;">
-            <h3 style="color: #16a085;">👨‍🎓 የተመዘገቡ ተማሪዎች ማህደር (Registered Students Database)</h3>
-            <p style="color: #555;">የተመዘገቡ ተማሪዎችን ዝርዝር በየክፍሉ እና በየሴክሽኑ ለማየት፣ እንዲሁም የ ID ፍለጋ ለማድረግ እዚህ ይጫኑ።<br>(Click here to view the categorized list of registered students and search by ID/Name.)</p>
-            <a href="/admin/registered-students" target="_blank" style="display: inline-block; background: #1abc9c; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 18px; margin-top: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                📂 የተማሪዎችን ዝርዝር ክፈት (Open Students List)
+            <h3 style="color: #16a085;">👨‍🎓 <span class="am">የተመዘገቡ ተማሪዎች ማህደር</span><span class="en">Registered Students Database</span></h3>
+            <a href="/admin/registered-students" target="_blank" style="display: inline-block; background: #1abc9c; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 18px; margin-top: 10px;">
+                📂 <span class="am">የተማሪዎችን ዝርዝር ክፈት</span><span class="en">Open Students List</span>
             </a>
         </div>
 
     </div>
 
-    <!-- የ Quill Editor ስክሪፕት -->
     <script>
-        var quill = new Quill('#editor', {
-            theme: 'snow',
-            placeholder: 'መልዕክትዎን እዚህ ይጻፉ... (Write your message here...)',
-            modules: {
-                toolbar: [
-                    [{ 'font': [] }, { 'size': [] }],
-                    ['bold', 'italic', 'underline', 'strike'],
-                    [{ 'color': [] }, { 'background': [] }],
-                    [{ 'script': 'super' }, { 'script': 'sub' }],
-                    [{ 'header': '1' }, { 'header': '2' }, 'blockquote', 'code-block'],
-                    [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
-                    [{ 'direction': 'rtl' }, { 'align': [] }],
-                    ['link', 'image', 'video', 'formula'],
-                    ['clean']
-                ]
-            }
+        // Language Toggle Script
+        function setLang(lang) {
+            document.body.className = 'lang-' + lang;
+            localStorage.setItem('prefLang', lang);
+            
+            // Style the active button
+            document.getElementById('btn-am').style.background = lang === 'am' ? '#27ae60' : 'transparent';
+            document.getElementById('btn-am').style.color = lang === 'am' ? 'white' : '#333';
+            
+            document.getElementById('btn-en').style.background = lang === 'en' ? '#2980b9' : 'transparent';
+            document.getElementById('btn-en').style.color = lang === 'en' ? 'white' : '#333';
+        }
+
+        // Apply saved language on load
+        document.addEventListener("DOMContentLoaded", function() {
+            let savedLang = localStorage.getItem('prefLang') || 'am';
+            setLang(savedLang);
         });
 
+        // Quill Setup
+        var quill = new Quill('#editor', {
+            theme: 'snow',
+            modules: { toolbar: [ [{ 'font': [] }, { 'size': [] }], ['bold', 'italic', 'underline'], [{'color': []}, {'background': []}], ['clean'] ] }
+        });
         document.getElementById('notifForm').onsubmit = function() {
-            var html = document.querySelector('#editor .ql-editor').innerHTML;
-            document.getElementById('hiddenMessage').value = html;
+            document.getElementById('hiddenMessage').value = document.querySelector('#editor .ql-editor').innerHTML;
         };
     </script>
 </body>
