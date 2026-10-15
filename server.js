@@ -429,7 +429,6 @@ app.get('/admin', (req, res) => {
                                 let gradeCheckboxes = ''; for(let i=1; i<=12; i++) gradeCheckboxes += `<label style="margin-right:8px;"><input type="checkbox" name="grades" value="Grade ${i}"> Grade ${i}</label>`;
                                 let cRows = courses.map(c => `<tr><td>${c.code}</td><td>${c.title}</td><td style="display:none;">0</td><td>${c.class_level}</td><td>${c.teacher_name||'-'}</td><td><a href="/admin/delete-course/${c.id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td></tr>`).join('');
                                 
-                                // 👩‍🏫 የመምህራን ሰንጠረዥ (ከ Edit፣ ID Card እና Delete ቁልፎች ጋር)
                                 let tRows = teachers.map(tc => `
                                     <tr>
                                         <td><b>${tc.id}</b></td>
@@ -444,7 +443,6 @@ app.get('/admin', (req, res) => {
                                     </tr>
                                 `).join('');
 
-                                // 🔔 ማስታወቂያዎች (ከለርና ፎንት ሳይጠፋ + Edit እና Delete)
                                 let adminNotiRows = adminNotifs.map(n => `
                                     <div style="background:#fdf2e9; padding:15px; margin-bottom:15px; border-radius:8px; border:1px solid #e67e22;">
                                         <strong>🔔 ${n.sender_name} (ለ: ${n.target_audience || 'ALL'} | ቀን: ${n.created_at})</strong>
@@ -478,7 +476,7 @@ app.get('/admin', (req, res) => {
     });
 });
 
-// ================= 📢 NOTIFICATION ROUTES (FIXED) =================
+// ================= 📢 NOTIFICATION ROUTES =================
 app.post('/admin/save-notice', upload.single('attachment'), (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const target_audience = req.body.target_audience || 'ALL';
@@ -520,7 +518,7 @@ app.post('/edit-notification/:id', upload.single('attachment'), (req, res) => {
     db.run(q, p, () => res.redirect('/admin'));
 });
 
-// ================= ✏️ EDIT STUDENT INFORMATION (FULL FORM) =================
+// ================= ✏️ EDIT STUDENT & TEACHER INFORMATION =================
 app.get('/admin/edit-student/:id', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     db.get(`SELECT * FROM students WHERE student_id = ?`, [req.params.id], (err, s) => {
@@ -625,7 +623,6 @@ app.post('/admin/edit-student/:id', upload.single('bank_slip'), (req, res) => {
     });
 });
 
-// ================= ✏️ EDIT TEACHER INFORMATION (FULL FORM) =================
 app.get('/admin/edit-teacher/:id', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     db.get(`SELECT * FROM teachers WHERE id = ?`, [req.params.id], (err, t) => {
@@ -746,7 +743,18 @@ app.post('/admin/register-teacher-full', upload.single('teacher_photo'), (req, r
     db.run(
         `INSERT INTO teachers (id, name, phone, password, assigned_sections, gender, subject, emergency_name, emergency_phone, photo, plain_pin) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [teacherID, name, phone, hashedPIN, sectionsStr, gender || '', subject || '', emergency_name || '', emergency_phone || '', photoFile, autoPIN],
-        () => res.redirect(`/admin/teacher-id/${teacherID}?pin=${autoPIN}`)
+        () => {
+            // መምህሩ ሲመዘገብ የሚያስተምረውን ትምህርት (Subject) ለተመደበባቸው ክፍሎች በራሱ እንዲፈጥር (Course Not Found እንዳይል)
+            const secList = sectionsStr.split(',').map(s => s.trim()).filter(Boolean);
+            if (subject && secList.length > 0) {
+                const autoCode = subject.substring(0, 3).toUpperCase() + '-' + Math.floor(10 + Math.random() * 89);
+                secList.forEach(sec => {
+                    db.run(`INSERT INTO courses (code, title, credit_hours, teacher_id, teacher_name, class_level) VALUES (?,?,?,?,?,?)`,
+                        [autoCode, subject, 0, teacherID, name, sec], () => {});
+                });
+            }
+            res.redirect(`/admin/teacher-id/${teacherID}?pin=${autoPIN}`);
+        }
     );
 });
 
@@ -1029,7 +1037,7 @@ app.get('/admin/director-report', (req, res) => {
     });
 });
 
-// ================= TEACHER DASHBOARD & GRADES =================
+// ================= TEACHER DASHBOARD & GRADES (FIXED) =================
 app.get('/teacher-dashboard', (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
     db.get('SELECT * FROM teachers WHERE id = ?', [req.session.teacherId], (err, teacher) => {
@@ -1039,12 +1047,23 @@ app.get('/teacher-dashboard', (req, res) => {
 
         db.all('SELECT student_id, name, class_level FROM students ORDER BY name ASC', [], (err, allStudents = []) => {
             let studentsInClass = allStudents.filter(s => isClassMatch(s.class_level, selectedClass));
-            db.all('SELECT * FROM courses WHERE teacher_id = ?', [req.session.teacherId], (err, courses = []) => {
-                let classCourses = courses.filter(c => isClassMatch(c.class_level, selectedClass));
-                let selectedCourseId = req.query.course_id || (classCourses[0] ? classCourses[0].id.toString() : '');
-                let selectedCourse = classCourses.find(c => c.id.toString() === selectedCourseId) || '';
+            db.all('SELECT * FROM courses', [], (err, allCourses = []) => {
+                // የመምህሩን ኮርሶች ወይም ለክፍሉ የተመዘገቡ ኮርሶችን ማምጣት
+                let classCourses = allCourses.filter(c => (c.teacher_id === req.session.teacherId || !c.teacher_id) && isClassMatch(c.class_level, selectedClass));
+                if (classCourses.length === 0) {
+                    classCourses = allCourses.filter(c => isClassMatch(c.class_level, selectedClass));
+                }
+                if (classCourses.length === 0) {
+                    classCourses = allCourses.filter(c => c.teacher_id === req.session.teacherId);
+                }
 
-                db.all('SELECT * FROM course_assessments WHERE course_code = ?', [selectedCourse ? selectedCourse.code : ''], (err, assessments = []) => {
+                let selectedCourseId = req.query.course_id || (classCourses[0] ? classCourses[0].id.toString() : '');
+                let selectedCourse = classCourses.find(c => c.id.toString() === selectedCourseId) || classCourses[0] || null;
+                if (selectedCourse && !selectedCourseId) selectedCourseId = selectedCourse.id.toString();
+
+                const activeCourseCode = selectedCourse ? selectedCourse.code : (teacher.subject || 'GEN-01');
+
+                db.all('SELECT * FROM course_assessments WHERE course_code = ?', [activeCourseCode], (err, assessments = []) => {
                     db.all('SELECT * FROM absence_requests WHERE class_level = ? ORDER BY id DESC', [selectedClass], (err, classAbsences = []) => {
                         db.all('SELECT * FROM sections', [], (err, allSections = []) => {
                             let currentSection = allSections.find(sec => isClassMatch(sec.name, selectedClass));
@@ -1052,7 +1071,9 @@ app.get('/teacher-dashboard', (req, res) => {
 
                             db.all("SELECT * FROM notifications WHERE sender_name = ? ORDER BY id DESC", [teacher.name], (err, mySentNotifs = []) => {
                                 let classOptions = assignedClasses.map(cls => `<option value="${cls}" ${cls === selectedClass ? 'selected' : ''}>${cls}</option>`).join('');
-                                let courseOptions = classCourses.map(c => `<option value="${c.id}" ${c.id.toString() === selectedCourseId ? 'selected' : ''}>${c.title} (${c.code})</option>`).join('');
+                                let courseOptions = classCourses.length > 0
+                                    ? classCourses.map(c => `<option value="${c.id}" ${c.id.toString() === selectedCourseId ? 'selected' : ''}>${c.title} (${c.code})</option>`).join('')
+                                    : `<option value="default">${teacher.subject || 'General Course'} (${activeCourseCode})</option>`;
 
                                 let studentRows = studentsInClass.map((st, idx) => {
                                     let asm = assessments.find(a => a.student_id === st.student_id) || {};
@@ -1064,9 +1085,9 @@ app.get('/teacher-dashboard', (req, res) => {
                                         <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="30" name="mid" value="${asm.mid !== undefined ? asm.mid : 0}" style="width:65px; text-align:center;"></td>
                                         <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="50" name="final" value="${asm.final !== undefined ? asm.final : 0}" style="width:65px; text-align:center;"></td>
                                         <td>
-                                            <form id="form_${st.student_id}" class="ajax-grade-form" action="/teacher/save-grade?course_id=${selectedCourseId}" method="POST">
+                                            <form id="form_${st.student_id}" class="ajax-grade-form" action="/teacher/save-grade?course_id=${encodeURIComponent(selectedCourseId || 'default')}&cls=${encodeURIComponent(selectedClass)}" method="POST">
                                                 <input type="hidden" name="student_id" value="${st.student_id}">
-                                                <input type="hidden" name="course_id" value="${selectedCourseId}">
+                                                <input type="hidden" name="course_id" value="${selectedCourseId || 'default'}">
                                                 <button type="submit" style="background:#27ae60; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-weight:bold;">💾 Save</button>
                                             </form>
                                         </td>
@@ -1078,7 +1099,7 @@ app.get('/teacher-dashboard', (req, res) => {
                                 let proctorPanel = isProctor ? `<div class="card" style="background:#f9fcf7; border:1px solid #27ae60;"><h3>🟢 የፕሮክተር ፓነል</h3><a href="/attendance-sheet/${encodeURIComponent(selectedClass)}" target="_blank" style="background:#16a085; color:white; padding:8px 15px; border-radius:5px; text-decoration:none; font-weight:bold; display:inline-block;">📋 Attendance Sheet</a></div>` : '';
 
                                 res.render('teacher', {
-                                    lang: 'am', teacher, selectedClass, selectedCourseId, classOptions, courseOptions, studentRows, absRows, teacherNotiRows, proctorPanel
+                                    lang: 'am', teacher, selectedClass, selectedCourseId: selectedCourseId || 'default', classOptions, courseOptions, studentRows, absRows, teacherNotiRows, proctorPanel
                                 });
                             });
                         });
@@ -1099,9 +1120,11 @@ app.post('/teacher/send-notification', upload.single('attachment'), (req, res) =
     });
 });
 
+// ✅ የማይሳሳት (Bulletproof) የውጤት ማስቀመጫ ራውት
 app.post('/teacher/save-grade', (req, res) => {
     if (!req.session.teacherId) return res.json({ error: 'Unauthorized' });
     let courseId = req.body.course_id || req.query.course_id || '';
+    let selectedCls = req.query.cls || '';
     let { student_id, quiz, mid, final } = req.body;
     
     let q = Math.min(20, Math.max(0, parseFloat(quiz) || 0));
@@ -1109,23 +1132,50 @@ app.post('/teacher/save-grade', (req, res) => {
     let f = Math.min(50, Math.max(0, parseFloat(final) || 0));
     let total = Number((q + m + f).toFixed(2));
 
-    const saveAssessment = (course) => {
-        if (!course) return res.json({ error: 'Course not found' });
-        db.get(`SELECT id FROM course_assessments WHERE student_id = ? AND course_code = ?`, [student_id, course.code], (err, row) => {
+    const saveAssessmentRecord = (code, title) => {
+        db.get(`SELECT id FROM course_assessments WHERE student_id = ? AND course_code = ?`, [student_id, code], (err, row) => {
             if (row) {
                 db.run(`UPDATE course_assessments SET teacher_id=?, quiz=?, mid=?, final=?, total=?, remark=? WHERE id=?`, 
                 [req.session.teacherId, q, m, f, total, total >= 50 ? 'Pass' : 'Fail', row.id], () => res.json({ success: true, total: total }));
             } else {
                 db.run(`INSERT INTO course_assessments (student_id, teacher_id, course_code, course_title, quiz, mid, final, total, remark) VALUES (?,?,?,?,?,?,?,?,?)`,
-                [student_id, req.session.teacherId, course.code, course.title, q, m, f, total, total >= 50 ? 'Pass' : 'Fail'], () => res.json({ success: true, total: total }));
+                [student_id, req.session.teacherId, code, title, q, m, f, total, total >= 50 ? 'Pass' : 'Fail'], () => res.json({ success: true, total: total }));
             }
         });
     };
 
-    if (courseId) {
-        db.get(`SELECT * FROM courses WHERE id = ?`, [courseId], (err, course) => saveAssessment(course));
+    if (courseId && courseId !== 'default' && !isNaN(Number(courseId))) {
+        db.get(`SELECT * FROM courses WHERE id = ?`, [courseId], (err, course) => {
+            if (course) return saveAssessmentRecord(course.code, course.title);
+            fallbackFindCourse();
+        });
     } else {
-        db.get(`SELECT * FROM courses WHERE teacher_id = ? LIMIT 1`, [req.session.teacherId], (err, course) => saveAssessment(course));
+        fallbackFindCourse();
+    }
+
+    function fallbackFindCourse() {
+        db.all(`SELECT * FROM courses`, [], (err, allCourses = []) => {
+            let match = allCourses.find(c => c.teacher_id === req.session.teacherId && (!selectedCls || isClassMatch(c.class_level, selectedCls)));
+            if (!match && selectedCls) match = allCourses.find(c => isClassMatch(c.class_level, selectedCls));
+            if (!match) match = allCourses.find(c => c.teacher_id === req.session.teacherId);
+
+            if (match) {
+                return saveAssessmentRecord(match.code, match.title);
+            }
+
+            // ምንም ኮርስ ካልተመዘገበ በመምህሩ Subject በራሱ ፈጥሮ ያስቀምጣል!
+            db.get(`SELECT * FROM teachers WHERE id = ?`, [req.session.teacherId], (err2, t) => {
+                const subjTitle = (t && t.subject) ? t.subject : 'General Subject';
+                const subjCode = subjTitle.substring(0, 3).toUpperCase() + '-01';
+                db.get(`SELECT class_level FROM students WHERE student_id = ?`, [student_id], (err3, st) => {
+                    const clsName = selectedCls || (st ? st.class_level : 'Grade 1 - Section A');
+                    db.run(`INSERT INTO courses (code, title, credit_hours, teacher_id, teacher_name, class_level) VALUES (?,?,?,?,?,?)`,
+                        [subjCode, subjTitle, 0, req.session.teacherId, t ? t.name : '', clsName], () => {
+                            saveAssessmentRecord(subjCode, subjTitle);
+                        });
+                });
+            });
+        });
     }
 });
 
@@ -1135,21 +1185,125 @@ app.post('/teacher/submit-final-grades', (req, res) => {
     const yearStr = (academic_year || '2019 E.C').trim();
 
     db.get(`SELECT * FROM teachers WHERE id = ?`, [req.session.teacherId], (err, teacher) => {
-        db.get(`SELECT * FROM courses WHERE id = ?`, [course_id], (err2, course) => {
-            if (!teacher || !course) return res.redirect('/teacher-dashboard');
+        if (!teacher) return res.redirect('/teacher-dashboard');
+        db.all(`SELECT * FROM courses`, [], (err2, allCourses = []) => {
+            let course = allCourses.find(c => String(c.id) === String(course_id));
+            if (!course) course = allCourses.find(c => c.teacher_id === teacher.id && isClassMatch(c.class_level, class_level));
+            if (!course) course = allCourses.find(c => isClassMatch(c.class_level, class_level));
 
+            const cId = course ? String(course.id) : '0';
+            const cCode = course ? course.code : ((teacher.subject || 'GEN').substring(0, 3).toUpperCase() + '-01');
+            const cTitle = course ? course.title : (teacher.subject || 'General Course');
             const nowStr = new Date().toLocaleDateString('en-GB');
+
             pool.query(
                 `INSERT INTO grade_submissions (academic_year, class_level, course_id, course_code, course_title, teacher_id, teacher_name, submitted_at)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                  ON CONFLICT (academic_year, class_level, course_code)
                  DO UPDATE SET teacher_id = EXCLUDED.teacher_id, teacher_name = EXCLUDED.teacher_name, submitted_at = EXCLUDED.submitted_at`,
-                [yearStr, class_level, String(course.id), course.code, course.title, teacher.id, teacher.name, nowStr]
+                [yearStr, class_level, cId, cCode, cTitle, teacher.id, teacher.name, nowStr]
             ).then(() => {
                 res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(class_level)}&course_id=${course_id}&submitted=1`);
             }).catch(e => {
                 res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(class_level)}&course_id=${course_id}`);
             });
+        });
+    });
+});
+
+// ================= 📋 ATTENDANCE SHEET & SAVE ROUTE (FIXED) =================
+app.get('/attendance-sheet/:secName', (req, res) => {
+    if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
+    let sec = decodeURIComponent(req.params.secName);
+    let selectedDate = req.query.date || new Date().toISOString().split('T')[0];
+    let savedAlert = req.query.saved ? `<div style="background:#d4edda; color:#155724; padding:12px; border-radius:6px; margin-bottom:15px; font-weight:bold; text-align:center;">✅ የ ${selectedDate} አቴንዳንስ በተሳካ ሁኔታ ተቀምጧል! (Attendance Saved Successfully!)</div>` : '';
+
+    db.all(`SELECT student_id, name, gender, class_level FROM students ORDER BY name ASC`, [], (err, allStudents = []) => {
+        let studentsInClass = allStudents.filter(s => isClassMatch(s.class_level, sec));
+        db.all(`SELECT * FROM daily_attendance WHERE class_level = ? AND date = ?`, [sec, selectedDate], (err, records = []) => {
+            let attendanceMap = {}; records.forEach(r => { attendanceMap[r.student_id] = r.status; });
+            let rowsHtml = '';
+            studentsInClass.forEach((st, i) => {
+                const stStatus = attendanceMap[st.student_id] || 'Present';
+                rowsHtml += `<tr>
+                    <td><b>${i+1}</b></td>
+                    <td><b>${st.student_id}</b></td>
+                    <td style="text-align:left; font-weight:bold;">${st.name}</td>
+                    <td>${st.gender || '-'}</td>
+                    <td>
+                        <label style="color:#27ae60; font-weight:bold; cursor:pointer; margin-right:15px;">
+                            <input type="radio" name="status_${st.student_id}" value="Present" ${stStatus==='Present'?'checked':''}> ✅ Present (ተገኝቷል)
+                        </label>
+                        <label style="color:#e74c3c; font-weight:bold; cursor:pointer;">
+                            <input type="radio" name="status_${st.student_id}" value="Absent" ${stStatus==='Absent'?'checked':''}> ❌ Absent (ቀርቷል)
+                        </label>
+                    </td>
+                </tr>`;
+            });
+
+            if (!rowsHtml) {
+                rowsHtml = `<tr><td colspan="5" style="padding:20px; color:#777;">በዚህ ክፍል የተመዘገበ ተማሪ የለም።</td></tr>`;
+            }
+
+            res.send(`<!DOCTYPE html>
+<html lang="am">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance - ${sec}</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #eef2f5; padding: 25px; margin: 0; }
+        .box { max-width: 900px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 5px 20px rgba(0,0,0,0.08); border-top: 6px solid #16a085; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: center; font-size: 14px; }
+        th { background: #1f4e79; color: white; }
+        tr:nth-child(even) { background: #f8fafc; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:15px;">
+            <h2 style="margin:0; color:#1f4e79;">📋 የዕለት አቴንዳንስ መቆጣጠሪያ (${sec})</h2>
+            <form method="GET" action="/attendance-sheet/${encodeURIComponent(sec)}" style="display:flex; gap:8px; align-items:center;">
+                <label style="font-weight:bold;">📅 ቀን:</label>
+                <input type="date" name="date" value="${selectedDate}" onchange="this.form.submit()" style="padding:7px; border:1px solid #ccc; border-radius:5px;">
+            </form>
+        </div>
+        ${savedAlert}
+        <form action="/save-attendance" method="POST">
+            <input type="hidden" name="class_level" value="${sec}">
+            <input type="hidden" name="date" value="${selectedDate}">
+            <table>
+                <tr><th>#</th><th>መታወቂያ (ID)</th><th>የተማሪ ስም (Name)</th><th>ፆታ</th><th>ሁኔታ (Status)</th></tr>
+                ${rowsHtml}
+            </table>
+            <button type="submit" style="width:100%; margin-top:20px; padding:14px; background:#27ae60; color:white; border:none; border-radius:8px; font-weight:bold; font-size:16px; cursor:pointer;">
+                💾 የዛሬውን አቴንዳንስ አስቀምጥ (Save Attendance)
+            </button>
+        </form>
+    </div>
+</body>
+</html>`);
+        });
+    });
+});
+
+app.post('/save-attendance', (req, res) => {
+    if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
+    const { class_level, date } = req.body;
+    const attDate = date || new Date().toISOString().split('T')[0];
+
+    db.all(`SELECT student_id, name, class_level FROM students`, [], (err, allStudents = []) => {
+        const studentsInClass = allStudents.filter(s => isClassMatch(s.class_level, class_level));
+        db.run(`DELETE FROM daily_attendance WHERE class_level = ? AND date = ?`, [class_level, attDate], () => {
+            studentsInClass.forEach(st => {
+                const statusVal = req.body[`status_${st.student_id}`];
+                if (statusVal) {
+                    db.run(`INSERT INTO daily_attendance (student_id, student_name, class_level, date, status) VALUES (?, ?, ?, ?, ?)`,
+                        [st.student_id, st.name, class_level, attDate, statusVal]);
+                }
+            });
+            res.redirect(`/attendance-sheet/${encodeURIComponent(class_level)}?date=${encodeURIComponent(attDate)}&saved=1`);
         });
     });
 });
@@ -1566,27 +1720,6 @@ app.get('/admin/master-roster/:year/:className', (req, res) => {
 </html>`);
                 });
             });
-        });
-    });
-});
-
-app.get('/attendance-sheet/:secName', (req, res) => {
-    if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
-    let sec = decodeURIComponent(req.params.secName);
-    let selectedDate = req.query.date || new Date().toISOString().split('T')[0];
-
-    db.all(`SELECT student_id, name, gender, class_level FROM students ORDER BY name ASC`, [], (err, allStudents = []) => {
-        let studentsInClass = allStudents.filter(s => isClassMatch(s.class_level, sec));
-        db.all(`SELECT * FROM daily_attendance WHERE class_level = ? AND date = ?`, [sec, selectedDate], (err, records = []) => {
-            let attendanceMap = {}; records.forEach(r => { attendanceMap[r.student_id] = r.status; });
-            let rowsHtml = '';
-            for (let i = 0; i < 50; i++) {
-                let st = studentsInClass[i];
-                if (st) {
-                    rowsHtml += `<tr><td>${i+1}</td><td>${st.student_id}</td><td style="text-align:left;">${st.name}</td><td>${st.gender}</td><td><label><input type="radio" name="status_${st.student_id}" value="Present" ${attendanceMap[st.student_id]==='Present'?'checked':''}> Present</label> &nbsp; <label><input type="radio" name="status_${st.student_id}" value="Absent" ${attendanceMap[st.student_id]==='Absent'?'checked':''}> Absent</label></td></tr>`;
-                } else { rowsHtml += `<tr><td>${i+1}</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>-</td></tr>`; }
-            }
-            res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Attendance</title></head><body><h2>Attendance - ${sec}</h2><form action="/save-attendance" method="POST"><input type="hidden" name="class_level" value="${sec}"><input type="hidden" name="date" value="${selectedDate}"><table border="1" style="border-collapse:collapse;width:100%;text-align:center;"><tr><th>No</th><th>ID</th><th>Name</th><th>Gender</th><th>Status</th></tr>${rowsHtml}</table><br><button type="submit" style="padding:10px 20px;background:#27ae60;color:white;border:none;border-radius:5px;">Save Attendance</button></form></body></html>`);
         });
     });
 });
