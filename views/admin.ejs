@@ -86,14 +86,14 @@
             </div>
         </div>
 
-        <!-- 🏆 እርምጃ 3: የመምህራን ውጤት ማስረከቢያ፣ የተማሪ ካርድ በID መፈለጊያ እና የዓመቱ ጠቅላላ ሮስተር (Roster & Report Card Center) -->
+        <!-- 🏆 Roster & Report Card Center -->
         <div class="card" style="border-color: #d35400; background: linear-gradient(to bottom, #ffffff, #fffdf9);">
             <h3 style="color: #d35400; border-bottom-color: #fdebd0;">
                 🏆 <span class="am">የተማሪዎች ውጤት ማስረከቢያ፣ የ1 ገጽ ካርድ እና ጠቅላላ ሮስተር (Roster Center)</span>
                 <span class="en">Submitted Grades, 1-Page Student Report Card & All Student Roster</span>
             </h3>
 
-            <!-- 1. 🔍 በተማሪው ID ብቻ ፈልጎ ሙሉ የ1 ገጽ ካርድ ከነፊርማ ማውጫ -->
+            <!-- 1. Search Student by ID -->
             <div style="background: #f8fafc; padding: 18px; border-radius: 10px; border: 2px solid #2980b9; margin-bottom: 22px;">
                 <h4 style="margin-top:0; color:#1f4e79;">
                     🔍 <span class="am">1. በተማሪው መታወቂያ (ID) ብቻ ሙሉ የሁሉም ትምህርቶች ውጤት ካርድ ማውጫ (1-Page PDF)</span>
@@ -116,7 +116,7 @@
                 </form>
             </div>
 
-            <!-- 2. 👨‍🏫 መምህራን ከ 100% ሞልተው ያስረከቧቸው ክፍሎች (Submitted by Teachers) -->
+            <!-- 2. Teacher Submitted Class Grades -->
             <div style="margin-bottom: 22px;">
                 <h4 style="margin-top:0; color:#27ae60;">
                     ✅ <span class="am">2. መምህራን ውጤት ሞልተው ያስረከቧቸው ክፍሎች ( በክፍል፣ በመምህሩ ስምና በዓመተ ምህረት )</span>
@@ -127,7 +127,7 @@
                 </div>
             </div>
 
-            <!-- 3. 📂 የዓመቱ ጠቅላላ ተማሪዎች ሮስተር (e.g. 2019 E.C All Student Roster) -->
+            <!-- 3. All Student Roster -->
             <div style="background: #fffcf5; padding: 18px; border-radius: 10px; border: 2px solid #f39c12;">
                 <h4 style="margin-top:0; color:#d35400;">
                     📂 <span class="am">3. የዓመቱ ጠቅላላ ተማሪዎች ሮስተር (All Student Roster by Year & Class)</span>
@@ -137,7 +137,7 @@
             </div>
         </div>
 
-        <!-- Notification (With Rich Text Color, Font, Size) -->
+        <!-- Notification (With Rich Text & Edit/Delete) -->
         <div class="card">
             <h3>📢 <span class="am">አዲስ ማስታወቂያ መላኪያ</span><span class="en">Send New Notification</span></h3>
             <form id="notifForm" action="/admin/save-notice" method="POST" enctype="multipart/form-data">
@@ -162,7 +162,7 @@
         </div>
 
         <div class="card">
-            <h3>🔔 <span class="am">ቀደም ሲል የተላኩ ማስታወቂያዎች</span><span class="en">Previously Sent Notifications</span></h3>
+            <h3>🔔 <span class="am">ቀደም ሲል የተላኩ ማስታወቂያዎች (ማስተካከል / ማጥፋት ይቻላል)</span><span class="en">Previously Sent Notifications (Edit / Delete)</span></h3>
             <div style="max-height: 400px; overflow-y: auto;">
                 <%- adminNotiRows %>
             </div>
@@ -170,7 +170,7 @@
 
         <!-- Pending Students & Registered Students Archive -->
         <div class="grid-2">
-            <!-- 🟢 Pending Students (Compact Size) -->
+            <!-- 🟢 Pending Students -->
             <div class="card compact-applicants-card" style="border-color: #27ae60;">
                 <h3 style="color: #27ae60; border-bottom-color: #d5f5e3;">🟢 <span class="am">አዲስ አመልካቾች</span><span class="en">Pending Approvals</span></h3>
                 <div style="overflow-x: auto;">
@@ -187,7 +187,7 @@
                 </div>
             </div>
 
-            <!-- 👨‍🎓 Registered Students Archive Card -->
+            <!-- 👨‍🎓 Registered Students Archive Card (OPEN REGISTERED STUDENTS LIST) -->
             <div class="card" style="border-color: #2980b9; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; background: linear-gradient(to bottom, #ffffff, #ebf5fb);">
                 <h3 style="color: #2980b9; border-bottom-color: #d4e6f1; width: 100%;">
                     👨‍🎓 <span class="am">የተመዘገቡ ተማሪዎች ማህደር</span><span class="en">Registered Students Archive</span>
@@ -202,10 +202,10 @@
             </div>
         </div>
 
-        <!-- 📊 Director's Weekly & Monthly Report Card (Editable on Next Page) -->
+        <!-- 📊 Director's Weekly & Monthly Report Card (GENERATE & EDIT REPORT) -->
         <div class="card" id="directorReportCard" style="border-color: #16a085; background: linear-gradient(to right, #ffffff, #f4fbf9);">
             <h3 style="color: #16a085; border-bottom-color: #d1f2eb;">
-                📊 <span class="am">የዲሬክተር ሳምንታዊ እና ወርሃዊ ሪፖርት (ሊስተካከል የሚችል)</span><span class="en">Director's Weekly & Monthly Report (Editable)</span>
+                📊 <span class="am">የዲሬክተር ሳምንታዊ እና ወርሃዊ ሪፖርት (ማዘጋጀት እና ማስተካከል)</span><span class="en">Director's Weekly & Monthly Report (Generate & Edit)</span>
             </h3>
             <form action="/admin/director-report" method="GET" target="_blank" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; align-items: end;">
                 <div>
@@ -225,19 +225,18 @@
                 </div>
                 <div>
                     <button type="submit" style="width:100%; background:#16a085; color:white; padding:12px; border:none; border-radius:6px; font-weight:bold; font-size:15px; cursor:pointer;">
-                        🖨️ <span class="am">ሪፖርት አዘጋጅና አስተካክል (Generate & Edit)</span><span class="en">Generate & Edit Report</span>
+                        🖨️ <span class="am">ሪፖርት አዘጋጅና አስተካክል (Generate & Edit Report)</span><span class="en">Generate & Edit Report</span>
                     </button>
                 </div>
             </form>
         </div>
 
-        <!-- 👩‍🏫 Teachers Management (Multi-Section Assignment & Teacher Handover) -->
+        <!-- 👩‍🏫 Teachers Management -->
         <div class="card" style="border-color: #8e44ad;">
             <h3 style="color: #8e44ad; border-bottom-color: #f4ecf7;">
                 👩‍🏫 <span class="am">መምህራን ምዝገባ እና የብዙ ክፍል/ሴክሽን ምደባ</span><span class="en">Teachers Registration & Multi-Section Assignment</span>
             </h3>
             
-            <!-- 1. Register New Teacher -->
             <form action="/admin/register-teacher-full" method="POST" enctype="multipart/form-data" style="margin-bottom: 20px; background: #faf8fc; padding: 18px; border-radius: 10px; border: 1px solid #e8daef;">
                 <h4 style="margin-top:0; color:#8e44ad;">➕ <span class="am">1. አዲስ መምህር መመዝገቢያ</span><span class="en">1. Register New Teacher</span></h4>
 
@@ -290,17 +289,11 @@
                 </button>
             </form>
 
-            <!-- 2. Assign Multiple Sections / Teacher Handover -->
             <div style="background: #eef7fa; padding: 18px; border-radius: 10px; border: 2px solid #3498db; margin-bottom: 20px;">
                 <h4 style="margin-top:0; color:#1f4e79;">
                     🔄 <span class="am">2. ለመምህር ብዙ ክፍሎች መመደቢያ / መምህር በመምህር መተኪያ</span>
                     <span class="en">2. Assign Multiple Sections / Teacher Handover</span>
                 </h4>
-                <p style="font-size: 12.5px; color: #555; margin-top: -5px; margin-bottom: 12px;">
-                    <span class="am">💡 ለአንድ መምህር ብዙ ክፍሎችን በአንድ ጊዜ መመደብ ይችላሉ። የሚለቅ መምህር ካለም ሲተኩት <b>ቀድሞ የተሞሉ ውጤቶች ሳይጠፉ</b> አዲሱ መምህር ከቆመበት ይቀጥላል።</span>
-                    <span class="en">💡 Assign one or multiple sections at once. Replacing a leaving teacher preserves all entered student grades.</span>
-                </p>
-
                 <form action="/admin/handover-section" method="POST">
                     <label style="font-weight:bold; font-size:13px; color:#1f4e79; display:block; margin-bottom:6px;">
                         🏫 <span class="am">ክፍሎች እና ሴክሽኖች ይምረጡ (1 ወይም ብዙ መምረጥ ይችላሉ) *</span>
@@ -334,7 +327,6 @@
                 </form>
             </div>
 
-            <!-- 3. Teachers List Table -->
             <div style="overflow-x: auto;">
                 <table id="teachersListTable">
                     <tr>
@@ -369,7 +361,7 @@
             </div>
         </div>
 
-        <!-- 📚 Courses Card (Expanded & Without Credit Hours) -->
+        <!-- 📚 Courses Card -->
         <div class="card expanded-subjects-card" style="border-color: #2980b9;">
             <h3>📚 <span class="am">የትምህርት አይነቶች ምዝገባ እና ዝርዝር</span><span class="en">Courses Registration & List</span></h3>
             <form action="/admin/add-course" method="POST" style="background: #f8fafc; padding: 18px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 20px;">
@@ -409,7 +401,6 @@
     </div>
 
     <script>
-        // 🌐 1. Language Toggle Function
         function setLang(lang) {
             const cleanLang = (lang === 'en') ? 'en' : 'am';
             document.body.className = 'lang-' + cleanLang;
@@ -427,11 +418,9 @@
         }
 
         document.addEventListener("DOMContentLoaded", function() {
-            // Apply saved language on load
             const savedLang = localStorage.getItem('prefLang') || 'am';
             setLang(savedLang);
 
-            // 🎨 2. Quill Rich Text Editor Setup (Color, Background, Font, Size, Lists, Align)
             var quill = new Quill('#editor', {
                 theme: 'snow',
                 placeholder: 'መልዕክትዎን እዚህ ይጻፉ... / Write your notification here...',
@@ -455,7 +444,6 @@
                 });
             }
 
-            // ☑️ 3. Populate Multi-Select Checkboxes for Sections
             const rawSelect = document.getElementById("rawSectionOptionsSource");
             const regGrid = document.getElementById("regSectionCheckboxes");
             const handGrid = document.getElementById("handoverSectionCheckboxes");
@@ -491,7 +479,6 @@
                 });
             }
 
-            // 👨‍🏫 4. Populate Teachers into Handover Dropdowns
             const table = document.getElementById("teachersListTable");
             const oldSel = document.getElementById("oldTeacherSelect");
             const newSel = document.getElementById("newTeacherSelect");
@@ -510,7 +497,6 @@
                 });
             }
 
-            // 🚫 5. Hide Credit Hours Column in Courses Table
             const coursesTable = document.getElementById("coursesListTable");
             if (coursesTable) {
                 coursesTable.querySelectorAll("tr").forEach((tr, rIdx) => {
@@ -522,7 +508,6 @@
                 });
             }
 
-            // 🏆 6. Fetch Submitted Grades & Roster Summary for Admin Center
             fetch('/api/admin/roster-summary')
                 .then(r => r.json())
                 .then(data => {
