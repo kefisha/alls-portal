@@ -733,8 +733,25 @@ app.get('/teacher-dashboard', (req, res) => {
                             db.all("SELECT * FROM notifications WHERE sender_name = ? ORDER BY id DESC", [teacher.name], (err, mySentNotifs = []) => {
                                 let classOptions = assignedClasses.map(cls => `<option value="${cls}" ${cls === selectedClass ? 'selected' : ''}>${cls}</option>`).join('');
                                 let courseOptions = classCourses.map(c => `<option value="${c.id}" ${c.id.toString() === selectedCourseId ? 'selected' : ''}>${c.title} (${c.code})</option>`).join('');
+let studentRows = studentsInClass.map((st, idx) => {
+    let asm = assessments.find(a => a.student_id === st.student_id) || {};
+    return `<tr>
+        <td>${idx + 1}</td>
+        <td><b>${st.student_id}</b></td>
+        <td style="text-align:left;">${st.name}</td>
+        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="20" name="quiz" value="${asm.quiz !== undefined ? asm.quiz : 0}" style="width:65px; text-align:center;"></td>
+        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="30" name="mid" value="${asm.mid !== undefined ? asm.mid : 0}" style="width:65px; text-align:center;"></td>
+        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="50" name="final" value="${asm.final !== undefined ? asm.final : 0}" style="width:65px; text-align:center;"></td>
+        <td>
+            <form id="form_${st.student_id}" class="ajax-grade-form" action="/teacher/save-grade?course_id=${selectedCourseId}" method="POST">
+                <input type="hidden" name="student_id" value="${st.student_id}">
+                <input type="hidden" name="course_id" value="${selectedCourseId}">
+                <button type="submit" style="background:#27ae60; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-weight:bold;">💾 Save</button>
+            </form>
+        </td>
+    </tr>`;
+}).join('');
 
-                                let studentRows = studentsInClass.map((st, idx) => {
                                     let asm = assessments.find(a => a.student_id === st.student_id) || {};
                                     return `<tr><td>${idx + 1}</td><td>${st.student_id}</td><td style="text-align:left;">${st.name}</td><td><input form="form_${st.student_id}" type="number" name="quiz" value="${asm.quiz || 0}" style="width:60px;"></td><td><input form="form_${st.student_id}" type="number" name="mid" value="${asm.mid || 0}" style="width:60px;"></td><td><input form="form_${st.student_id}" type="number" name="final" value="${asm.final || 0}" style="width:60px;"></td><td><form id="form_${st.student_id}" class="ajax-grade-form" action="/teacher/save-grade" method="POST"><input type="hidden" name="student_id" value="${st.student_id}"><button type="submit" style="background:#27ae60; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-weight:bold;">💾 Save</button></form></td></tr>`;
                                 }).join('');
@@ -1480,6 +1497,468 @@ app.get('/admin/registered-students', (req, res) => {
             maleCount,
             femaleCount,
             groupedStudentsHtml
+        });
+    });
+});
+// ==========================================
+// 🗄️ የመምህራን ውጤት ማስረከቢያ ሰንጠረዥ (Grade Submissions Table)
+// ==========================================
+pool.query(`CREATE TABLE IF NOT EXISTS grade_submissions (
+    id SERIAL PRIMARY KEY,
+    academic_year TEXT,
+    class_level TEXT,
+    course_id TEXT,
+    course_code TEXT,
+    course_title TEXT,
+    teacher_id TEXT,
+    teacher_name TEXT,
+    submitted_at TEXT,
+    UNIQUE(academic_year, class_level, course_code)
+)`).catch(err => console.error(err));
+
+// ✅ 1. የተስተካከለው የመምህር ውጤት ማስቀመጫ (Pending የሚለውን ችግር የሚፈታ)
+app.post('/teacher/save-grade', (req, res) => {
+    if (!req.session.teacherId) return res.json({ error: 'Unauthorized' });
+    
+    let courseId = req.body.course_id || req.query.course_id || '';
+    let { student_id, quiz, mid, final } = req.body;
+    
+    let q = Math.min(20, Math.max(0, parseFloat(quiz) || 0));
+    let m = Math.min(30, Math.max(0, parseFloat(mid) || 0));
+    let f = Math.min(50, Math.max(0, parseFloat(final) || 0));
+    let total = Number((q + m + f).toFixed(2));
+
+    const saveAssessment = (course) => {
+        if (!course) return res.json({ error: 'Course not found' });
+        db.get(`SELECT id FROM course_assessments WHERE student_id = ? AND course_code = ?`, [student_id, course.code], (err, row) => {
+            if (row) {
+                db.run(`UPDATE course_assessments SET teacher_id=?, quiz=?, mid=?, final=?, total=?, remark=? WHERE id=?`, 
+                [req.session.teacherId, q, m, f, total, total >= 50 ? 'Pass' : 'Fail', row.id], () => res.json({ success: true, total: total }));
+            } else {
+                db.run(`INSERT INTO course_assessments (student_id, teacher_id, course_code, course_title, quiz, mid, final, total, remark) VALUES (?,?,?,?,?,?,?,?,?)`,
+                [student_id, req.session.teacherId, course.code, course.title, q, m, f, total, total >= 50 ? 'Pass' : 'Fail'], () => res.json({ success: true, total: total }));
+            }
+        });
+    };
+
+    if (courseId) {
+        db.get(`SELECT * FROM courses WHERE id = ?`, [courseId], (err, course) => saveAssessment(course));
+    } else {
+        db.get(`SELECT * FROM courses WHERE teacher_id = ? LIMIT 1`, [req.session.teacherId], (err, course) => saveAssessment(course));
+    }
+});
+
+// 📤 2. መምህሩ ከ 100% ሞልቶ ሲጨርስ ለአድሚኑ ማስረከቢያ (Submit Grades to Admin)
+app.post('/teacher/submit-final-grades', (req, res) => {
+    if (!req.session.teacherId) return res.redirect('/');
+    const { class_level, course_id, academic_year } = req.body;
+    const yearStr = (academic_year || '2019 E.C').trim();
+
+    db.get(`SELECT * FROM teachers WHERE id = ?`, [req.session.teacherId], (err, teacher) => {
+        db.get(`SELECT * FROM courses WHERE id = ?`, [course_id], (err2, course) => {
+            if (!teacher || !course) return res.redirect('/teacher-dashboard');
+
+            const nowStr = new Date().toLocaleDateString('en-GB');
+            pool.query(
+                `INSERT INTO grade_submissions (academic_year, class_level, course_id, course_code, course_title, teacher_id, teacher_name, submitted_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                 ON CONFLICT (academic_year, class_level, course_code)
+                 DO UPDATE SET teacher_id = EXCLUDED.teacher_id, teacher_name = EXCLUDED.teacher_name, submitted_at = EXCLUDED.submitted_at`,
+                [yearStr, class_level, String(course.id), course.code, course.title, teacher.id, teacher.name, nowStr]
+            ).then(() => {
+                res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(class_level)}&course_id=${course_id}&submitted=1`);
+            }).catch(e => {
+                console.error(e);
+                res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(class_level)}&course_id=${course_id}`);
+            });
+        });
+    });
+});
+
+// 📡 3. በአድሚን ገጽ ላይ የገቡ ውጤቶችንና የዓመት ሮስተር ቁልፎችን ማምጫ API
+app.get('/api/admin/roster-summary', (req, res) => {
+    if (!req.session.isAdmin) return res.json({ submissions: [], years: [], sections: [] });
+    db.all(`SELECT * FROM grade_submissions ORDER BY academic_year DESC, class_level ASC`, [], (err, submissions = []) => {
+        db.all(`SELECT * FROM sections ORDER BY name ASC`, [], (err2, sections = []) => {
+            let years = [...new Set(submissions.map(s => s.academic_year))];
+            if (!years.includes('2019 E.C')) years.unshift('2019 E.C');
+            res.json({ submissions, years, sections });
+        });
+    });
+});
+
+// 🎓 4. የተማሪ ሙሉ የውጤት ካርድ (በ ID ፈልጎ በ1 ገጽ ከነፊርማ ማውጫ)
+app.get('/admin/student-report-card', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    const studentId = (req.query.student_id || '').trim().toUpperCase();
+    const academicYear = (req.query.year || '2019 E.C').trim();
+
+    if (!studentId) return res.send('<h3 style="text-align:center;color:red;margin-top:40px;">እባክዎ የተማሪውን መታወቂያ (ID) ያስገቡ!</h3>');
+
+    db.get(`SELECT * FROM students WHERE UPPER(student_id) = ?`, [studentId], (err, student) => {
+        if (!student) {
+            return res.send(`<div style="font-family:sans-serif;text-align:center;padding:50px;">
+                <h2 style="color:#e74c3c;">❌ ተማሪው አልተገኘም! (${studentId})</h2>
+                <p>እባክዎ ትክክለኛ የተማሪ መታወቂያ (ID) ማስገባትዎን ያረጋግጡ።</p>
+                <a href="/admin" style="background:#2980b9;color:white;padding:10px 20px;text-decoration:none;border-radius:6px;">⬅️ ወደ አድሚን ተመለስ</a>
+            </div>`);
+        }
+
+        db.all(`SELECT * FROM students`, [], (err2, allStudents = []) => {
+            const classmates = allStudents.filter(s => isClassMatch(s.class_level, student.class_level));
+            db.all(`SELECT * FROM courses`, [], (err3, allCourses = []) => {
+                const classCourses = allCourses.filter(c => isClassMatch(c.class_level, student.class_level));
+                db.all(`SELECT * FROM course_assessments`, [], (err4, allAssessments = []) => {
+
+                    // የክፍሉን ተማሪዎች ደረጃ (Rank) ማስያ
+                    const totalsMap = {};
+                    classmates.forEach(cm => {
+                        let sum = 0;
+                        classCourses.forEach(c => {
+                            const a = allAssessments.find(x => x.student_id === cm.student_id && x.course_code === c.code);
+                            if (a) sum += (parseFloat(a.total) || 0);
+                        });
+                        totalsMap[cm.student_id] = sum;
+                    });
+                    const sortedTotals = Object.values(totalsMap).sort((a, b) => b - a);
+                    const myGrandTotal = Number((totalsMap[student.student_id] || 0).toFixed(2));
+                    const myRank = sortedTotals.indexOf(myGrandTotal) + 1;
+                    const myAvg = classCourses.length > 0 ? (myGrandTotal / classCourses.length).toFixed(2) : '0.00';
+
+                    let courseRowsHtml = classCourses.map((c, i) => {
+                        const a = allAssessments.find(x => x.student_id === student.student_id && x.course_code === c.code) || {};
+                        const q = a.quiz !== undefined ? a.quiz : '-';
+                        const m = a.mid !== undefined ? a.mid : '-';
+                        const f = a.final !== undefined ? a.final : '-';
+                        const tot = a.total !== undefined ? a.total : 0;
+                        const grade = tot >= 90 ? 'A+' : tot >= 85 ? 'A' : tot >= 80 ? 'A-' : tot >= 75 ? 'B+' : tot >= 70 ? 'B' : tot >= 60 ? 'C' : tot >= 50 ? 'D' : 'F';
+                        const status = tot >= 50 ? '<span style="color:#27ae60;font-weight:bold;">Pass (አልፏል)</span>' : '<span style="color:#e74c3c;font-weight:bold;">Fail (ወድቋል)</span>';
+                        return `<tr>
+                            <td>${i + 1}</td>
+                            <td><b>${c.code}</b></td>
+                            <td style="text-align:left;"><b>${c.title}</b></td>
+                            <td>${c.teacher_name || '-'}</td>
+                            <td>${q}</td>
+                            <td>${m}</td>
+                            <td>${f}</td>
+                            <td style="font-weight:bold;font-size:15px;color:#1f4e79;">${tot}</td>
+                            <td><b>${grade}</b></td>
+                            <td>${status}</td>
+                        </tr>`;
+                    }).join('');
+
+                    if (!courseRowsHtml) {
+                        courseRowsHtml = `<tr><td colspan="10">ለዚህ ክፍል የተመዘገበ ትምህርት የለም።</td></tr>`;
+                    }
+
+                    res.send(`<!DOCTYPE html>
+<html lang="am">
+<head>
+    <meta charset="UTF-8">
+    <title>Student Report Card - ${student.name}</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #eef2f5; margin: 0; padding: 20px; color: #1e293b; }
+        .no-print { text-align: center; margin-bottom: 18px; }
+        .btn { padding: 10px 22px; border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; text-decoration: none; margin: 0 5px; font-size: 14px; display: inline-block; }
+        .card-page { max-width: 850px; margin: auto; background: white; padding: 35px 40px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.12); border: 3px double #1f4e79; box-sizing: border-box; }
+        .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #1f4e79; padding-bottom: 15px; margin-bottom: 20px; }
+        .header img { width: 80px; height: 80px; border-radius: 50%; border: 2px solid #f39c12; object-fit: cover; }
+        .header-center { text-align: center; flex: 1; }
+        .header-center h1 { margin: 0; font-size: 23px; color: #1f4e79; letter-spacing: 0.5px; }
+        .header-center h3 { margin: 5px 0 0; font-size: 15px; color: #d35400; text-transform: uppercase; }
+        .student-bio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #cbd5e1; margin-bottom: 20px; font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13.5px; }
+        th, td { border: 1px solid #94a3b8; padding: 9px 8px; text-align: center; }
+        th { background: #1f4e79; color: white; }
+        .summary-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 25px; }
+        .sum-box { background: #f1f5f9; border-left: 4px solid #1f4e79; padding: 12px; border-radius: 6px; text-align: center; }
+        .sum-box .val { font-size: 20px; font-weight: 800; color: #1f4e79; }
+        .sum-box .lbl { font-size: 12px; color: #475569; font-weight: bold; }
+        .sig-section { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-top: 45px; padding-top: 15px; text-align: center; font-size: 13.5px; font-weight: bold; }
+        .sig-line { border-top: 1.5px solid #1e293b; margin-top: 35px; padding-top: 6px; }
+        @media print {
+            @page { size: A4 portrait; margin: 10mm; }
+            body { background: white; padding: 0; }
+            .no-print { display: none !important; }
+            .card-page { box-shadow: none; width: 100%; max-width: 100%; padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print">
+        <button onclick="window.print()" class="btn" style="background:#27ae60;">🖨️ ፕሪንት አድርግ / Save as 1-Page PDF</button>
+        <a href="/admin" class="btn" style="background:#7f8c8d;">⬅️ ወደ አድሚን ተመለስ</a>
+    </div>
+
+    <div class="card-page">
+        <div class="header">
+            <img src="/uploads/logo.jpg" onerror="this.src='/uploads/logo.png'" alt="Logo">
+            <div class="header-center">
+                <h1>AMANUEL LIGHT AND LIFE SCHOOL</h1>
+                <h3>አማኑኤል ብርሃንና ሕይወት ትምህርት ቤት</h3>
+                <div style="margin-top:6px; display:inline-block; background:#1f4e79; color:white; padding:4px 16px; border-radius:15px; font-size:13px; font-weight:bold;">
+                    OFFICIAL STUDENT GRADE REPORT CARD (${academicYear})
+                </div>
+            </div>
+            <img src="/uploads/${student.photo || 'logo.jpg'}" onerror="this.src='/uploads/logo.jpg'" alt="Student">
+        </div>
+
+        <div class="student-bio">
+            <div><b>👤 የተማሪ ስም (Name):</b> ${student.name}</div>
+            <div><b>🆔 መታወቂያ (ID):</b> <span style="color:#2980b9;font-weight:bold;">${student.student_id}</span></div>
+            <div><b>⚧ ፆታ (Gender):</b> ${student.gender || '-'}</div>
+            <div><b>🏫 ክፍል (Class):</b> ${student.class_level}</div>
+            <div><b>📅 ዓመተ ምህረት (Year):</b> ${academicYear}</div>
+            <div><b>📞 ስልክ (Phone):</b> ${student.phone || '-'}</div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>ኮድ (Code)</th>
+                    <th>የትምህርት ዓይነት (Course Title)</th>
+                    <th>መምህር (Teacher)</th>
+                    <th>Quiz (20%)</th>
+                    <th>Mid (30%)</th>
+                    <th>Final (50%)</th>
+                    <th>Total (100%)</th>
+                    <th>Grade</th>
+                    <th>ውጤት (Status)</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${courseRowsHtml}
+            </tbody>
+        </table>
+
+        <div class="summary-row">
+            <div class="sum-box">
+                <div class="val">${myGrandTotal}</div>
+                <div class="lbl">ጠቅላላ ድምር (Grand Total)</div>
+            </div>
+            <div class="sum-box" style="border-left-color:#2980b9;">
+                <div class="val">${myAvg}%</div>
+                <div class="lbl">አማካይ ውጤት (Average)</div>
+            </div>
+            <div class="sum-box" style="border-left-color:#f39c12;">
+                <div class="val">${myRank} / ${classmates.length}</div>
+                <div class="lbl">ደረጃ (Class Rank)</div>
+            </div>
+            <div class="sum-box" style="border-left-color:#27ae60;">
+                <div class="val" style="color:${parseFloat(myAvg) >= 50 ? '#27ae60' : '#e74c3c'};">${parseFloat(myAvg) >= 50 ? 'Promoted' : 'Failed'}</div>
+                <div class="lbl">የዓመቱ ውሳኔ (Final Remark)</div>
+            </div>
+        </div>
+
+        <div class="sig-section">
+            <div>
+                <div class="sig-line">የክፍል ተቆጣጣሪ መምህር ፊርማ<br><span style="font-size:11px;font-weight:normal;">Homeroom Teacher's Signature</span></div>
+            </div>
+            <div>
+                <div class="sig-line">የትምህርት ቤቱ ማህተም<br><span style="font-size:11px;font-weight:normal;">Official School Stamp</span></div>
+            </div>
+            <div>
+                <div class="sig-line">የዲሬክተሩ ስምና ፊርማ<br><span style="font-size:11px;font-weight:normal;">School Director's Signature</span></div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>`);
+                });
+            });
+        });
+    });
+});
+
+// 🏆 5. የሙሉ ሴክሽን ማስተር ሮስተር እና የሁሉም ተማሪዎች ካርድ ማውጫ (Master Section Roster & Bulk PDF)
+app.get('/admin/master-roster/:year/:className', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    const academicYear = decodeURIComponent(req.params.year);
+    const className = decodeURIComponent(req.params.className);
+
+    db.all(`SELECT * FROM students ORDER BY name ASC`, [], (err, allStudents = []) => {
+        const students = allStudents.filter(s => isClassMatch(s.class_level, className));
+        db.all(`SELECT * FROM courses ORDER BY code ASC`, [], (err2, allCourses = []) => {
+            const courses = allCourses.filter(c => isClassMatch(c.class_level, className));
+            db.all(`SELECT * FROM course_assessments`, [], (err3, assessments = []) => {
+                db.all(`SELECT * FROM sections`, [], (err4, sections = []) => {
+                    const secObj = sections.find(s => isClassMatch(s.name, className)) || {};
+
+                    // የእያንዳንዱን ተማሪ ድምር እና አማካይ ማስያ
+                    const rosterData = students.map(st => {
+                        let sum = 0;
+                        const courseScores = courses.map(c => {
+                            const a = assessments.find(x => x.student_id === st.student_id && x.course_code === c.code) || {};
+                            const tot = a.total !== undefined ? parseFloat(a.total) : 0;
+                            sum += tot;
+                            return { code: c.code, title: c.title, quiz: a.quiz ?? '-', mid: a.mid ?? '-', final: a.final ?? '-', total: tot };
+                        });
+                        const avg = courses.length > 0 ? (sum / courses.length) : 0;
+                        return { student: st, courseScores, grandTotal: Number(sum.toFixed(2)), average: Number(avg.toFixed(2)) };
+                    });
+
+                    // ደረጃ (Rank) ማውጣት
+                    const sortedScores = [...rosterData].sort((a, b) => b.grandTotal - a.grandTotal);
+                    rosterData.forEach(item => {
+                        item.rank = sortedScores.findIndex(x => x.grandTotal === item.grandTotal) + 1;
+                    });
+                    // በደረጃ መደርደር
+                    rosterData.sort((a, b) => a.rank - b.rank);
+
+                    const courseHeaders = courses.map(c => `<th>${c.title}<br><small>(${c.code})</small></th>`).join('');
+                    const rosterRows = rosterData.map((r, idx) => {
+                        const scoreCells = r.courseScores.map(cs => `<td><b>${cs.total}</b><br><small style="color:#64748b;">(${cs.quiz}/${cs.mid}/${cs.final})</small></td>`).join('');
+                        return `<tr>
+                            <td><b>${idx + 1}</b></td>
+                            <td><b>${r.student.student_id}</b></td>
+                            <td style="text-align:left;font-weight:bold;">${r.student.name}</td>
+                            <td>${r.student.gender || '-'}</td>
+                            ${scoreCells}
+                            <td style="background:#eff6ff;font-weight:800;color:#1e3a8a;">${r.grandTotal}</td>
+                            <td style="background:#f0fdf4;font-weight:800;color:#166534;">${r.average}%</td>
+                            <td style="background:#fefce8;font-weight:800;color:#b45309;">🏆 ${r.rank}</td>
+                            <td class="no-print">
+                                <a href="/admin/student-report-card?student_id=${encodeURIComponent(r.student.student_id)}&year=${encodeURIComponent(academicYear)}" target="_blank" style="background:#2980b9;color:white;padding:5px 10px;border-radius:5px;text-decoration:none;font-size:12px;font-weight:bold;">📄 ካርድ አውጣ</a>
+                            </td>
+                        </tr>`;
+                    }).join('') || `<tr><td colspan="${courses.length + 8}">በዚህ ክፍል ምንም ተማሪ የለም።</td></tr>`;
+
+                    // የእያንዳንዱ ተማሪ የግል ካርድ (በአንድ ጊዜ ፕሪንት እንዲሆን)
+                    const allIndividualCardsHtml = rosterData.map(r => {
+                        const cRows = r.courseScores.map((cs, i) => `
+                            <tr>
+                                <td>${i + 1}</td>
+                                <td><b>${cs.code}</b></td>
+                                <td style="text-align:left;">${cs.title}</td>
+                                <td>${cs.quiz}</td>
+                                <td>${cs.mid}</td>
+                                <td>${cs.final}</td>
+                                <td><b>${cs.total}</b></td>
+                                <td>${cs.total >= 50 ? 'Pass' : 'Fail'}</td>
+                            </tr>
+                        `).join('');
+                        return `
+                        <div class="individual-card-page">
+                            <div style="text-align:center;border-bottom:2px solid #1f4e79;padding-bottom:10px;margin-bottom:12px;">
+                                <h2 style="margin:0;color:#1f4e79;">AMANUEL LIGHT AND LIFE SCHOOL</h2>
+                                <p style="margin:4px 0;font-weight:bold;color:#d35400;">OFFICIAL STUDENT REPORT CARD - ${academicYear}</p>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;background:#f8fafc;padding:10px;border:1px solid #cbd5e1;border-radius:6px;margin-bottom:12px;font-size:13.5px;">
+                                <div><b>Name:</b> ${r.student.name}</div>
+                                <div><b>ID:</b> ${r.student.student_id}</div>
+                                <div><b>Class:</b> ${className}</div>
+                                <div><b>Gender:</b> ${r.student.gender || '-'}</div>
+                            </div>
+                            <table>
+                                <tr><th>#</th><th>Code</th><th>Course</th><th>Quiz (20)</th><th>Mid (30)</th><th>Final (50)</th><th>Total (100)</th><th>Status</th></tr>
+                                ${cRows}
+                            </table>
+                            <div style="display:flex;justify-content:space-around;background:#f1f5f9;padding:10px;border-radius:6px;margin-top:12px;font-weight:bold;">
+                                <div>Grand Total: <span style="color:#1f4e79;">${r.grandTotal}</span></div>
+                                <div>Average: <span style="color:#27ae60;">${r.average}%</span></div>
+                                <div>Rank: <span style="color:#d35400;">${r.rank} / ${rosterData.length}</span></div>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;margin-top:35px;font-weight:bold;font-size:13px;">
+                                <div>Homeroom Teacher: ___________________</div>
+                                <div>Director's Signature & Stamp: ___________________</div>
+                            </div>
+                        </div>`;
+                    }).join('');
+
+                    res.send(`<!DOCTYPE html>
+<html lang="am">
+<head>
+    <meta charset="UTF-8">
+    <title>Master Roster - ${className} (${academicYear})</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #eef2f5; margin: 0; padding: 20px; color: #1e293b; }
+        .top-controls { background: white; padding: 15px; border-radius: 10px; max-width: 1200px; margin: 0 auto 20px auto; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+        .btn { padding: 10px 18px; border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; text-decoration: none; font-size: 14px; }
+        .roster-box { max-width: 1200px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.1); border-top: 8px solid #1f4e79; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
+        th, td { border: 1px solid #cbd5e1; padding: 8px 6px; text-align: center; }
+        th { background: #1f4e79; color: white; }
+        .individual-cards-wrapper { display: none; max-width: 850px; margin: 20px auto; }
+        .individual-card-page { background: white; padding: 30px; border: 2px solid #1f4e79; border-radius: 10px; margin-bottom: 25px; page-break-after: always; }
+        @media print {
+            body { background: white; padding: 0; }
+            .no-print, .top-controls { display: none !important; }
+            .roster-box { box-shadow: none; border: none; padding: 0; max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="top-controls no-print">
+        <button onclick="printMode('roster')" class="btn" style="background:#1f4e79;">🖨️ ሙሉውን የክፍል ሮስተር ፕሪንት / Save PDF (Master Roster)</button>
+        <button onclick="printMode('cards')" class="btn" style="background:#27ae60;">🗂️ የሁሉንም ተማሪዎች ካርድ በ1 ጊዜ ፕሪንት / PDF (All Individual Cards)</button>
+        <a href="/admin" class="btn" style="background:#7f8c8d;">⬅️ ወደ አድሚን ተመለስ</a>
+    </div>
+
+    <!-- 📋 1. የሙሉ ሴክሽን ማስተር ሮስተር ሰንጠረዥ -->
+    <div class="roster-box" id="masterRosterSection">
+        <div style="text-align:center; border-bottom:2px solid #1f4e79; padding-bottom:12px; margin-bottom:15px;">
+            <img src="/uploads/logo.jpg" onerror="this.src='/uploads/logo.png'" style="width:70px;height:70px;border-radius:50%;border:2px solid #1f4e79;object-fit:cover;">
+            <h1 style="margin:6px 0 2px;color:#1f4e79;font-size:24px;">AMANUEL LIGHT AND LIFE SCHOOL</h1>
+            <h3 style="margin:0;color:#d35400;">OFFICIAL CLASS MASTER ROSTER - ${academicYear}</h3>
+            <p style="margin:6px 0 0;font-weight:bold;color:#334155;">
+                🏫 ክፍል (Class): <span style="color:#2980b9;">${className}</span> &nbsp;|&nbsp;
+                👨‍🏫 የተቆጣጣሪ መምህር (Proctor): <span style="color:#27ae60;">${secObj.proctor_name || 'N/A'}</span> &nbsp;|&nbsp;
+                👨‍🎓 የተማሪ ብዛት (Total Students): ${rosterData.length}
+            </p>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>መታወቂያ (ID)</th>
+                    <th>የተማሪው ሙሉ ስም (Student Name)</th>
+                    <th>ፆታ</th>
+                    ${courseHeaders}
+                    <th>ጠቅላላ ድምር<br>(Total)</th>
+                    <th>አማካይ<br>(Average)</th>
+                    <th>ደረጃ<br>(Rank)</th>
+                    <th class="no-print">የግል ካርድ<br>(1-Page Card)</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rosterRows}
+            </tbody>
+        </table>
+
+        <div style="display:flex; justify-content:space-between; margin-top:45px; font-weight:bold; font-size:14px;">
+            <div>የክፍል ተቆጣጣሪ መምህር ፊርማ፦ ________________________</div>
+            <div>የዲሬክተሩ ስም፣ ፊርማ እና ማህተም፦ ________________________</div>
+        </div>
+    </div>
+
+    <!-- 🗂️ 2. የእያንዳንዱ ተማሪ የግል ካርድ (All Students Individual Cards) -->
+    <div class="individual-cards-wrapper" id="allCardsSection">
+        ${allIndividualCardsHtml}
+    </div>
+
+    <script>
+        function printMode(mode) {
+            const rosterEl = document.getElementById('masterRosterSection');
+            const cardsEl = document.getElementById('allCardsSection');
+            if (mode === 'cards') {
+                rosterEl.style.display = 'none';
+                cardsEl.style.display = 'block';
+                window.print();
+                rosterEl.style.display = 'block';
+                cardsEl.style.display = 'none';
+            } else {
+                rosterEl.style.display = 'block';
+                cardsEl.style.display = 'none';
+                window.print();
+            }
+        }
+    </script>
+</body>
+</html>`);
+                });
+            });
         });
     });
 });
