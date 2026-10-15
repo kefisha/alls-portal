@@ -1516,27 +1516,72 @@ app.get('/admin/director-report', (req, res) => {
                 <th>የተመደቡባቸው ክፍሎች (Sections)</th>
                 <th>ስልክ (Phone)</th>
             </tr>
-            ${teacherRowsHtml}
-        </table>
+// ==========================================
+// 📊 የዲሬክተር ሳምንታዊ እና ወርሃዊ ሪፖርት ማውጫ
+// ==========================================
+app.get('/admin/director-report', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
 
-        <div class="note-box">
-            <b>✍️ የዲሬክተሩ ማጠቃለያ ማስታወሻ (Director's Summary Note):</b>
-            <p style="margin:8px 0 0 0; line-height:1.6;">${directorNote || 'በዚህ ሳምንት/ወር የመማር ማስተማር ሂደቱ በሰላም እና በተሳካ ሁኔታ ተከናውኗል።'}</p>
-        </div>
+    const reportType = req.query.type === 'monthly' ? 'monthly' : 'weekly';
+    const directorNote = req.query.note || '';
+    const todayStr = new Date().toLocaleDateString('en-GB');
 
-        <div class="sig-row">
-            <div>የዲሬክተሩ ስምና ፊርማ፦ ________________________</div>
-            <div>የትምህርት ቤቱ ማህተም፦ ________________________</div>
-        </div>
-    </div>
-</body>
-</html>
-                    `);
+    db.all(`SELECT * FROM students`, [], (err, students = []) => {
+        db.all(`SELECT * FROM pending_students`, [], (err2, pending = []) => {
+            db.all(`SELECT * FROM teachers`, [], (err3, teachers = []) => {
+                db.all(`SELECT * FROM sections`, [], (err4, sections = []) => {
+
+                    const totalStudents = students.length;
+                    const maleCount = students.filter(s => (s.gender || '').toLowerCase() === 'male' || s.gender === 'ወንድ').length;
+                    const femaleCount = students.filter(s => (s.gender || '').toLowerCase() === 'female' || s.gender === 'ሴት').length;
+
+                    const classCounts = {};
+                    students.forEach(s => {
+                        const cls = s.class_level || 'Unassigned';
+                        if (!classCounts[cls]) classCounts[cls] = { total: 0, male: 0, female: 0 };
+                        classCounts[cls].total++;
+                        if ((s.gender || '').toLowerCase() === 'male' || s.gender === 'ወንድ') classCounts[cls].male++;
+                        else classCounts[cls].female++;
+                    });
+
+                    const classRowsHtml = Object.keys(classCounts).sort().map(cls => `
+                        <tr>
+                            <td><b>${cls}</b></td>
+                            <td>${classCounts[cls].male}</td>
+                            <td>${classCounts[cls].female}</td>
+                            <td><b>${classCounts[cls].total}</b></td>
+                        </tr>
+                    `).join('') || `<tr><td colspan="4">ምንም የተመዘገበ ተማሪ የለም</td></tr>`;
+
+                    const teacherRowsHtml = teachers.map(t => `
+                        <tr>
+                            <td><b>${t.id}</b></td>
+                            <td>${t.name}</td>
+                            <td>${t.subject || '-'}</td>
+                            <td>${t.assigned_sections || '-'}</td>
+                            <td>${t.phone || '-'}</td>
+                        </tr>
+                    `).join('') || `<tr><td colspan="5">ምንም የተመዘገበ መምህር የለም</td></tr>`;
+
+                    res.render('director-report', {
+                        reportType,
+                        directorNote,
+                        todayStr,
+                        totalStudents,
+                        maleCount,
+                        femaleCount,
+                        pendingCount: pending.length,
+                        teacherCount: teachers.length,
+                        sectionCount: sections.length,
+                        classRowsHtml,
+                        teacherRowsHtml
+                    });
                 });
             });
         });
     });
 });
+
 
 // ==========================================
 // 👨‍🎓 የተመዘገቡ ተማሪዎች ማህደር እና ባርኮድ ስካነር ራውት
