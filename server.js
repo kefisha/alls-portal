@@ -231,7 +231,26 @@ app.get('/admin', (req, res) => {
                             let teacherOptions = teachers.map(tc => `<option value="${tc.id}">${tc.name}</option>`).join('');
                             let cRows = courses.map(c => `<tr><td>${c.code}</td><td>${c.title}</td><td>${c.class_level}</td><td>${c.teacher_name||'-'}</td><td><a href="/admin/delete-course/${c.id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td></tr>`).join('');
                             let tRows = teachers.map(tc => `<tr><td>${tc.id}</td><td style="text-align:left;">${tc.name}</td><td>${tc.assigned_sections || 'None'}</td><td><span style="color:#d35400; font-weight:bold;">${tc.plain_pin || '[Hashed]'}</span></td><td><a href="/admin/delete-teacher/${tc.id}?lang=${lang}" onclick="return confirm('Remove?')" style="color:red; font-weight:bold;">🗑️ Remove</a></td></tr>`).join('');
-                            let adminNotiRows = adminNotifs.map(n => `<div style="background:#fdf2e9; padding:15px; margin-bottom:15px; border-radius:8px; border:1px solid #e67e22;"><strong>🔔 ${n.sender_name} (${n.created_at})</strong><br><div style="margin-top:10px;">${n.message}</div>${n.attachment ? `<br><a href="/uploads/${n.attachment}" target="_blank" style="color:blue; font-weight:bold;">📎 ፋይል ክፈት</a>` : ''}</div>`).join('');
+                            
+                            // 🔔 ማስታወቂያዎችን ማስተካከል (Edit) እና ማጥፋት (Delete) የሚያስችል ኮድ
+                            let adminNotiRows = adminNotifs.map(n => `
+                                <div style="background:#fdf2e9; padding:15px; margin-bottom:15px; border-radius:8px; border:1px solid #e67e22;">
+                                    <strong>🔔 ${n.sender_name} (${n.created_at})</strong>
+                                    <div style="margin-top:10px; background:white; padding:10px; border-radius:6px; border:1px solid #ddd;">${n.message}</div>
+                                    ${n.attachment ? `<br><a href="/uploads/${n.attachment}" target="_blank" style="color:blue; font-weight:bold;">📎 ፋይል ክፈት</a>` : ''}
+                                    <div style="margin-top:15px; border-top:1px solid #ccc; padding-top:10px; display:flex; gap:10px;">
+                                        <button onclick="document.getElementById('editNotif_${n.id}').style.display='block'" style="background:orange; color:white; border:none; padding:6px 14px; border-radius:4px; cursor:pointer; font-weight:bold;">✏️ Edit</button> 
+                                        <a href="/delete-notification/${n.id}" onclick="return confirm('እርግጠኛ ነዎት ይህ ማስታወቂያ ይጠፋ?')" style="background:red; color:white; padding:6px 14px; border-radius:4px; text-decoration:none; font-size:13px; font-weight:bold; display:inline-block;">🗑️ Delete</a>
+                                    </div>
+                                    <form id="editNotif_${n.id}" action="/edit-notification/${n.id}" method="POST" enctype="multipart/form-data" style="display:none; margin-top:15px; background:#fff; padding:15px; border-radius:6px; border:1px solid #ccc;">
+                                        <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:5px;">ማስታወቂያውን ማስተካከል:</label>
+                                        <textarea name="message" rows="4" style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc; border-radius:4px;">${n.message.replace(/<[^>]+>/g, '')}</textarea>
+                                        <input type="file" name="attachment" style="display:block; margin-bottom:10px;">
+                                        <button type="submit" style="background:green; color:white; border:none; padding:8px 18px; border-radius:4px; font-weight:bold; cursor:pointer;">💾 Save Changes</button>
+                                        <button type="button" onclick="document.getElementById('editNotif_${n.id}').style.display='none'" style="background:gray; color:white; border:none; padding:8px 14px; border-radius:4px; cursor:pointer; margin-left:5px;">Cancel</button>
+                                    </form>
+                                </div>
+                            `).join('');
 
                             res.render('admin', {
                                 lang, pRows, secRows, cRows, tRows, adminNotiRows, sectionOptions, teacherOptions
@@ -312,6 +331,19 @@ app.get('/admin/delete-course/:id', (req, res) => {
 app.get('/admin/delete-teacher/:id', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     db.run(`DELETE FROM teachers WHERE id = ?`, [req.params.id], () => res.redirect('/admin'));
+});
+
+// ================= NOTIFICATIONS EDIT & DELETE ROUTES =================
+app.get('/delete-notification/:id', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.run(`DELETE FROM notifications WHERE id = ?`, [req.params.id], () => res.redirect('/admin'));
+});
+
+app.post('/edit-notification/:id', upload.single('attachment'), (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    let q = req.file ? `UPDATE notifications SET message = ?, attachment = ? WHERE id = ?` : `UPDATE notifications SET message = ? WHERE id = ?`;
+    let p = req.file ? [xss(req.body.message), req.file.filename, req.params.id] : [xss(req.body.message), req.params.id];
+    db.run(q, p, () => res.redirect('/admin'));
 });
 
 // ================= TEACHER DASHBOARD & GRADES =================
