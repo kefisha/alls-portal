@@ -112,16 +112,64 @@
                 </div>
             </div>
 
-            <!-- Teachers -->
+                        <!-- Teachers Management (Full Info + Photo + Auto ID) -->
             <div class="card" style="border-color: #8e44ad;">
-                <h3 style="color: #8e44ad; border-bottom-color: #f4ecf7;">👩‍🏫 <span class="am">መምህራን አስተዳደር</span><span class="en">Teachers Management</span></h3>
-                <form action="/admin/add-teacher" method="POST" style="margin-bottom: 15px; background: #fafafa; padding: 15px; border-radius: 8px;">
-                    <input type="text" name="name" placeholder="ሙሉ ስም / Full Name" required>
-                    <input type="text" name="phone" placeholder="ስልክ ቁጥር / Phone Number" required>
-                    <label style="display:block; margin-bottom:5px;"><span class="am">የሚያስተምሩት ክፍል</span><span class="en">Assigned Sections</span>:</label>
-                    <input type="text" name="assigned_sections" placeholder="Grade 1 - Section A">
-                    <button type="submit" class="btn-green" style="width: 100%;">➕ <span class="am">አዲስ መምህር መዝግብ</span><span class="en">Register Teacher</span></button>
+                <h3 style="color: #8e44ad; border-bottom-color: #f4ecf7;">
+                    👩‍🏫 <span class="am">መምህራን አስተዳደር (ሙሉ ምዝገባ)</span><span class="en">Teachers Management (Full Registration)</span>
+                </h3>
+                
+                <form action="/admin/register-teacher-full" method="POST" enctype="multipart/form-data" style="margin-bottom: 15px; background: #faf8fc; padding: 18px; border-radius: 10px; border: 1px solid #e8daef;">
+                    
+                    <label style="font-weight:bold; font-size:13px;"><span class="am">👤 የመምህሩ ሙሉ ስም *</span><span class="en">👤 Teacher Full Name *</span></label>
+                    <input type="text" name="name" placeholder="ሙሉ ስም (ከነአያት) / Full Name" required>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div>
+                            <label style="font-weight:bold; font-size:13px;"><span class="am">⚧ ፆታ *</span><span class="en">⚧ Gender *</span></label>
+                            <select name="gender" required>
+                                <option value="">ፆታ / Gender</option>
+                                <option value="Male">ወንድ / Male</option>
+                                <option value="Female">ሴት / Female</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-weight:bold; font-size:13px;"><span class="am">📞 ስልክ ቁጥር *</span><span class="en">📞 Phone Number *</span></label>
+                            <input type="text" name="phone" placeholder="09... / 07..." required>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div>
+                            <label style="font-weight:bold; font-size:13px;"><span class="am">📘 የሚያስተምሩት ትምህርት *</span><span class="en">📘 Subject / Department *</span></label>
+                            <input type="text" name="subject" placeholder="ምሳሌ: Maths, English..." required>
+                        </div>
+                        <div>
+                            <label style="font-weight:bold; font-size:13px;"><span class="am">🏫 የሚያስተምሩት ሴክሽን *</span><span class="en">🏫 Assigned Sections *</span></label>
+                            <input type="text" name="assigned_sections" placeholder="Grade 1 - Section A" required>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div>
+                            <label style="font-weight:bold; font-size:13px;"><span class="am">🚨 የአደጋ ጊዜ ተጠሪ ስም *</span><span class="en">🚨 Emergency Contact Name *</span></label>
+                            <input type="text" name="emergency_name" placeholder="ተጠሪ ስም / Contact Name" required>
+                        </div>
+                        <div>
+                            <label style="font-weight:bold; font-size:13px;"><span class="am">☎️ የአደጋ ጊዜ ተጠሪ ስልክ *</span><span class="en">☎️ Emergency Phone *</span></label>
+                            <input type="text" name="emergency_phone" placeholder="09... / 07..." required>
+                        </div>
+                    </div>
+
+                    <label style="font-weight:bold; font-size:13px; display:block; margin-top:5px;">
+                        📷 <span class="am">የመምህሩ ፎቶ (ለመታወቂያ ካርድ)</span><span class="en">Teacher Photo (For ID Card)</span>:
+                    </label>
+                    <input type="file" name="teacher_photo" accept="image/*" style="background: white;">
+
+                    <button type="submit" class="btn-green" style="width: 100%; background: #8e44ad; padding: 12px; font-size: 15px; margin-top: 8px;">
+                        🪪 <span class="am">መምህር መዝግብና መታወቂያ አውጣ</span><span class="en">Register & Generate Teacher ID</span>
+                    </button>
                 </form>
+
                 <div style="overflow-x: auto;">
                     <table>
                         <tr>
@@ -135,7 +183,7 @@
                     </table>
                 </div>
             </div>
-        </div>
+
 
         <div class="grid-2">
             <!-- Sections -->
