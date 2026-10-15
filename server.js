@@ -1544,16 +1544,20 @@ app.get('/admin/director-report', (req, res) => {
                         else classCounts[cls].female++;
                     });
 
-                    const classRowsHtml = Object.keys(classCounts).sort().map(cls => `
+                    let classRowsHtml = Object.keys(classCounts).sort().map(cls => `
                         <tr>
                             <td><b>${cls}</b></td>
                             <td>${classCounts[cls].male}</td>
                             <td>${classCounts[cls].female}</td>
                             <td><b>${classCounts[cls].total}</b></td>
                         </tr>
-                    `).join('') || `<tr><td colspan="4">ምንም የተመዘገበ ተማሪ የለም</td></tr>`;
+                    `).join('');
 
-                    const teacherRowsHtml = teachers.map(t => `
+                    if (!classRowsHtml) {
+                        classRowsHtml = `<tr><td colspan="4">ምንም የተመዘገበ ተማሪ የለም</td></tr>`;
+                    }
+
+                    let teacherRowsHtml = teachers.map(t => `
                         <tr>
                             <td><b>${t.id}</b></td>
                             <td>${t.name}</td>
@@ -1561,7 +1565,11 @@ app.get('/admin/director-report', (req, res) => {
                             <td>${t.assigned_sections || '-'}</td>
                             <td>${t.phone || '-'}</td>
                         </tr>
-                    `).join('') || `<tr><td colspan="5">ምንም የተመዘገበ መምህር የለም</td></tr>`;
+                    `).join('');
+
+                    if (!teacherRowsHtml) {
+                        teacherRowsHtml = `<tr><td colspan="5">ምንም የተመዘገበ መምህር የለም</td></tr>`;
+                    }
 
                     res.render('director-report', {
                         reportType,
@@ -1576,12 +1584,12 @@ app.get('/admin/director-report', (req, res) => {
                         classRowsHtml,
                         teacherRowsHtml
                     });
+
                 });
             });
         });
     });
 });
-
 
 // ==========================================
 // 👨‍🎓 የተመዘገቡ ተማሪዎች ማህደር እና ባርኮድ ስካነር ራውት
