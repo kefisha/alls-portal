@@ -1327,7 +1327,7 @@ app.get('/admin/teacher-id/:id', (req, res) => {
     });
 });
 // ==========================================
-// 🔄 መምህር በመምህር መተኪያ እና የክፍል ምደባ ማስተላለፊያ (ውጤት ሳይጠፋ)
+// 🔄 ለአንድ መምህር ብዙ ክፍሎች መመደቢያ እና መምህር በመምህር መተኪያ (ውጤት ሳይጠፋ)
 // ==========================================
 app.post('/admin/handover-section', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
@@ -1335,10 +1335,16 @@ app.post('/admin/handover-section', (req, res) => {
     const { section_name, old_teacher_id, new_teacher_id } = req.body;
     if (!section_name || !new_teacher_id) return res.redirect('/admin');
 
-    const targetSection = section_name.trim();
+    // የተመረጡትን ብዙ ክፍሎች/ሴክሽኖች መለየት
+    const selectedSections = (Array.isArray(section_name) ? section_name.join(',') : section_name)
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
 
-    // 1. የሚለቀው መምህር ተመርጦ ከሆነ፣ ያንን ክፍል (ለምሳሌ 2A) ከእሱ ላይ ብቻ ያነሳል
-    const removeOldTeacherSection = (callback) => {
+    if (selectedSections.length === 0) return res.redirect('/admin');
+
+    // 1. የሚለቀው መምህር ተመርጦ ከሆነ የተመረጡትን ክፍሎች ከእሱ ላይ ያነሳል
+    const removeOldTeacherSections = (callback) => {
         if (!old_teacher_id) return callback();
         
         db.get(`SELECT assigned_sections FROM teachers WHERE id = ?`, [old_teacher_id], (err, oldT) => {
@@ -1347,7 +1353,7 @@ app.post('/admin/handover-section', (req, res) => {
             let currentSecs = (oldT.assigned_sections || '')
                 .split(',')
                 .map(s => s.trim())
-                .filter(s => s && s !== targetSection);
+                .filter(s => s && !selectedSections.includes(s));
                 
             db.run(`UPDATE teachers SET assigned_sections = ? WHERE id = ?`, [currentSecs.join(', '), old_teacher_id], () => {
                 callback();
@@ -1355,8 +1361,8 @@ app.post('/admin/handover-section', (req, res) => {
         });
     };
 
-    // 2. ክፍሉን ለአዲሱ መምህር ይሰጣል (የተማሪ ውጤቶች በክፍሉ ስለሚቀመጡ አዲሱ መምህር ወዲያውኑ ያገኛቸዋል)
-    removeOldTeacherSection(() => {
+    // 2. የተመረጡትን ብዙ ክፍሎች ለአዲሱ/ለተመረጠው መምህር ይመድባል (ውጤቶች ሳይጠፉ)
+    removeOldTeacherSections(() => {
         db.get(`SELECT name, assigned_sections FROM teachers WHERE id = ?`, [new_teacher_id], (err, newT) => {
             if (err || !newT) return res.redirect('/admin');
 
@@ -1365,19 +1371,173 @@ app.post('/admin/handover-section', (req, res) => {
                 .map(s => s.trim())
                 .filter(Boolean);
 
-            if (!newSecs.includes(targetSection)) {
-                newSecs.push(targetSection);
-            }
+            selectedSections.forEach(sec => {
+                if (!newSecs.includes(sec)) newSecs.push(sec);
+            });
 
             db.run(`UPDATE teachers SET assigned_sections = ? WHERE id = ?`, [newSecs.join(', '), new_teacher_id], () => {
-                // በ sections ሰንጠረዥ ላይም የተቆጣጣሪ (Proctor) ስሙን ወደ አዲሱ መምህር ያዞራል
-                db.run(`UPDATE sections SET proctor = ? WHERE name = ?`, [newT.name, targetSection], () => {
-                    res.redirect('/admin');
+                selectedSections.forEach(sec => {
+                    db.run(`UPDATE sections SET proctor = ? WHERE name = ?`, [newT.name, sec], () => {});
+                });
+                res.redirect('/admin');
+            });
+        });
+    });
+});
+
+// ==========================================
+// 📊 የዲሬክተር ሳምንታዊ እና ወርሃዊ ሪፖርት ማውጫ (Director Weekly & Monthly Report)
+// ==========================================
+app.get('/admin/director-report', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+
+    const reportType = req.query.type === 'monthly' ? 'monthly' : 'weekly';
+    const directorNote = req.query.note || '';
+    const todayStr = new Date().toLocaleDateString('en-GB');
+
+    db.all(`SELECT * FROM students`, [], (err, students = []) => {
+        db.all(`SELECT * FROM pending_students`, [], (err2, pending = []) => {
+            db.all(`SELECT * FROM teachers`, [], (err3, teachers = []) => {
+                db.all(`SELECT * FROM sections`, [], (err4, sections = []) => {
+
+                    const totalStudents = students.length;
+                    const maleCount = students.filter(s => (s.gender || '').toLowerCase() === 'male' || s.gender === 'ወንድ').length;
+                    const femaleCount = students.filter(s => (s.gender || '').toLowerCase() === 'female' || s.gender === 'ሴት').length;
+
+                    // በየክፍሉ ያሉ ተማሪዎች ብዛት ማስያ
+                    const classCounts = {};
+                    students.forEach(s => {
+                        const cls = s.class_level || 'Unassigned';
+                        if (!classCounts[cls]) classCounts[cls] = { total: 0, male: 0, female: 0 };
+                        classCounts[cls].total++;
+                        if ((s.gender || '').toLowerCase() === 'male' || s.gender === 'ወንድ') classCounts[cls].male++;
+                        else classCounts[cls].female++;
+                    });
+
+                    const classRowsHtml = Object.keys(classCounts).sort().map(cls => `
+                        <tr>
+                            <td><b>${cls}</b></td>
+                            <td>${classCounts[cls].male}</td>
+                            <td>${classCounts[cls].female}</td>
+                            <td><b>${classCounts[cls].total}</b></td>
+                        </tr>
+                    `).join('') || `<tr><td colspan="4">ምንም የተመዘገበ ተማሪ የለም</td></tr>`;
+
+                    const teacherRowsHtml = teachers.map(t => `
+                        <tr>
+                            <td><b>${t.id}</b></td>
+                            <td>${t.name}</td>
+                            <td>${t.subject || '-'}</td>
+                            <td>${t.assigned_sections || '-'}</td>
+                            <td>${t.phone || '-'}</td>
+                        </tr>
+                    `).join('') || `<tr><td colspan="5">ምንም የተመዘገበ መምህር የለም</td></tr>`;
+
+                    res.send(`
+<!DOCTYPE html>
+<html lang="am">
+<head>
+    <meta charset="UTF-8">
+    <title>Director Report - Amanuel Light and Life School</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #eef2f5; margin: 0; padding: 25px; color: #2c3e50; }
+        .report-page { max-width: 900px; margin: auto; background: white; padding: 35px; border-radius: 12px; box-shadow: 0 5px 25px rgba(0,0,0,0.1); border-top: 8px solid #1f4e79; }
+        .header { text-align: center; border-bottom: 2px solid #1f4e79; padding-bottom: 15px; margin-bottom: 25px; }
+        .header img { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid #1f4e79; }
+        .header h1 { margin: 8px 0 4px 0; color: #1f4e79; font-size: 24px; }
+        .badge { display: inline-block; background: #16a085; color: white; padding: 6px 18px; border-radius: 20px; font-weight: bold; font-size: 15px; margin-top: 5px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px; }
+        .stat-card { background: #f8fafc; border: 1px solid #cbd5e1; border-left: 5px solid #2980b9; padding: 15px; border-radius: 8px; text-align: center; }
+        .stat-card .num { font-size: 26px; font-weight: 800; color: #1f4e79; }
+        .stat-card .lbl { font-size: 13px; color: #555; font-weight: bold; }
+        h3 { color: #1f4e79; border-left: 4px solid #f39c12; padding-left: 10px; margin-top: 25px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+        th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: center; }
+        th { background: #1f4e79; color: white; }
+        .note-box { background: #fffdf5; border: 1px solid #f39c12; padding: 15px; border-radius: 8px; margin-top: 20px; }
+        .sig-row { display: flex; justify-content: space-between; margin-top: 50px; padding-top: 20px; font-weight: bold; }
+        .no-print { text-align: center; margin-bottom: 20px; }
+        .btn { padding: 10px 20px; border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; text-decoration: none; margin: 0 5px; }
+        @media print { body { background: white; padding: 0; } .no-print { display: none; } .report-page { box-shadow: none; border: none; } }
+    </style>
+</head>
+<body>
+    <div class="no-print">
+        <button onclick="window.print()" class="btn" style="background:#2980b9;">🖨️ ፕሪንት አድርግ / Save PDF</button>
+        <a href="/admin" class="btn" style="background:#7f8c8d;">⬅️ ወደ አድሚን ተመለስ</a>
+    </div>
+
+    <div class="report-page">
+        <div class="header">
+            <img src="/uploads/logo.jpg" alt="School Logo">
+            <h1>AMANUEL LIGHT AND LIFE SCHOOL</h1>
+            <div class="badge">
+                ${reportType === 'monthly' ? '🗓️ የዲሬክተር ወርሃዊ ሪፖርት (Monthly Director Report)' : '📆 የዲሬክተር ሳምንታዊ ሪፖርት (Weekly Director Report)'}
+            </div>
+            <p style="margin:8px 0 0 0; font-size:13.5px; color:#555;">ቀን / Date: <b>${todayStr}</b></p>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="num">${totalStudents}</div>
+                <div class="lbl">ጠቅላላ ተማሪዎች (ወ: ${maleCount} | ሴ: ${femaleCount})</div>
+            </div>
+            <div class="stat-card" style="border-left-color:#e67e22;">
+                <div class="num">${pending.length}</div>
+                <div class="lbl">አዲስ አመልካቾች (Pending)</div>
+            </div>
+            <div class="stat-card" style="border-left-color:#8e44ad;">
+                <div class="num">${teachers.length}</div>
+                <div class="lbl">ጠቅላላ መምህራን (Teachers)</div>
+            </div>
+            <div class="stat-card" style="border-left-color:#27ae60;">
+                <div class="num">${sections.length}</div>
+                <div class="lbl">ጠቅላላ ሴክሽኖች (Sections)</div>
+            </div>
+        </div>
+
+        <h3>1. የተማሪዎች ብዛት በየክፍሉ እና በፆታ (Student Enrollment by Class & Gender)</h3>
+        <table>
+            <tr>
+                <th>ክፍል እና ሴክሽን (Class / Section)</th>
+                <th>ወንድ (Male)</th>
+                <th>ሴት (Female)</th>
+                <th>ድምር (Total)</th>
+            </tr>
+            ${classRowsHtml}
+        </table>
+
+        <h3>2. የመምህራን እና የክፍል ምደባ ዝርዝር (Teachers & Assigned Sections)</h3>
+        <table>
+            <tr>
+                <th>መታወቂያ (ID)</th>
+                <th>የመምህሩ ስም (Name)</th>
+                <th>ትምህርት (Subject)</th>
+                <th>የተመደቡባቸው ክፍሎች (Sections)</th>
+                <th>ስልክ (Phone)</th>
+            </tr>
+            ${teacherRowsHtml}
+        </table>
+
+        <div class="note-box">
+            <b>✍️ የዲሬክተሩ ማጠቃለያ ማስታወሻ (Director's Summary Note):</b>
+            <p style="margin:8px 0 0 0; line-height:1.6;">${directorNote || 'በዚህ ሳምንት/ወር የመማር ማስተማር ሂደቱ በሰላም እና በተሳካ ሁኔታ ተከናውኗል።'}</p>
+        </div>
+
+        <div class="sig-row">
+            <div>የዲሬክተሩ ስምና ፊርማ፦ ________________________</div>
+            <div>የትምህርት ቤቱ ማህተም፦ ________________________</div>
+        </div>
+    </div>
+</body>
+</html>
+                    `);
                 });
             });
         });
     });
 });
+
 
 app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
