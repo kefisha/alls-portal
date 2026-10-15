@@ -1326,6 +1326,58 @@ app.get('/admin/teacher-id/:id', (req, res) => {
         `);
     });
 });
+// ==========================================
+// 🔄 መምህር በመምህር መተኪያ እና የክፍል ምደባ ማስተላለፊያ (ውጤት ሳይጠፋ)
+// ==========================================
+app.post('/admin/handover-section', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+
+    const { section_name, old_teacher_id, new_teacher_id } = req.body;
+    if (!section_name || !new_teacher_id) return res.redirect('/admin');
+
+    const targetSection = section_name.trim();
+
+    // 1. የሚለቀው መምህር ተመርጦ ከሆነ፣ ያንን ክፍል (ለምሳሌ 2A) ከእሱ ላይ ብቻ ያነሳል
+    const removeOldTeacherSection = (callback) => {
+        if (!old_teacher_id) return callback();
+        
+        db.get(`SELECT assigned_sections FROM teachers WHERE id = ?`, [old_teacher_id], (err, oldT) => {
+            if (err || !oldT) return callback();
+            
+            let currentSecs = (oldT.assigned_sections || '')
+                .split(',')
+                .map(s => s.trim())
+                .filter(s => s && s !== targetSection);
+                
+            db.run(`UPDATE teachers SET assigned_sections = ? WHERE id = ?`, [currentSecs.join(', '), old_teacher_id], () => {
+                callback();
+            });
+        });
+    };
+
+    // 2. ክፍሉን ለአዲሱ መምህር ይሰጣል (የተማሪ ውጤቶች በክፍሉ ስለሚቀመጡ አዲሱ መምህር ወዲያውኑ ያገኛቸዋል)
+    removeOldTeacherSection(() => {
+        db.get(`SELECT name, assigned_sections FROM teachers WHERE id = ?`, [new_teacher_id], (err, newT) => {
+            if (err || !newT) return res.redirect('/admin');
+
+            let newSecs = (newT.assigned_sections || '')
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
+
+            if (!newSecs.includes(targetSection)) {
+                newSecs.push(targetSection);
+            }
+
+            db.run(`UPDATE teachers SET assigned_sections = ? WHERE id = ?`, [newSecs.join(', '), new_teacher_id], () => {
+                // በ sections ሰንጠረዥ ላይም የተቆጣጣሪ (Proctor) ስሙን ወደ አዲሱ መምህር ያዞራል
+                db.run(`UPDATE sections SET proctor = ? WHERE name = ?`, [newT.name, targetSection], () => {
+                    res.redirect('/admin');
+                });
+            });
+        });
+    });
+});
 
 app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
