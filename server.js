@@ -327,7 +327,7 @@ app.post('/api/recover-password', (req, res) => {
     });
 });
 
-// ================= STUDENT REGISTRATION & DIGITAL ID =================
+// ================= STUDENT REGISTRATION & FULL-COLOR DIGITAL ID =================
 app.get('/student-register', (req, res) => {
     const lang = req.query.lang === 'en' ? 'en' : 'am';
     let gradeOptions = '';
@@ -381,11 +381,82 @@ app.post('/register-student', upload.single('bank_slip'), (req, res) => {
     });
 });
 
+// 🪪 የተማሪ ዲጂታል መታወቂያ (በሙሉ ኦሪጅናል ከለር Download እና Print የሚሆን)
 app.get('/student/digital-id', (req, res) => {
     if (!req.session.studentId) return res.redirect('/');
     db.get('SELECT * FROM students WHERE student_id = ?', [req.session.studentId], (err, student) => {
         if (!student) return res.redirect('/');
-        res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><title>Digital ID - ${student.name}</title><style>body{font-family:sans-serif;background:#eef2f5;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.id-card{width:380px;background:white;border-radius:12px;box-shadow:0 8px 20px rgba(0,0,0,0.15);overflow:hidden;border:2px solid #1f4e79;}.header{background:#1f4e79;color:white;padding:12px 15px;display:flex;align-items:center;gap:12px;}.school-logo{width:45px;height:45px;border-radius:50%;object-fit:cover;background:white;border:2px solid white;}.content{padding:18px;display:flex;gap:15px;align-items:center;border-bottom:1px solid #eee;}.profile-img{width:95px;height:95px;border-radius:8px;object-fit:cover;border:2px solid #1f4e79;}.info{font-size:13px;line-height:1.5;color:#333;}.qr-section{padding:12px;text-align:center;background:#fafafa;}.actions{padding:10px;background:#fff;display:flex;gap:10px;}.btn{flex:1;padding:10px;font-size:14px;font-weight:bold;cursor:pointer;border:none;border-radius:6px;text-align:center;text-decoration:none;color:white;}@media print{.actions{display:none!important;}}</style></head><body><div class="id-card"><div class="header"><img src="/uploads/logo.jpg" class="school-logo"><div><h3 style="margin:0;font-size:15px;">AMANUEL LIGHT & LIFE SCHOOL</h3><p style="margin:2px 0 0;font-size:11px;">OFFICIAL DIGITAL STUDENT ID CARD</p></div></div><div class="content"><img src="/uploads/${student.photo || 'logo.jpg'}" onerror="this.src='/uploads/logo.jpg'" class="profile-img"><div class="info"><h3 style="margin:0 0 4px 0;color:#2c3e50;">${student.name}</h3><p><b>ID No:</b> ${student.student_id}</p><p><b>Class:</b> ${student.class_level}</p><p><b>Phone:</b> ${student.phone || '-'}</p></div></div><div class="qr-section"><img src="https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=${student.student_id}" style="width:80px;height:80px;"></div><div class="actions"><button onclick="window.print()" class="btn" style="background:#27ae60;">📥 Print PDF</button><a href="/student-dashboard" class="btn" style="background:#7f8c8d;">⬅️ ተመለስ</a></div></div></body></html>`);
+        res.send(`<!DOCTYPE html>
+<html lang="am">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital ID - ${student.name}</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #eef2f5; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
+        .id-card { width: 380px; background: white; border-radius: 14px; box-shadow: 0 10px 25px rgba(0,0,0,0.18); overflow: hidden; border: 2px solid #1f4e79; }
+        .header { background: linear-gradient(135deg, #1f4e79 0%, #0d2b45 100%) !important; color: white !important; padding: 14px 16px; display: flex; align-items: center; gap: 12px; border-bottom: 4px solid #f39c12; }
+        .school-logo { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background: white; border: 2px solid #f39c12; }
+        .content { padding: 18px; display: flex; gap: 15px; align-items: center; border-bottom: 1px solid #eee; background: white !important; }
+        .profile-img { width: 95px; height: 95px; border-radius: 10px; object-fit: cover; border: 2.5px solid #1f4e79; }
+        .info { font-size: 13.5px; line-height: 1.6; color: #333; }
+        .info p { margin: 3px 0; }
+        .qr-section { padding: 12px; text-align: center; background: #f8fafc !important; }
+        .footer { background: #1f4e79 !important; color: white !important; padding: 7px; text-align: center; font-size: 10.5px; }
+        .actions { margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+        .btn { padding: 11px 18px; font-size: 14px; font-weight: bold; cursor: pointer; border: none; border-radius: 8px; text-align: center; text-decoration: none; color: white; }
+        @media print { .actions { display: none !important; } body { background: white; padding: 0; } .id-card { box-shadow: none; margin: auto; } }
+    </style>
+</head>
+<body>
+    <div id="studentIdCard" class="id-card">
+        <div class="header">
+            <img src="/uploads/logo.jpg" onerror="this.src='/uploads/logo.png'" class="school-logo" crossorigin="anonymous">
+            <div>
+                <h3 style="margin:0; font-size:15.5px;">AMANUEL LIGHT & LIFE SCHOOL</h3>
+                <p style="margin:3px 0 0; font-size:11px; color:#f39c12; font-weight:bold;">OFFICIAL DIGITAL STUDENT ID CARD</p>
+            </div>
+        </div>
+        <div class="content">
+            <img src="/uploads/${student.photo || 'logo.jpg'}" onerror="this.src='/uploads/logo.jpg'" class="profile-img" crossorigin="anonymous">
+            <div class="info">
+                <h3 style="margin:0 0 5px 0; color:#1f4e79; font-size:16px;">${student.name}</h3>
+                <p><b>ID No:</b> <span style="color:#2980b9; font-weight:bold;">${student.student_id}</span></p>
+                <p><b>Class:</b> ${student.class_level}</p>
+                <p><b>Gender:</b> ${student.gender || '-'}</p>
+                <p><b>Phone:</b> ${student.phone || '-'}</p>
+                <p><b>Status:</b> <span style="color:#27ae60; font-weight:bold;">Approved</span></p>
+            </div>
+        </div>
+        <div class="qr-section">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${student.student_id}" style="width:82px; height:82px;" crossorigin="anonymous">
+            <p style="font-size:10px; color:#64748b; margin:3px 0 0;">Scan to verify student status</p>
+        </div>
+        <div class="footer">Property of Amanuel Light and Life School</div>
+    </div>
+
+    <div class="actions">
+        <button onclick="downloadColorID()" class="btn" style="background:#27ae60;">📥 በኦሪጅናል ከለር Download PDF</button>
+        <button onclick="window.print()" class="btn" style="background:#2980b9;">🖨️ Print ID</button>
+        <a href="/student-dashboard" class="btn" style="background:#7f8c8d;">⬅️ ተመለስ</a>
+    </div>
+
+    <script>
+        function downloadColorID() {
+            const element = document.getElementById('studentIdCard');
+            html2pdf().set({
+                margin: 10,
+                filename: 'Student_ID_${student.student_id}.pdf',
+                image: { type: 'jpeg', quality: 1 },
+                html2canvas: { scale: 3, useCORS: true, backgroundColor: '#ffffff' },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            }).from(element).save();
+        }
+    </script>
+</body>
+</html>`);
     });
 });
 
@@ -719,7 +790,7 @@ app.post('/admin/edit-teacher/:id', upload.single('teacher_photo'), (req, res) =
     });
 });
 
-// ================= OTHER ADMIN ACTIONS =================
+// ================= OTHER ADMIN ACTIONS & TEACHER ID CARD =================
 app.get('/admin/approve/:id', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     db.get(`SELECT * FROM pending_students WHERE id = ?`, [req.params.id], (err, st) => {
@@ -744,7 +815,6 @@ app.post('/admin/register-teacher-full', upload.single('teacher_photo'), (req, r
         `INSERT INTO teachers (id, name, phone, password, assigned_sections, gender, subject, emergency_name, emergency_phone, photo, plain_pin) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [teacherID, name, phone, hashedPIN, sectionsStr, gender || '', subject || '', emergency_name || '', emergency_phone || '', photoFile, autoPIN],
         () => {
-            // መምህሩ ሲመዘገብ የሚያስተምረውን ትምህርት (Subject) ለተመደበባቸው ክፍሎች በራሱ እንዲፈጥር (Course Not Found እንዳይል)
             const secList = sectionsStr.split(',').map(s => s.trim()).filter(Boolean);
             if (subject && secList.length > 0) {
                 const autoCode = subject.substring(0, 3).toUpperCase() + '-' + Math.floor(10 + Math.random() * 89);
@@ -758,6 +828,7 @@ app.post('/admin/register-teacher-full', upload.single('teacher_photo'), (req, r
     );
 });
 
+// 🪪 የመምህር ዲጂታል መታወቂያ (በሙሉ ኦሪጅናል ከለር Download እና Print የሚሆን)
 app.get('/admin/teacher-id/:id', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     db.get(`SELECT * FROM teachers WHERE id = ?`, [req.params.id], (err, t) => {
@@ -765,7 +836,83 @@ app.get('/admin/teacher-id/:id', (req, res) => {
         const displayPin = req.query.pin || t.plain_pin || '****';
         const avatarUrl = t.photo ? `/uploads/${t.photo}` : `/uploads/logo.jpg`;
 
-        res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><title>Teacher ID Card - ${t.name}</title><script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script><style>body{font-family:'Segoe UI',Tahoma,sans-serif;background:#eef2f5;margin:0;padding:25px;display:flex;flex-direction:column;align-items:center;}.top-bar{display:flex;gap:12px;margin-bottom:20px;}.btn{padding:10px 18px;border:none;border-radius:6px;font-weight:bold;cursor:pointer;text-decoration:none;color:white;font-size:14px;}.cred-box{background:#fffcf5;border:2px dashed #f39c12;border-radius:10px;padding:15px 25px;margin-bottom:25px;max-width:420px;width:100%;text-align:center;}.id-card{width:360px;background:white;border-radius:16px;overflow:hidden;box-shadow:0 15px 35px rgba(0,0,0,0.2);border:1px solid #d0d7de;}.id-header{background:linear-gradient(135deg,#1f4e79 0%,#0d2b45 100%);color:white;padding:20px 15px 45px 15px;text-align: center;border-bottom:5px solid #f39c12;}.id-header img.school-logo{width:52px;height:52px;border-radius:50%;border:2px solid #f39c12;background:white;object-fit:cover;}.photo-wrap{width:105px;height:105px;margin:-52px auto 10px auto;border-radius:50%;border:4px solid white;box-shadow:0 5px 15px rgba(0,0,0,0.2);overflow:hidden;background:#fff;}.photo-wrap img{width:100%;height:100%;object-fit:cover;}.id-body{padding:5px 22px 20px 22px;text-align:center;}.teacher-name{font-size:20px;font-weight:800;color:#1f4e79;margin:5px 0;}.teacher-subject{font-size:14px;font-weight:bold;color:#8e44ad;margin-bottom:12px;}.info-table{width:100%;text-align:left;font-size:13.5px;border-collapse:collapse;margin-bottom:12px;}.info-table td{padding:6px 4px;border-bottom:1px solid #f0f2f5;}.barcode-box{background:#f8fafc;padding:8px;border-radius:8px;border:1px solid #e2e8f0;margin-top:5px;}.id-footer{background:#1f4e79;color:white;font-size:11.5px;padding:8px;text-align:center;}@media print{.no-print{display:none!important;}body{background:white;}}</style></head><body><div class="top-bar no-print"><a href="/admin" class="btn" style="background:#7f8c8d;">⬅️ ወደ አድሚን ተመለስ</a><button onclick="window.print()" class="btn" style="background:#2980b9;">🖨️ ፕሪንት አድርግ</button></div><div class="cred-box no-print"><h3 style="margin:0 0 8px 0;color:#d35400;">✅ የመምህር መግቢያ መረጃ</h3><div style="font-size:16px;background:white;padding:10px;border-radius:6px;border:1px solid #fad7a0;"><b>🆔 ID:</b> <span style="color:#2980b9;font-weight:bold;">${t.id}</span> &nbsp;|&nbsp; <b>🔑 PIN:</b> <span style="color:#e74c3c;font-weight:bold;font-size:18px;">${displayPin}</span></div></div><div class="id-card"><div class="id-header"><img src="/uploads/logo.jpg" class="school-logo"><h3 style="margin:8px 0 3px 0;font-size:17px;">AMANUEL LIGHT & LIFE SCHOOL</h3><span style="background:#f39c12;color:#fff;font-size:11px;font-weight:bold;padding:3px 12px;border-radius:20px;">OFFICIAL TEACHER ID CARD</span></div><div class="photo-wrap"><img src="${avatarUrl}" onerror="this.src='/uploads/logo.jpg'"></div><div class="id-body"><div class="teacher-name">${t.name}</div><div class="teacher-subject">📘 ${t.subject || 'Teacher'}</div><table class="info-table"><tr><td><b>ID:</b></td><td style="color:#2980b9;font-weight:bold;">${t.id}</td></tr><tr><td><b>Gender:</b></td><td>${t.gender || '-'}</td></tr><tr><td><b>Sections:</b></td><td>${t.assigned_sections || '-'}</td></tr><tr><td><b>Phone:</b></td><td>${t.phone || '-'}</td></tr><tr><td><b>Emergency:</b></td><td>${t.emergency_name || '-'} (${t.emergency_phone || '-'})</td></tr></table><div class="barcode-box"><svg id="barcode"></svg></div></div><div class="id-footer">Property of Amanuel Light and Life School</div></div><script>JsBarcode("#barcode","${t.id}",{format:"CODE128",width:1.8,height:40,displayValue:true,fontSize:13,margin:0});</script></body></html>`);
+        res.send(`<!DOCTYPE html>
+<html lang="am">
+<head>
+    <meta charset="UTF-8">
+    <title>Teacher ID Card - ${t.name}</title>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #eef2f5; margin: 0; padding: 25px; display: flex; flex-direction: column; align-items: center; }
+        .top-bar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
+        .btn { padding: 10px 18px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; text-decoration: none; color: white; font-size: 14px; }
+        .cred-box { background: #fffcf5 !important; border: 2px dashed #f39c12; border-radius: 10px; padding: 15px 25px; margin-bottom: 25px; max-width: 420px; width: 100%; text-align: center; }
+        .id-card { width: 360px; background: white !important; border-radius: 16px; overflow: hidden; box-shadow: 0 15px 35px rgba(0,0,0,0.2); border: 2px solid #1f4e79; }
+        .id-header { background: linear-gradient(135deg, #1f4e79 0%, #0d2b45 100%) !important; color: white !important; padding: 20px 15px 45px 15px; text-align: center; border-bottom: 5px solid #f39c12; }
+        .id-header img.school-logo { width: 52px; height: 52px; border-radius: 50%; border: 2px solid #f39c12; background: white; object-fit: cover; }
+        .photo-wrap { width: 105px; height: 105px; margin: -52px auto 10px auto; border-radius: 50%; border: 4px solid white; box-shadow: 0 5px 15px rgba(0,0,0,0.2); overflow: hidden; background: #fff; }
+        .photo-wrap img { width: 100%; height: 100%; object-fit: cover; }
+        .id-body { padding: 5px 22px 20px 22px; text-align: center; background: white !important; }
+        .teacher-name { font-size: 20px; font-weight: 800; color: #1f4e79; margin: 5px 0; }
+        .teacher-subject { font-size: 14px; font-weight: bold; color: #8e44ad; margin-bottom: 12px; }
+        .info-table { width: 100%; text-align: left; font-size: 13.5px; border-collapse: collapse; margin-bottom: 12px; }
+        .info-table td { padding: 6px 4px; border-bottom: 1px solid #f0f2f5; }
+        .barcode-box { background: #f8fafc !important; padding: 8px; border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 5px; }
+        .id-footer { background: #1f4e79 !important; color: white !important; font-size: 11.5px; padding: 8px; text-align: center; }
+        @media print { .no-print { display: none !important; } body { background: white; padding: 0; } .id-card { box-shadow: none; margin: auto; } }
+    </style>
+</head>
+<body>
+    <div class="top-bar no-print">
+        <a href="/admin" class="btn" style="background:#7f8c8d;">⬅️ ወደ አድሚን ተመለስ</a>
+        <button onclick="downloadTeacherID()" class="btn" style="background:#27ae60;">📥 በኦሪጅናል ከለር Download PDF</button>
+        <button onclick="window.print()" class="btn" style="background:#2980b9;">🖨️ ፕሪንት አድርግ</button>
+    </div>
+    <div class="cred-box no-print">
+        <h3 style="margin:0 0 8px 0;color:#d35400;">✅ የመምህር መግቢያ መረጃ</h3>
+        <div style="font-size:16px;background:white;padding:10px;border-radius:6px;border:1px solid #fad7a0;">
+            <b>🆔 ID:</b> <span style="color:#2980b9;font-weight:bold;">${t.id}</span> &nbsp;|&nbsp;
+            <b>🔑 PIN:</b> <span style="color:#e74c3c;font-weight:bold;font-size:18px;">${displayPin}</span>
+        </div>
+    </div>
+    <div id="teacherIdCard" class="id-card">
+        <div class="id-header">
+            <img src="/uploads/logo.jpg" class="school-logo" crossorigin="anonymous">
+            <h3 style="margin:8px 0 3px 0;font-size:17px;">AMANUEL LIGHT & LIFE SCHOOL</h3>
+            <span style="background:#f39c12 !important;color:#fff !important;font-size:11px;font-weight:bold;padding:3px 12px;border-radius:20px;">OFFICIAL TEACHER ID CARD</span>
+        </div>
+        <div class="photo-wrap"><img src="${avatarUrl}" onerror="this.src='/uploads/logo.jpg'" crossorigin="anonymous"></div>
+        <div class="id-body">
+            <div class="teacher-name">${t.name}</div>
+            <div class="teacher-subject">📘 ${t.subject || 'Teacher'}</div>
+            <table class="info-table">
+                <tr><td><b>ID:</b></td><td style="color:#2980b9;font-weight:bold;">${t.id}</td></tr>
+                <tr><td><b>Gender:</b></td><td>${t.gender || '-'}</td></tr>
+                <tr><td><b>Sections:</b></td><td>${t.assigned_sections || '-'}</td></tr>
+                <tr><td><b>Phone:</b></td><td>${t.phone || '-'}</td></tr>
+                <tr><td><b>Emergency:</b></td><td>${t.emergency_name || '-'} (${t.emergency_phone || '-'})</td></tr>
+            </table>
+            <div class="barcode-box"><svg id="barcode"></svg></div>
+        </div>
+        <div class="id-footer">Property of Amanuel Light and Life School</div>
+    </div>
+    <script>
+        JsBarcode("#barcode","${t.id}",{format:"CODE128",width:1.8,height:40,displayValue:true,fontSize:13,margin:0});
+        function downloadTeacherID() {
+            const element = document.getElementById('teacherIdCard');
+            html2pdf().set({
+                margin: 10,
+                filename: 'Teacher_ID_${t.id}.pdf',
+                image: { type: 'jpeg', quality: 1 },
+                html2canvas: { scale: 3, useCORS: true, backgroundColor: '#ffffff' },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            }).from(element).save();
+        }
+    </script>
+</body>
+</html>`);
     });
 });
 
@@ -887,7 +1034,7 @@ app.get('/class-hub/:className', (req, res) => {
                     let courses = allCourses.filter(c => isClassMatch(c.class_level, className));
                     let sRows = students.map((s, idx) => `<tr><td><b>${idx + 1}</b></td><td>${s.student_id}</td><td style="text-align:left;">${s.name}</td><td>${s.gender}</td><td>${s.cumulative_total}</td></tr>`).join('');
                     let cRows = courses.map(c => `<tr><td>${c.code}</td><td>${c.title}</td><td>${c.teacher_name || 'N/A'}</td></tr>`).join('');
-                    res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Class Hub - ${className}</title><style>body{font-family:sans-serif; padding:20px; background:#f4f7f6;} .card{background:white; padding:20px; border-radius:8px; margin-bottom:15px;} table{width:100%; border-collapse:collapse; margin-top:10px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#1f4e79; color:white;}</style></head><body><a href="/admin" style="background:#7f8c8d; color:white; padding:8px 12px; text-decoration:none; border-radius:5px;">⬅️ Back to Admin Dashboard</a><h2>📂 Class Hub: ${className}</h2><div class="card"><p><strong>Proctor:</strong> ${section ? section.proctor_name : 'N/A'}</p><p><strong>Total Students:</strong> ${students.length}</p></div><div class="card"><h3>📚 Courses</h3><table><tr><th>Code</th><th>Title</th><th>Teacher</th></tr>${cRows||'<tr><td colspan="3">No courses</td></tr>'}</table></div><div class="card"><h3>🏆 Ranking</h3><table><tr><th>Rank</th><th>ID</th><th>Name</th><th>Gender</th><th>Total</th></tr>${sRows||'<tr><td colspan="5">No students</td></tr>'}</table></div></body></html>`);
+                    res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Class Hub - ${className}</title><style>*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}body{font-family:sans-serif; padding:20px; background:#f4f7f6;} .card{background:white; padding:20px; border-radius:8px; margin-bottom:15px;} table{width:100%; border-collapse:collapse; margin-top:10px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#1f4e79!important; color:white!important;}</style></head><body><a href="/admin" style="background:#7f8c8d; color:white; padding:8px 12px; text-decoration:none; border-radius:5px;">⬅️ Back to Admin Dashboard</a><h2>📂 Class Hub: ${className}</h2><div class="card"><p><strong>Proctor:</strong> ${section ? section.proctor_name : 'N/A'}</p><p><strong>Total Students:</strong> ${students.length}</p></div><div class="card"><h3>📚 Courses</h3><table><tr><th>Code</th><th>Title</th><th>Teacher</th></tr>${cRows||'<tr><td colspan="3">No courses</td></tr>'}</table></div><div class="card"><h3>🏆 Ranking</h3><table><tr><th>Rank</th><th>ID</th><th>Name</th><th>Gender</th><th>Total</th></tr>${sRows||'<tr><td colspan="5">No students</td></tr>'}</table></div></body></html>`);
                 });
             });
         });
@@ -1037,7 +1184,7 @@ app.get('/admin/director-report', (req, res) => {
     });
 });
 
-// ================= TEACHER DASHBOARD & GRADES (FIXED) =================
+// ================= TEACHER DASHBOARD & GRADES =================
 app.get('/teacher-dashboard', (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
     db.get('SELECT * FROM teachers WHERE id = ?', [req.session.teacherId], (err, teacher) => {
@@ -1048,7 +1195,6 @@ app.get('/teacher-dashboard', (req, res) => {
         db.all('SELECT student_id, name, class_level FROM students ORDER BY name ASC', [], (err, allStudents = []) => {
             let studentsInClass = allStudents.filter(s => isClassMatch(s.class_level, selectedClass));
             db.all('SELECT * FROM courses', [], (err, allCourses = []) => {
-                // የመምህሩን ኮርሶች ወይም ለክፍሉ የተመዘገቡ ኮርሶችን ማምጣት
                 let classCourses = allCourses.filter(c => (c.teacher_id === req.session.teacherId || !c.teacher_id) && isClassMatch(c.class_level, selectedClass));
                 if (classCourses.length === 0) {
                     classCourses = allCourses.filter(c => isClassMatch(c.class_level, selectedClass));
@@ -1120,7 +1266,6 @@ app.post('/teacher/send-notification', upload.single('attachment'), (req, res) =
     });
 });
 
-// ✅ የማይሳሳት (Bulletproof) የውጤት ማስቀመጫ ራውት
 app.post('/teacher/save-grade', (req, res) => {
     if (!req.session.teacherId) return res.json({ error: 'Unauthorized' });
     let courseId = req.body.course_id || req.query.course_id || '';
@@ -1163,7 +1308,6 @@ app.post('/teacher/save-grade', (req, res) => {
                 return saveAssessmentRecord(match.code, match.title);
             }
 
-            // ምንም ኮርስ ካልተመዘገበ በመምህሩ Subject በራሱ ፈጥሮ ያስቀምጣል!
             db.get(`SELECT * FROM teachers WHERE id = ?`, [req.session.teacherId], (err2, t) => {
                 const subjTitle = (t && t.subject) ? t.subject : 'General Subject';
                 const subjCode = subjTitle.substring(0, 3).toUpperCase() + '-01';
@@ -1211,7 +1355,7 @@ app.post('/teacher/submit-final-grades', (req, res) => {
     });
 });
 
-// ================= 📋 ATTENDANCE SHEET & SAVE ROUTE (FIXED) =================
+// ================= 📋 ATTENDANCE SHEET & SAVE ROUTE =================
 app.get('/attendance-sheet/:secName', (req, res) => {
     if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
     let sec = decodeURIComponent(req.params.secName);
@@ -1252,12 +1396,13 @@ app.get('/attendance-sheet/:secName', (req, res) => {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Attendance - ${sec}</title>
     <style>
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         body { font-family: 'Segoe UI', sans-serif; background: #eef2f5; padding: 25px; margin: 0; }
         .box { max-width: 900px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 5px 20px rgba(0,0,0,0.08); border-top: 6px solid #16a085; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; }
         th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: center; font-size: 14px; }
-        th { background: #1f4e79; color: white; }
-        tr:nth-child(even) { background: #f8fafc; }
+        th { background: #1f4e79 !important; color: white !important; }
+        tr:nth-child(even) { background: #f8fafc !important; }
     </style>
 </head>
 <body>
@@ -1356,7 +1501,7 @@ app.post('/student/absence', upload.single('attachment'), (req, res) => {
     });
 });
 
-// ================= ROSTER, REPORT CARDS & ARCHIVES =================
+// ================= 🏆 FULL-COLOR ROSTER & 1-PAGE REPORT CARD =================
 app.get('/api/admin/roster-summary', (req, res) => {
     if (!req.session.isAdmin) return res.json({ submissions: [], years: [], sections: [] });
     db.all(`SELECT * FROM grade_submissions ORDER BY academic_year DESC, class_level ASC`, [], (err, submissions = []) => {
@@ -1368,6 +1513,7 @@ app.get('/api/admin/roster-summary', (req, res) => {
     });
 });
 
+// 🎓 የተማሪ የ1 ገጽ ካርድ (100% ኦሪጅናል ከለር እንደ ፎቶ B የሚያወርድ)
 app.get('/admin/student-report-card', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const studentId = (req.query.student_id || '').trim().toUpperCase();
@@ -1410,7 +1556,7 @@ app.get('/admin/student-report-card', (req, res) => {
                         const f = a.final !== undefined ? a.final : '-';
                         const tot = a.total !== undefined ? a.total : 0;
                         const grade = tot >= 90 ? 'A+' : tot >= 85 ? 'A' : tot >= 80 ? 'A-' : tot >= 75 ? 'B+' : tot >= 70 ? 'B' : tot >= 60 ? 'C' : tot >= 50 ? 'D' : 'F';
-                        const status = tot >= 50 ? '<span style="color:#27ae60;font-weight:bold;">Pass (አልፏል)</span>' : '<span style="color:#e74c3c;font-weight:bold;">Fail (ወድቋል)</span>';
+                        const status = tot >= 50 ? '<span style="color:#27ae60 !important;font-weight:bold;">Pass<br>(አልፏል)</span>' : '<span style="color:#e74c3c !important;font-weight:bold;">Fail<br>(ወድቋል)</span>';
                         return `<tr>
                             <td>${i + 1}</td>
                             <td><b>${c.code}</b></td>
@@ -1419,7 +1565,7 @@ app.get('/admin/student-report-card', (req, res) => {
                             <td>${q}</td>
                             <td>${m}</td>
                             <td>${f}</td>
-                            <td style="font-weight:bold;font-size:15px;color:#1f4e79;">${tot}</td>
+                            <td style="font-weight:bold;font-size:15px;color:#1f4e79 !important;">${tot}</td>
                             <td><b>${grade}</b></td>
                             <td>${status}</td>
                         </tr>`;
@@ -1430,29 +1576,33 @@ app.get('/admin/student-report-card', (req, res) => {
 <head>
     <meta charset="UTF-8">
     <title>Student Report Card - ${student.name}</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
         body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #eef2f5; margin: 0; padding: 20px; color: #1e293b; }
-        .no-print { text-align: center; margin-bottom: 18px; }
-        .btn { padding: 10px 22px; border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; text-decoration: none; margin: 0 5px; font-size: 14px; display: inline-block; }
-        .card-page { max-width: 850px; margin: auto; background: white; padding: 35px 40px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.12); border: 3px double #1f4e79; box-sizing: border-box; }
+        .no-print { text-align: center; margin-bottom: 18px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+        .btn { padding: 11px 22px; border: none; border-radius: 8px; color: white; font-weight: bold; cursor: pointer; text-decoration: none; font-size: 14px; display: inline-block; box-shadow: 0 4px 10px rgba(0,0,0,0.12); }
+        .card-page { max-width: 850px; margin: auto; background: #ffffff !important; padding: 35px 40px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.12); border: 3px double #1f4e79; box-sizing: border-box; }
         .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #1f4e79; padding-bottom: 15px; margin-bottom: 20px; }
-        .header img { width: 80px; height: 80px; border-radius: 50%; border: 2px solid #f39c12; object-fit: cover; }
+        .header img { width: 80px; height: 80px; border-radius: 50%; border: 2.5px solid #f39c12; object-fit: cover; }
         .header-center { text-align: center; flex: 1; }
-        .header-center h1 { margin: 0; font-size: 23px; color: #1f4e79; }
-        .header-center h3 { margin: 5px 0 0; font-size: 15px; color: #d35400; }
-        .student-bio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #cbd5e1; margin-bottom: 20px; font-size: 14px; }
+        .header-center h1 { margin: 0; font-size: 23px; color: #1f4e79 !important; }
+        .header-center h3 { margin: 5px 0 0; font-size: 15px; color: #d35400 !important; }
+        .badge-title { margin-top: 6px; display: inline-block; background: #1f4e79 !important; color: #ffffff !important; padding: 5px 18px; border-radius: 15px; font-size: 13px; font-weight: bold; }
+        .student-bio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; background: #f8fafc !important; padding: 15px; border-radius: 8px; border: 1px solid #cbd5e1; margin-bottom: 20px; font-size: 14px; }
         table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13.5px; }
         th, td { border: 1px solid #94a3b8; padding: 9px 8px; text-align: center; }
-        th { background: #1f4e79; color: white; }
+        th { background: #1f4e79 !important; color: #ffffff !important; font-weight: bold; }
+        tr:nth-child(even) td { background: #f8fafc !important; }
         .summary-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 25px; }
-        .sum-box { background: #f1f5f9; border-left: 4px solid #1f4e79; padding: 12px; border-radius: 6px; text-align: center; }
-        .sum-box .val { font-size: 20px; font-weight: 800; color: #1f4e79; }
-        .sum-box .lbl { font-size: 12px; color: #475569; font-weight: bold; }
+        .sum-box { background: #f1f5f9 !important; border-left: 5px solid #1f4e79; padding: 12px; border-radius: 6px; text-align: center; }
+        .sum-box .val { font-size: 20px; font-weight: 800; color: #1f4e79 !important; }
+        .sum-box .lbl { font-size: 12px; color: #475569 !important; font-weight: bold; }
         .sig-section { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-top: 45px; padding-top: 15px; text-align: center; font-size: 13.5px; font-weight: bold; }
         .sig-line { border-top: 1.5px solid #1e293b; margin-top: 35px; padding-top: 6px; }
         @media print {
-            @page { size: A4 portrait; margin: 10mm; }
-            body { background: white; padding: 0; }
+            @page { size: A4 portrait; margin: 8mm; }
+            body { background: white !important; padding: 0; }
             .no-print { display: none !important; }
             .card-page { box-shadow: none; width: 100%; max-width: 100%; padding: 20px; }
         }
@@ -1460,26 +1610,27 @@ app.get('/admin/student-report-card', (req, res) => {
 </head>
 <body>
     <div class="no-print">
-        <button onclick="window.print()" class="btn" style="background:#27ae60;">🖨️ ፕሪንት አድርግ / Save as 1-Page PDF</button>
+        <button onclick="downloadColorPDF()" class="btn" style="background:#27ae60;">📥 በኦሪጅናል ከለር Download PDF (Full Color)</button>
+        <button onclick="window.print()" class="btn" style="background:#2980b9;">🖨️ ፕሪንት አድርግ (Print Color PDF)</button>
         <a href="/admin" class="btn" style="background:#7f8c8d;">⬅️ ወደ አድሚን ተመለስ</a>
     </div>
 
-    <div class="card-page">
+    <div id="reportCardArea" class="card-page">
         <div class="header">
-            <img src="/uploads/logo.jpg" onerror="this.src='/uploads/logo.png'" alt="Logo">
+            <img src="/uploads/logo.jpg" onerror="this.src='/uploads/logo.png'" alt="Logo" crossorigin="anonymous">
             <div class="header-center">
                 <h1>AMANUEL LIGHT AND LIFE SCHOOL</h1>
                 <h3>አማኑኤል ብርሃንና ሕይወት ትምህርት ቤት</h3>
-                <div style="margin-top:6px; display:inline-block; background:#1f4e79; color:white; padding:4px 16px; border-radius:15px; font-size:13px; font-weight:bold;">
+                <div class="badge-title">
                     OFFICIAL STUDENT GRADE REPORT CARD (${academicYear})
                 </div>
             </div>
-            <img src="/uploads/${student.photo || 'logo.jpg'}" onerror="this.src='/uploads/logo.jpg'" alt="Student">
+            <img src="/uploads/${student.photo || 'logo.jpg'}" onerror="this.src='/uploads/logo.jpg'" alt="Student" crossorigin="anonymous">
         </div>
 
         <div class="student-bio">
             <div><b>👤 የተማሪ ስም (Name):</b> ${student.name}</div>
-            <div><b>🆔 መታወቂያ (ID):</b> <span style="color:#2980b9;font-weight:bold;">${student.student_id}</span></div>
+            <div><b>🆔 መታወቂያ (ID):</b> <span style="color:#2980b9 !important;font-weight:bold;">${student.student_id}</span></div>
             <div><b>⚧ ፆታ (Gender):</b> ${student.gender || '-'}</div>
             <div><b>🏫 ክፍል (Class):</b> ${student.class_level}</div>
             <div><b>📅 ዓመተ ምህረት (Year):</b> ${academicYear}</div>
@@ -1490,15 +1641,15 @@ app.get('/admin/student-report-card', (req, res) => {
             <thead>
                 <tr>
                     <th>#</th>
-                    <th>ኮድ (Code)</th>
-                    <th>የትምህርት ዓይነት (Course Title)</th>
-                    <th>መምህር (Teacher)</th>
-                    <th>Quiz (20%)</th>
-                    <th>Mid (30%)</th>
-                    <th>Final (50%)</th>
-                    <th>Total (100%)</th>
+                    <th>ኮድ<br>(Code)</th>
+                    <th>የትምህርት ዓይነት<br>(Course Title)</th>
+                    <th>መምህር<br>(Teacher)</th>
+                    <th>Quiz<br>(20%)</th>
+                    <th>Mid<br>(30%)</th>
+                    <th>Final<br>(50%)</th>
+                    <th>Total<br>(100%)</th>
                     <th>Grade</th>
-                    <th>ውጤት (Status)</th>
+                    <th>ውጤት<br>(Status)</th>
                 </tr>
             </thead>
             <tbody>
@@ -1520,7 +1671,7 @@ app.get('/admin/student-report-card', (req, res) => {
                 <div class="lbl">ደረጃ (Class Rank)</div>
             </div>
             <div class="sum-box" style="border-left-color:#27ae60;">
-                <div class="val" style="color:${parseFloat(myAvg) >= 50 ? '#27ae60' : '#e74c3c'};">${parseFloat(myAvg) >= 50 ? 'Promoted' : 'Failed'}</div>
+                <div class="val" style="color:${parseFloat(myAvg) >= 50 ? '#27ae60' : '#e74c3c'} !important;">${parseFloat(myAvg) >= 50 ? 'Promoted' : 'Failed'}</div>
                 <div class="lbl">የዓመቱ ውሳኔ (Final Remark)</div>
             </div>
         </div>
@@ -1531,6 +1682,19 @@ app.get('/admin/student-report-card', (req, res) => {
             <div><div class="sig-line">የዲሬክተሩ ስምና ፊርማ<br><span style="font-size:11px;font-weight:normal;">School Director's Signature</span></div></div>
         </div>
     </div>
+
+    <script>
+        function downloadColorPDF() {
+            const element = document.getElementById('reportCardArea');
+            html2pdf().set({
+                margin: 6,
+                filename: 'ReportCard_${student.student_id}_${academicYear}.pdf',
+                image: { type: 'jpeg', quality: 1 },
+                html2canvas: { scale: 2.5, useCORS: true, backgroundColor: '#ffffff' },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            }).from(element).save();
+        }
+    </script>
 </body>
 </html>`);
                 });
@@ -1539,6 +1703,7 @@ app.get('/admin/student-report-card', (req, res) => {
     });
 });
 
+// 🏆 የሙሉ ክፍል ሮስተር እና የሁሉም ተማሪዎች ካርድ (100% ኦሪጅናል ከለር PDF የሚያወርድ)
 app.get('/admin/master-roster/:year/:className', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const academicYear = decodeURIComponent(req.params.year);
@@ -1579,9 +1744,9 @@ app.get('/admin/master-roster/:year/:className', (req, res) => {
                             <td style="text-align:left;font-weight:bold;">${r.student.name}</td>
                             <td>${r.student.gender || '-'}</td>
                             ${scoreCells}
-                            <td style="background:#eff6ff;font-weight:800;color:#1e3a8a;">${r.grandTotal}</td>
-                            <td style="background:#f0fdf4;font-weight:800;color:#166534;">${r.average}%</td>
-                            <td style="background:#fefce8;font-weight:800;color:#b45309;">🏆 ${r.rank}</td>
+                            <td style="background:#eff6ff !important;font-weight:800;color:#1e3a8a !important;">${r.grandTotal}</td>
+                            <td style="background:#f0fdf4 !important;font-weight:800;color:#166534 !important;">${r.average}%</td>
+                            <td style="background:#fefce8 !important;font-weight:800;color:#b45309 !important;">🏆 ${r.rank}</td>
                             <td class="no-print">
                                 <a href="/admin/student-report-card?student_id=${encodeURIComponent(r.student.student_id)}&year=${encodeURIComponent(academicYear)}" target="_blank" style="background:#2980b9;color:white;padding:5px 10px;border-radius:5px;text-decoration:none;font-size:12px;font-weight:bold;">📄 ካርድ አውጣ</a>
                             </td>
@@ -1597,34 +1762,41 @@ app.get('/admin/master-roster/:year/:className', (req, res) => {
                                 <td>${cs.quiz}</td>
                                 <td>${cs.mid}</td>
                                 <td>${cs.final}</td>
-                                <td><b>${cs.total}</b></td>
-                                <td>${cs.total >= 50 ? 'Pass' : 'Fail'}</td>
+                                <td style="color:#1f4e79 !important;font-weight:bold;">${cs.total}</td>
+                                <td style="color:${cs.total >= 50 ? '#27ae60' : '#e74c3c'} !important;font-weight:bold;">${cs.total >= 50 ? 'Pass' : 'Fail'}</td>
                             </tr>
                         `).join('');
                         return `
                         <div class="individual-card-page">
-                            <div style="text-align:center;border-bottom:2px solid #1f4e79;padding-bottom:10px;margin-bottom:12px;">
-                                <h2 style="margin:0;color:#1f4e79;">AMANUEL LIGHT AND LIFE SCHOOL</h2>
-                                <p style="margin:4px 0;font-weight:bold;color:#d35400;">OFFICIAL STUDENT REPORT CARD - ${academicYear}</p>
+                            <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #1f4e79;padding-bottom:12px;margin-bottom:15px;">
+                                <img src="/uploads/logo.jpg" onerror="this.src='/uploads/logo.png'" style="width:70px;height:70px;border-radius:50%;border:2px solid #f39c12;object-fit:cover;" crossorigin="anonymous">
+                                <div style="text-align:center;flex:1;">
+                                    <h2 style="margin:0;color:#1f4e79 !important;">AMANUEL LIGHT AND LIFE SCHOOL</h2>
+                                    <p style="margin:4px 0;font-weight:bold;color:#d35400 !important;">አማኑኤል ብርሃንና ሕይወት ትምህርት ቤት</p>
+                                    <span style="background:#1f4e79 !important;color:white !important;padding:4px 14px;border-radius:12px;font-size:12px;font-weight:bold;">OFFICIAL STUDENT REPORT CARD (${academicYear})</span>
+                                </div>
+                                <img src="/uploads/${r.student.photo || 'logo.jpg'}" onerror="this.src='/uploads/logo.jpg'" style="width:70px;height:70px;border-radius:50%;border:2px solid #1f4e79;object-fit:cover;" crossorigin="anonymous">
                             </div>
-                            <div style="display:flex;justify-content:space-between;background:#f8fafc;padding:10px;border:1px solid #cbd5e1;border-radius:6px;margin-bottom:12px;font-size:13.5px;">
-                                <div><b>Name:</b> ${r.student.name}</div>
-                                <div><b>ID:</b> ${r.student.student_id}</div>
-                                <div><b>Class:</b> ${className}</div>
-                                <div><b>Gender:</b> ${r.student.gender || '-'}</div>
+                            <div style="display:flex;justify-content:space-between;background:#f8fafc !important;padding:12px;border:1px solid #cbd5e1;border-radius:6px;margin-bottom:14px;font-size:13.5px;">
+                                <div><b>👤 Name:</b> ${r.student.name}</div>
+                                <div><b>🆔 ID:</b> <span style="color:#2980b9 !important;font-weight:bold;">${r.student.student_id}</span></div>
+                                <div><b>🏫 Class:</b> ${className}</div>
+                                <div><b>⚧ Gender:</b> ${r.student.gender || '-'}</div>
                             </div>
                             <table>
-                                <tr><th>#</th><th>Code</th><th>Course</th><th>Quiz (20)</th><th>Mid (30)</th><th>Final (50)</th><th>Total (100)</th><th>Status</th></tr>
+                                <tr><th>#</th><th>Code</th><th>Course</th><th>Quiz (20%)</th><th>Mid (30%)</th><th>Final (50%)</th><th>Total (100%)</th><th>Status</th></tr>
                                 ${cRows}
                             </table>
-                            <div style="display:flex;justify-content:space-around;background:#f1f5f9;padding:10px;border-radius:6px;margin-top:12px;font-weight:bold;">
-                                <div>Grand Total: <span style="color:#1f4e79;">${r.grandTotal}</span></div>
-                                <div>Average: <span style="color:#27ae60;">${r.average}%</span></div>
-                                <div>Rank: <span style="color:#d35400;">${r.rank} / ${rosterData.length}</span></div>
+                            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:15px;">
+                                <div style="background:#f1f5f9 !important;border-left:4px solid #1f4e79;padding:10px;border-radius:6px;text-align:center;"><b>${r.grandTotal}</b><br><small>Grand Total</small></div>
+                                <div style="background:#f1f5f9 !important;border-left:4px solid #2980b9;padding:10px;border-radius:6px;text-align:center;"><b>${r.average}%</b><br><small>Average</small></div>
+                                <div style="background:#f1f5f9 !important;border-left:4px solid #f39c12;padding:10px;border-radius:6px;text-align:center;"><b>${r.rank} / ${rosterData.length}</b><br><small>Class Rank</small></div>
+                                <div style="background:#f1f5f9 !important;border-left:4px solid #27ae60;padding:10px;border-radius:6px;text-align:center;"><b style="color:${r.average >= 50 ? '#27ae60' : '#e74c3c'} !important;">${r.average >= 50 ? 'Promoted' : 'Failed'}</b><br><small>Remark</small></div>
                             </div>
-                            <div style="display:flex;justify-content:space-between;margin-top:35px;font-weight:bold;font-size:13px;">
+                            <div style="display:flex;justify-content:space-between;margin-top:40px;font-weight:bold;font-size:13px;">
                                 <div>Homeroom Teacher: ___________________</div>
-                                <div>Director's Signature & Stamp: ___________________</div>
+                                <div>Official Stamp: _______________</div>
+                                <div>Director's Signature: ___________________</div>
                             </div>
                         </div>`;
                     }).join('');
@@ -1634,18 +1806,20 @@ app.get('/admin/master-roster/:year/:className', (req, res) => {
 <head>
     <meta charset="UTF-8">
     <title>Master Roster - ${className} (${academicYear})</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
         body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #eef2f5; margin: 0; padding: 20px; color: #1e293b; }
         .top-controls { background: white; padding: 15px; border-radius: 10px; max-width: 1200px; margin: 0 auto 20px auto; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
         .btn { padding: 10px 18px; border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; text-decoration: none; font-size: 14px; }
-        .roster-box { max-width: 1200px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.1); border-top: 8px solid #1f4e79; overflow-x: auto; }
+        .roster-box { max-width: 1200px; margin: auto; background: white !important; padding: 30px; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.1); border-top: 8px solid #1f4e79; overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
         th, td { border: 1px solid #cbd5e1; padding: 8px 6px; text-align: center; }
-        th { background: #1f4e79; color: white; }
+        th { background: #1f4e79 !important; color: white !important; }
         .individual-cards-wrapper { display: none; max-width: 850px; margin: 20px auto; }
-        .individual-card-page { background: white; padding: 30px; border: 2px solid #1f4e79; border-radius: 10px; margin-bottom: 25px; page-break-after: always; }
+        .individual-card-page { background: white !important; padding: 30px; border: 3px double #1f4e79; border-radius: 12px; margin-bottom: 25px; page-break-after: always; }
         @media print {
-            body { background: white; padding: 0; }
+            body { background: white !important; padding: 0; }
             .no-print, .top-controls { display: none !important; }
             .roster-box { box-shadow: none; border: none; padding: 0; max-width: 100%; }
         }
@@ -1653,19 +1827,21 @@ app.get('/admin/master-roster/:year/:className', (req, res) => {
 </head>
 <body>
     <div class="top-controls no-print">
-        <button onclick="printMode('roster')" class="btn" style="background:#1f4e79;">🖨️ ሙሉውን የክፍል ሮስተር ፕሪንት / Save PDF (Master Roster)</button>
-        <button onclick="printMode('cards')" class="btn" style="background:#27ae60;">🗂️ የሁሉንም ተማሪዎች ካርድ በ1 ጊዜ ፕሪንት / PDF (All Individual Cards)</button>
+        <button onclick="downloadMasterRosterPDF()" class="btn" style="background:#16a085;">📥 ሮስተሩን በኦሪጅናል ከለር Download PDF</button>
+        <button onclick="downloadAllCardsPDF()" class="btn" style="background:#8e44ad;">📥 የሁሉንም ተማሪዎች ካርድ በከለር Download PDF</button>
+        <button onclick="printMode('roster')" class="btn" style="background:#1f4e79;">🖨️ Print Master Roster</button>
+        <button onclick="printMode('cards')" class="btn" style="background:#27ae60;">🗂️ Print All Individual Cards</button>
         <a href="/admin" class="btn" style="background:#7f8c8d;">⬅️ ወደ አድሚን ተመለስ</a>
     </div>
 
     <div class="roster-box" id="masterRosterSection">
         <div style="text-align:center; border-bottom:2px solid #1f4e79; padding-bottom:12px; margin-bottom:15px;">
-            <img src="/uploads/logo.jpg" onerror="this.src='/uploads/logo.png'" style="width:70px;height:70px;border-radius:50%;border:2px solid #1f4e79;object-fit:cover;">
-            <h1 style="margin:6px 0 2px;color:#1f4e79;font-size:24px;">AMANUEL LIGHT AND LIFE SCHOOL</h1>
-            <h3 style="margin:0;color:#d35400;">OFFICIAL CLASS MASTER ROSTER - ${academicYear}</h3>
+            <img src="/uploads/logo.jpg" onerror="this.src='/uploads/logo.png'" style="width:70px;height:70px;border-radius:50%;border:2px solid #f39c12;object-fit:cover;" crossorigin="anonymous">
+            <h1 style="margin:6px 0 2px;color:#1f4e79 !important;font-size:24px;">AMANUEL LIGHT AND LIFE SCHOOL</h1>
+            <h3 style="margin:0;color:#d35400 !important;">OFFICIAL CLASS MASTER ROSTER - ${academicYear}</h3>
             <p style="margin:6px 0 0;font-weight:bold;color:#334155;">
-                🏫 ክፍል (Class): <span style="color:#2980b9;">${className}</span> &nbsp;|&nbsp;
-                👨‍🏫 የተቆጣጣሪ መምህር (Proctor): <span style="color:#27ae60;">${secObj.proctor_name || 'N/A'}</span> &nbsp;|&nbsp;
+                🏫 ክፍል (Class): <span style="color:#2980b9 !important;">${className}</span> &nbsp;|&nbsp;
+                👨‍🏫 የተቆጣጣሪ መምህር (Proctor): <span style="color:#27ae60 !important;">${secObj.proctor_name || 'N/A'}</span> &nbsp;|&nbsp;
                 👨‍🎓 የተማሪ ብዛት (Total Students): ${rosterData.length}
             </p>
         </div>
@@ -1714,6 +1890,31 @@ app.get('/admin/master-roster/:year/:className', (req, res) => {
                 cardsEl.style.display = 'none';
                 window.print();
             }
+        }
+
+        function downloadMasterRosterPDF() {
+            const element = document.getElementById('masterRosterSection');
+            html2pdf().set({
+                margin: 8,
+                filename: 'Master_Roster_${className.replace(/\\s+/g, '_')}_${academicYear}.pdf',
+                image: { type: 'jpeg', quality: 1 },
+                html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+            }).from(element).save();
+        }
+
+        function downloadAllCardsPDF() {
+            const cardsEl = document.getElementById('allCardsSection');
+            cardsEl.style.display = 'block';
+            html2pdf().set({
+                margin: 8,
+                filename: 'All_Student_Cards_${className.replace(/\\s+/g, '_')}_${academicYear}.pdf',
+                image: { type: 'jpeg', quality: 1 },
+                html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            }).from(cardsEl).save().then(() => {
+                cardsEl.style.display = 'none';
+            });
         }
     </script>
 </body>
