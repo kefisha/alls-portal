@@ -3,110 +3,210 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Teacher Portal</title>
+    <title>Teacher Portal - Amanuel Light and Life School</title>
     <style>
-        body{font-family:sans-serif; background:#f4f7f6; padding:20px;}
-        .card{background:white; padding:20px; border-radius:10px; margin-bottom:20px; box-shadow:0 2px 4px rgba(0,0,0,0.05); overflow-x:auto;}
-        table{width:100%; border-collapse:collapse; min-width:600px;}
-        th,td{border:1px solid #ccc; padding:8px; text-align:center;}
-        th{background:#2c3e50; color:white;}
-        input,select{padding:6px;}
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eef2f5; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 1000px; margin: auto; }
+        .card { background: white; padding: 22px; border-radius: 12px; margin-bottom: 22px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-top: 4px solid #2980b9; overflow-x: auto; }
+        .card h3 { color: #1f4e79; margin-top: 0; margin-bottom: 15px; border-bottom: 2px solid #ecf0f1; padding-bottom: 8px; font-size: 18px; }
+        table { width: 100%; border-collapse: collapse; min-width: 650px; margin-top: 10px; background: white; }
+        th, td { border: 1px solid #e0e0e0; padding: 10px; text-align: center; font-size: 13.5px; }
+        th { background: #1f4e79; color: white; font-weight: 600; }
+        tr:nth-child(even) { background: #f8f9fa; }
+        input[type="number"], select { padding: 8px; border: 1px solid #ccd1d9; border-radius: 6px; box-sizing: border-box; font-family: inherit; }
+        button { background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: background 0.3s; }
+        button:hover { background: #2980b9; }
+        .logout-btn { background: #e74c3c; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; }
     </style>
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
 </head>
 <body>
-<div style="max-width:900px; margin:auto;">
-    <h2><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 10px;"> 👨‍🏫 የመምህር መቆጣጠሪያ ፖርታል</h2>
+<div class="container">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin:0; color:#2c3e50; font-size:24px;">
+            <img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 42px; width: 42px; border-radius: 50%; object-fit: cover; vertical-align: middle; margin-right: 10px; border: 2px solid #2980b9;"> 
+            👨‍🏫 የመምህር መቆጣጠሪያ ፖርታል (Teacher Portal)
+        </h2>
+        <a href="/logout" class="logout-btn">🔒 ውጣ (Logout)</a>
+    </div>
     
-    <div class="card">
-        <form method="GET" action="/teacher-dashboard" style="background:#eef2f5; padding:15px; border-radius:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-            <label style="font-weight:bold;">ክፍል ምረጥ:</label>
-            <select name="cls" onchange="this.form.submit()" style="padding:8px; border-radius:5px;"><%- classOptions %></select>
-            <label style="font-weight:bold; margin-left:15px;">ትምህርት ምረጥ:</label>
-            <select name="course_id" onchange="this.form.submit()" style="padding:8px; border-radius:5px;"><%- courseOptions %></select>
+    <!-- 🏫 Class & Course Filter -->
+    <div class="card" style="border-top-color: #8e44ad;">
+        <form method="GET" action="/teacher-dashboard" style="background:#f8fafc; padding:15px; border-radius:8px; display:flex; gap:15px; align-items:center; flex-wrap:wrap; border:1px solid #e2e8f0;">
+            <div>
+                <label style="font-weight:bold; font-size:13.5px; display:block; margin-bottom:5px;">🏫 ክፍል ምረጥ (Select Class):</label>
+                <select name="cls" onchange="this.form.submit()" style="padding:9px; border-radius:6px; min-width:200px;"><%- classOptions %></select>
+            </div>
+            <div>
+                <label style="font-weight:bold; font-size:13.5px; display:block; margin-bottom:5px;">📘 ትምህርት ምረጥ (Select Course):</label>
+                <select name="course_id" onchange="this.form.submit()" style="padding:9px; border-radius:6px; min-width:220px;"><%- courseOptions %></select>
+            </div>
         </form>
     </div>
 
     <%- proctorPanel %>
 
-    <div class="card">
+    <!-- 📊 Grades Input Card -->
+    <div class="card" style="border-top-color: #27ae60;">
         <h3>📊 የውጤት ማስገቢያ (ክፍል: <%= selectedClass %>)</h3>
+        <p style="font-size: 13px; color: #555; margin-top: -5px;">
+            ማሳሰቢያ፦ Quiz ከ 20፣ Mid ከ 30፣ Final ከ 50 ዐይበልጥ። <b>Save</b> ሲሉ ቆንጆ ምልክት ያሳየዎታል።
+        </p>
         <table>
-            <tr><th>#</th><th>ID</th><th>ስም (Name)</th><th>Quiz (20%)</th><th>Mid (30%)</th><th>Final (50%)</th><th>Action</th></tr>
-            <%- studentRows || '<tr><td colspan="7">ምንም ተማሪ የለም</td></tr>' %>
+            <tr>
+                <th>#</th>
+                <th>ID</th>
+                <th>ስም (Name)</th>
+                <th>Quiz (20%)</th>
+                <th>Mid (30%)</th>
+                <th>Final (50%)</th>
+                <th>Action</th>
+            </tr>
+            <%- studentRows || '<tr><td colspan="7" style="padding:20px; color:#777;">ምንም ተማሪ አልተገኘም</td></tr>' %>
         </table>
+
+        <!-- 📤 Submit to Admin Box (Dynamically injected or ready) -->
+        <div id="submitGradesToAdminBox" style="margin-top:20px; padding:18px; background:#f0fdf4; border:2px solid #27ae60; border-radius:10px; text-align:center;">
+            <h4 style="margin:0 0 6px 0; color:#166534; font-size:16px;">
+                ✅ የዚህን ክፍል ውጤት ሙሉ በሙሉ ሞልተው ጨርሰዋል?
+            </h4>
+            <p style="margin:0 0 12px 0; font-size:13px; color:#475569;">
+                ሁሉንም ተማሪዎች Save ካደረጉ በኋላ ከታች ያለውን ቁልፍ በመጫን ውጤቱን ለአድሚኑ ያስረክቡ።
+            </p>
+            <form action="/teacher/submit-final-grades" method="POST" onsubmit="return confirm('የዚህን ክፍል ውጤት ለአድሚኑ ማስረከብ ይፈልጋሉ?');" style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; align-items:center;">
+                <input type="hidden" name="class_level" value="<%= selectedClass %>">
+                <input type="hidden" name="course_id" value="<%= selectedCourseId %>">
+                <select name="academic_year" style="padding:9px 12px; border-radius:6px; border:1px solid #27ae60; font-weight:bold; width:auto; margin:0;">
+                    <option value="2019 E.C">📅 2019 E.C</option>
+                    <option value="2018 E.C">📅 2018 E.C</option>
+                    <option value="2020 E.C">📅 2020 E.C</option>
+                </select>
+                <button type="submit" style="background:#27ae60; color:white; padding:10px 22px; border:none; border-radius:6px; font-weight:bold; font-size:14.5px; cursor:pointer; box-shadow:0 3px 8px rgba(39,174,96,0.3);">
+                    📤 ውጤቱን ለአድሚን አስረክብ (Submit Final Grades to Admin)
+                </button>
+            </form>
+        </div>
     </div>
 
-    <div class="card">
-        <h3>📋 የፈቀዷቸው / የተማሪዎች መቅረት ጥያቄዎች (Absence Requests)</h3>
+    <!-- 📋 Absence Requests -->
+    <div class="card" style="border-top-color: #f39c12;">
+        <h3>📋 የተማሪዎች መቅረት ጥያቄዎች (Absence Requests)</h3>
         <table>
             <tr><th>ተማሪ</th><th>ቀን</th><th>ምክንያት</th><th>ሁኔታ</th></tr>
-            <%- absRows || '<tr><td colspan="4">ምንም ጥያቄ የለም</td></tr>' %>
+            <%- absRows || '<tr><td colspan="4" style="padding:15px; color:#777;">ምንም ጥያቄ የለም</td></tr>' %>
         </table>
     </div>
 
-    <div class="card" style="background:#e8f4fd;">
-        <h3 style="color:#2980b9;">📢 ማስታወቂያዎች</h3>
+    <!-- 📢 Notifications -->
+    <div class="card" style="background:#f8fafc; border-top-color: #3498db;">
+        <h3 style="color:#2980b9;">📢 ማስታወቂያዎች መላኪያ (Send Notification)</h3>
         <form action="/teacher/send-notification?cls=<%= encodeURIComponent(selectedClass) %>" method="POST" enctype="multipart/form-data" id="notifFormTeacher">
-            <div id="editorTeacher" style="height: 120px; background: white; margin-bottom: 10px;"></div>
+            <div id="editorTeacher" style="height: 140px; background: white; margin-bottom: 12px; border-radius: 0 0 6px 6px;"></div>
             <input type="hidden" name="message" id="hiddenMessageTeacher" required>
-            <input type="file" name="attachment" style="margin-bottom:10px;"><br>
-            <button type="submit" style="background:#3498db; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">Send Notification</button>
+            <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:5px;">📎 ፋይል ወይም ፎቶ አያይዝ (አማራጭ):</label>
+            <input type="file" name="attachment" style="margin-bottom:12px; background:white;"><br>
+            <button type="submit" style="background:#3498db; color:white; border:none; padding:11px 22px; border-radius:6px; font-weight:bold; cursor:pointer;">📩 ማስታወቂያ ላክ (Send)</button>
         </form>
-        <hr style="margin:20px 0;">
-        <%- teacherNotiRows || '<p style="color:#777;">ምንም ማስታወቂያ የለም</p>' %>
-    </div>
-
-    <div style="text-align:center; margin-top:20px;">
-        <a href="/logout" style="color:red; font-weight:bold; font-size:18px; text-decoration:none;">🔒 ውጣ (Logout)</a>
+        <hr style="margin:20px 0; border:0; border-top:1px solid #e2e8f0;">
+        <%- teacherNotiRows || '<p style="color:#777; text-align:center;">ምንም የላኩት ማስታወቂያ የለም</p>' %>
     </div>
 </div>
 
 <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
 <script>
-    var quill = new Quill('#editorTeacher', { theme: 'snow' });
-    var form = document.getElementById('notifFormTeacher');
-    if(form) {
-        form.onsubmit = function() { document.getElementById('hiddenMessageTeacher').value = quill.root.innerHTML; };
-    }
+    document.addEventListener("DOMContentLoaded", function() {
+        const selectedCourseId = "<%= selectedCourseId %>";
 
-    document.querySelectorAll('.ajax-grade-form').forEach(form => {
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const btn = this.querySelector('button');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '⏳...';
-            btn.disabled = true;
+        // 1. Quill Editor Setup
+        var quill = new Quill('#editorTeacher', {
+            theme: 'snow',
+            placeholder: 'መልዕክትዎን እዚህ ይጻፉ... / Write your message here...',
+            modules: {
+                toolbar: [
+                    [{ 'font': [] }, { 'size': [] }],
+                    ['bold', 'italic', 'underline'],
+                    [{ 'color': [] }, { 'background': [] }],
+                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                    ['clean']
+                ]
+            }
+        });
 
-            const studentId = this.querySelector('input[name="student_id"]').value;
-            const quiz = this.querySelector('input[name="quiz"]').value;
-            const mid = this.querySelector('input[name="mid"]').value;
-            const final = this.querySelector('input[name="final"]').value;
+        var form = document.getElementById('notifFormTeacher');
+        if(form) {
+            form.onsubmit = function() {
+                document.getElementById('hiddenMessageTeacher').value = quill.root.innerHTML;
+            };
+        }
 
-            let payload = new URLSearchParams();
-            payload.append('student_id', studentId);
-            payload.append('quiz', quiz);
-            payload.append('mid', mid);
-            payload.append('final', final);
+        // 2. AJAX Grade Saving (Fixing Pending ⏳ issue)
+        document.querySelectorAll('.ajax-grade-form').forEach(oldForm => {
+            const form = oldForm.cloneNode(true);
+            oldForm.parentNode.replaceChild(form, oldForm);
 
-            fetch(this.action, { method: 'POST', body: payload })
-            .then(res => res.json())
-            .then(res => {
-                if(res.success) {
-                    btn.innerHTML = '✅ Saved';
-                    btn.style.background = '#27ae60';
-                    setTimeout(() => { btn.innerHTML = originalText; btn.style.background = '#27ae60'; btn.disabled = false; }, 1500);
-                } else {
-                    btn.innerHTML = '❌ Error';
-                    btn.style.background = '#c0392b';
-                    setTimeout(() => { btn.innerHTML = originalText; btn.style.background = '#27ae60'; btn.disabled = false; }, 1500);
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const btn = form.querySelector('button[type="submit"]');
+                const row = form.closest('tr');
+                const studentId = form.querySelector('input[name="student_id"]').value;
+
+                const qInput = row ? row.querySelector('input[name="quiz"]') : null;
+                const mInput = row ? row.querySelector('input[name="mid"]') : null;
+                const fInput = row ? row.querySelector('input[name="final"]') : null;
+
+                const quiz = parseFloat(qInput ? qInput.value : 0) || 0;
+                const mid = parseFloat(mInput ? mInput.value : 0) || 0;
+                const final = parseFloat(fInput ? fInput.value : 0) || 0;
+
+                if (quiz > 20 || mid > 30 || final > 50 || (quiz + mid + final) > 100) {
+                    alert('⚠️ ስህተት፦ ውጤት ከ 100% መብለጥ የለበትም! (Quiz ≤ 20, Mid ≤ 30, Final ≤ 50)');
+                    return;
                 }
-            })
-            .catch(() => {
-                btn.innerHTML = '❌ Error';
-                btn.disabled = false;
+
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '⏳...';
+                btn.style.background = '#f39c12';
+                btn.disabled = true;
+
+                let payload = new URLSearchParams();
+                payload.append('student_id', studentId);
+                payload.append('course_id', selectedCourseId);
+                payload.append('quiz', quiz);
+                payload.append('mid', mid);
+                payload.append('final', final);
+
+                fetch(form.action, { method: 'POST', body: payload })
+                .then(res => res.json())
+                .then(res => {
+                    if(res && res.success) {
+                        btn.innerHTML = `✅ ${res.total}`;
+                        btn.style.background = '#27ae60';
+                        setTimeout(() => {
+                            btn.innerHTML = originalText;
+                            btn.style.background = '#27ae60';
+                            btn.disabled = false;
+                        }, 1500);
+                    } else {
+                        btn.innerHTML = '❌ Error';
+                        btn.style.background = '#e74c3c';
+                        setTimeout(() => {
+                            btn.innerHTML = originalText;
+                            btn.style.background = '#27ae60';
+                            btn.disabled = false;
+                        }, 1500);
+                    }
+                })
+                .catch(() => {
+                    btn.innerHTML = '❌ Error';
+                    btn.style.background = '#e74c3c';
+                    btn.disabled = false;
+                });
             });
         });
+
+        if (new URLSearchParams(window.location.search).get('submitted') === '1') {
+            alert('🎉 የዚህ ክፍል ውጤት በተሳካ ሁኔታ ለአድሚኑ ተልኳል (Submitted to Admin)!');
+        }
     });
 </script>
 </body>
