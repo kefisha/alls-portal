@@ -20,48 +20,73 @@
         th { background: #1f4e79; color: white; }
         .note-box { background: #fffdf5; border: 1px solid #f39c12; padding: 15px; border-radius: 8px; margin-top: 20px; }
         .sig-row { display: flex; justify-content: space-between; margin-top: 50px; padding-top: 20px; font-weight: bold; }
-        .no-print { text-align: center; margin-bottom: 20px; }
-        .btn { padding: 10px 20px; border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; text-decoration: none; margin: 0 5px; }
-        @media print { body { background: white; padding: 0; } .no-print { display: none; } .report-page { box-shadow: none; border: none; } }
+        .no-print { text-align: center; margin-bottom: 20px; background: white; padding: 12px; border-radius: 10px; max-width: 900px; margin: 0 auto 20px auto; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+        .btn { padding: 10px 18px; border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; text-decoration: none; margin: 4px; font-size: 14px; display: inline-block; }
+        
+        .editing-active [contenteditable="true"] {
+            outline: 2px dashed #f39c12;
+            background-color: #fffef8;
+            border-radius: 4px;
+        }
+        @media print {
+            body { background: white; padding: 0; }
+            .no-print { display: none !important; }
+            .report-page { box-shadow: none; border: none; }
+            .editing-active [contenteditable="true"] { outline: none !important; background: transparent !important; }
+        }
     </style>
 </head>
 <body>
     <div class="no-print">
-        <button onclick="window.print()" class="btn" style="background:#2980b9;">🖨️ ፕሪንት አድርግ / Save PDF</button>
+        <button id="toggleEditBtn" onclick="toggleEditMode()" class="btn" style="background:#e67e22;">
+            ✏️ ሪፖርቱን አስተካክል (Edit Report)
+        </button>
+        <button onclick="addClassRow()" id="addClassRowBtn" class="btn" style="background:#8e44ad; display:none;">
+            ➕ የክፍል መስመር ጨምር
+        </button>
+        <button onclick="addTeacherRow()" id="addTeacherRowBtn" class="btn" style="background:#16a085; display:none;">
+            ➕ የመምህር መስመር ጨምር
+        </button>
+        <button onclick="window.print()" class="btn" style="background:#2980b9;">
+            🖨️ ፕሪንት አድርግ / Save PDF
+        </button>
         <a href="/admin" class="btn" style="background:#7f8c8d;">⬅️ ወደ አድሚን ተመለስ</a>
+        <div id="editHint" style="display:none; margin-top:8px; font-size:13px; color:#d35400; font-weight:bold;">
+            💡 ማንኛውንም ጽሁፍ፣ ቁጥር ወይም ሰንጠረዥ በመንካት በቀጥታ መቀየር ይችላሉ! ሲጨርሱ "ማስተካከያውን ጨርስ (Done)" ይበሉ።
+        </div>
     </div>
 
-    <div class="report-page">
+    <div class="report-page" id="reportContainer">
         <div class="header">
             <img src="/uploads/logo.jpg" alt="School Logo">
-            <h1>AMANUEL LIGHT AND LIFE SCHOOL</h1>
-            <div class="badge">
+            <h1 editable-item>AMANUEL LIGHT AND LIFE SCHOOL</h1>
+            <div class="badge" editable-item>
                 <%= reportType === 'monthly' ? '🗓️ የዲሬክተር ወርሃዊ ሪፖርት (Monthly Director Report)' : '📆 የዲሬክተር ሳምንታዊ ሪፖርት (Weekly Director Report)' %>
             </div>
-            <p style="margin:8px 0 0 0; font-size:13.5px; color:#555;">ቀን / Date: <b><%= todayStr %></b></p>
+            <p style="margin:8px 0 0 0; font-size:13.5px; color:#555;" editable-item>ቀን / Date: <b><%= todayStr %></b></p>
         </div>
 
         <div class="stats-grid">
-            <div class="stat-card">
+            <div class="stat-card" editable-item>
                 <div class="num"><%= totalStudents %></div>
                 <div class="lbl">ጠቅላላ ተማሪዎች (ወ: <%= maleCount %> | ሴ: <%= femaleCount %>)</div>
             </div>
-            <div class="stat-card" style="border-left-color:#e67e22;">
+            <div class="stat-card" style="border-left-color:#e67e22;" editable-item>
                 <div class="num"><%= pendingCount %></div>
                 <div class="lbl">አዲስ አመልካቾች (Pending)</div>
             </div>
-            <div class="stat-card" style="border-left-color:#8e44ad;">
+            <div class="stat-card" style="border-left-color:#8e44ad;" editable-item>
                 <div class="num"><%= teacherCount %></div>
                 <div class="lbl">ጠቅላላ መምህራን (Teachers)</div>
             </div>
-            <div class="stat-card" style="border-left-color:#27ae60;">
+            <div class="stat-card" style="border-left-color:#27ae60;" editable-item>
                 <div class="num"><%= sectionCount %></div>
                 <div class="lbl">ጠቅላላ ሴክሽኖች (Sections)</div>
             </div>
         </div>
 
-        <h3>1. የተማሪዎች ብዛት በየክፍሉ እና በፆታ (Student Enrollment by Class & Gender)</h3>
-        <table>
+        <h3 editable-item>1. የተማሪዎች ብዛት በየክፍሉ እና በፆታ (Student Enrollment by Class & Gender)</h3>
+        <table id="classReportTable" editable-item>
             <tr>
                 <th>ክፍል እና ሴክሽን (Class / Section)</th>
                 <th>ወንድ (Male)</th>
@@ -71,8 +96,8 @@
             <%- classRowsHtml %>
         </table>
 
-        <h3>2. የመምህራን እና የክፍል ምደባ ዝርዝር (Teachers & Assigned Sections)</h3>
-        <table>
+        <h3 editable-item>2. የመምህራን እና የክፍል ምደባ ዝርዝር (Teachers & Assigned Sections)</h3>
+        <table id="teacherReportTable" editable-item>
             <tr>
                 <th>መታወቂያ (ID)</th>
                 <th>የመምህሩ ስም (Name)</th>
@@ -83,15 +108,58 @@
             <%- teacherRowsHtml %>
         </table>
 
-        <div class="note-box">
+        <div class="note-box" editable-item>
             <b>✍️ የዲሬክተሩ ማጠቃለያ ማስታወሻ (Director's Summary Note):</b>
             <p style="margin:8px 0 0 0; line-height:1.6;"><%= directorNote || 'በዚህ ሳምንት/ወር የመማር ማስተማር ሂደቱ በሰላም እና በተሳካ ሁኔታ ተከናውኗል።' %></p>
         </div>
 
-        <div class="sig-row">
+        <div class="sig-row" editable-item>
             <div>የዲሬክተሩ ስምና ፊርማ፦ ________________________</div>
             <div>የትምህርት ቤቱ ማህተም፦ ________________________</div>
         </div>
     </div>
+
+    <script>
+        let isEditing = false;
+        function toggleEditMode() {
+            isEditing = !isEditing;
+            const container = document.getElementById('reportContainer');
+            const btn = document.getElementById('toggleEditBtn');
+            const hint = document.getElementById('editHint');
+            const addClsBtn = document.getElementById('addClassRowBtn');
+            const addTchBtn = document.getElementById('addTeacherRowBtn');
+
+            container.classList.toggle('editing-active', isEditing);
+            document.querySelectorAll('[editable-item]').forEach(el => {
+                el.setAttribute('contenteditable', isEditing ? 'true' : 'false');
+            });
+
+            if (isEditing) {
+                btn.innerHTML = '✅ ማስተካከያውን ጨርስ (Done Editing)';
+                btn.style.background = '#27ae60';
+                hint.style.display = 'block';
+                addClsBtn.style.display = 'inline-block';
+                addTchBtn.style.display = 'inline-block';
+            } else {
+                btn.innerHTML = '✏️ ሪፖርቱን አስተካክል (Edit Report)';
+                btn.style.background = '#e67e22';
+                hint.style.display = 'none';
+                addClsBtn.style.display = 'none';
+                addTchBtn.style.display = 'none';
+            }
+        }
+
+        function addClassRow() {
+            const tbl = document.getElementById('classReportTable');
+            const row = tbl.insertRow(-1);
+            row.innerHTML = '<td><b>Grade - Section</b></td><td>0</td><td>0</td><td><b>0</b></td>';
+        }
+
+        function addTeacherRow() {
+            const tbl = document.getElementById('teacherReportTable');
+            const row = tbl.insertRow(-1);
+            row.innerHTML = '<td><b>ALLS-T-0000</b></td><td>ስም</td><td>ትምህርት</td><td>ክፍል</td><td>09...</td>';
+        }
+    </script>
 </body>
 </html>
