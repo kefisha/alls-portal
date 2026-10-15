@@ -112,14 +112,16 @@
                 </div>
             </div>
 
-                        <!-- Teachers Management (Full Info + Photo + Auto ID) -->
+                                    <!-- Teachers Management (With Section Options & Teacher Handover/Replacement) -->
             <div class="card" style="border-color: #8e44ad;">
                 <h3 style="color: #8e44ad; border-bottom-color: #f4ecf7;">
-                    👩‍🏫 <span class="am">መምህራን አስተዳደር (ሙሉ ምዝገባ)</span><span class="en">Teachers Management (Full Registration)</span>
+                    👩‍🏫 <span class="am">መምህራን ምዝገባ እና የክፍል ምደባ</span><span class="en">Teachers Registration & Class Assignment</span>
                 </h3>
                 
-                <form action="/admin/register-teacher-full" method="POST" enctype="multipart/form-data" style="margin-bottom: 15px; background: #faf8fc; padding: 18px; border-radius: 10px; border: 1px solid #e8daef;">
-                    
+                <!-- 1. አዲስ መምህር መመዝገቢያ (ከሴክሽን ምርጫ ጋር) -->
+                <form action="/admin/register-teacher-full" method="POST" enctype="multipart/form-data" style="margin-bottom: 20px; background: #faf8fc; padding: 18px; border-radius: 10px; border: 1px solid #e8daef;">
+                    <h4 style="margin-top:0; color:#8e44ad;">➕ <span class="am">1. አዲስ መምህር መመዝገቢያ</span><span class="en">1. Register New Teacher</span></h4>
+
                     <label style="font-weight:bold; font-size:13px;"><span class="am">👤 የመምህሩ ሙሉ ስም *</span><span class="en">👤 Teacher Full Name *</span></label>
                     <input type="text" name="name" placeholder="ሙሉ ስም (ከነአያት) / Full Name" required>
 
@@ -140,12 +142,15 @@
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                         <div>
-                            <label style="font-weight:bold; font-size:13px;"><span class="am">📘 የሚያስተምሩት ትምህርት *</span><span class="en">📘 Subject / Department *</span></label>
+                            <label style="font-weight:bold; font-size:13px;"><span class="am">📘 የሚያስተምሩት ትምህርት *</span><span class="en">📘 Subject *</span></label>
                             <input type="text" name="subject" placeholder="ምሳሌ: Maths, English..." required>
                         </div>
                         <div>
-                            <label style="font-weight:bold; font-size:13px;"><span class="am">🏫 የሚያስተምሩት ሴክሽን *</span><span class="en">🏫 Assigned Sections *</span></label>
-                            <input type="text" name="assigned_sections" placeholder="Grade 1 - Section A" required>
+                            <label style="font-weight:bold; font-size:13px;"><span class="am">🏫 የሚመደቡበት ክፍል/ሴክሽን (Option) *</span><span class="en">🏫 Assign Class/Section *</span></label>
+                            <select name="assigned_sections" required>
+                                <option value="">ክፍልና ሴክሽን ይምረጡ / Select Section</option>
+                                <%- sectionOptions %>
+                            </select>
                         </div>
                     </div>
 
@@ -161,7 +166,7 @@
                     </div>
 
                     <label style="font-weight:bold; font-size:13px; display:block; margin-top:5px;">
-                        📷 <span class="am">የመምህሩ ፎቶ (ለመታወቂያ ካርድ)</span><span class="en">Teacher Photo (For ID Card)</span>:
+                        📷 <span class="am">የመምህሩ ፎቶ (ለመታወቂያ)</span><span class="en">Teacher Photo (For ID)</span>:
                     </label>
                     <input type="file" name="teacher_photo" accept="image/*" style="background: white;">
 
@@ -170,8 +175,52 @@
                     </button>
                 </form>
 
+                <!-- 2. መምህር በመምህር መተኪያ እና ተጨማሪ ክፍል መመደቢያ (ውጤት ሳይጠፋ) -->
+                <div style="background: #eef7fa; padding: 18px; border-radius: 10px; border: 2px solid #3498db; margin-bottom: 20px;">
+                    <h4 style="margin-top:0; color:#1f4e79;">
+                        🔄 <span class="am">2. የክፍል ምደባ ማስተካከያ እና መምህር በመምህር መተኪያ</span>
+                        <span class="en">2. Class Reassignment & Teacher Handover</span>
+                    </h4>
+                    <p style="font-size: 12.5px; color: #555; margin-top: -5px; margin-bottom: 12px;">
+                        <span class="am">💡 አንድ መምህር ቢለቅ ወይም ቢቀየር፣ እዚህ ጋር ክፍሉን ለአዲሱ መምህር ሲያስተላልፉ <b>ቀድሞ የተሞሉ ውጤቶች ምንም ሳይጠፉ</b> አዲሱ መምህር ከቆመበት ይቀጥላል።</span>
+                        <span class="en">💡 Transferring a section to a new teacher preserves all previously entered student grades and records.</span>
+                    </p>
+
+                    <form action="/admin/handover-section" method="POST">
+                        <label style="font-weight:bold; font-size:13px;"><span class="am">🏫 ክፍል እና ሴክሽን ይምረጡ (ለምሳሌ 2A) *</span><span class="en">🏫 Select Class & Section *</span></label>
+                        <select name="section_name" required>
+                            <option value="">ክፍል ይምረጡ / Select Class & Section</option>
+                            <%- sectionOptions %>
+                        </select>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div>
+                                <label style="font-weight:bold; font-size:13px; color:#c0392b;">
+                                    <span class="am">📤 የሚለቀው መምህር (ካለ)</span><span class="en">📤 Leaving Teacher (Optional)</span>
+                                </label>
+                                <select name="old_teacher_id" id="oldTeacherSelect">
+                                    <option value="">-- የለም (ተጨማሪ ምደባ) / None --</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="font-weight:bold; font-size:13px; color:#27ae60;">
+                                    <span class="am">📥 አዲሱ / ተተኪው መምህር *</span><span class="en">📥 New / Incoming Teacher *</span>
+                                </label>
+                                <select name="new_teacher_id" id="newTeacherSelect" required>
+                                    <option value="">መምህር ይምረጡ / Select Teacher</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <button type="submit" style="width: 100%; background: #2980b9; padding: 11px; margin-top: 8px;">
+                            🔄 <span class="am">ክፍሉንና ውጤቶቹን ለአዲሱ መምህር አስተላልፍ</span><span class="en">Assign / Handover Section to Teacher</span>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- 3. የመምህራን ዝርዝር ሰንጠረዥ -->
                 <div style="overflow-x: auto;">
-                    <table>
+                    <table id="teachersListTable">
                         <tr>
                             <th><span class="am">መታወቂያ</span><span class="en">ID</span></th>
                             <th><span class="am">ስም</span><span class="en">Name</span></th>
@@ -183,6 +232,31 @@
                     </table>
                 </div>
             </div>
+
+            <script>
+                // በሰንጠረዡ ውስጥ ያሉትን መምህራን ወደ ምርጫው (Dropdown) በራሱ እንዲያስገባ
+                document.addEventListener("DOMContentLoaded", function() {
+                    const table = document.getElementById("teachersListTable");
+                    const oldSel = document.getElementById("oldTeacherSelect");
+                    const newSel = document.getElementById("newTeacherSelect");
+                    if (table && oldSel && newSel) {
+                        const rows = table.querySelectorAll("tr");
+                        rows.forEach((row, index) => {
+                            if (index === 0) return; // የመጀመሪያውን የርዕስ መስመር ይዘለዋል
+                            const cells = row.querySelectorAll("td");
+                            if (cells.length >= 2) {
+                                const tId = cells[0].innerText.trim();
+                                const tName = cells[1].innerText.trim();
+                                if (tId) {
+                                    oldSel.innerHTML += `<option value="${tId}">${tName} (${tId})</option>`;
+                                    newSel.innerHTML += `<option value="${tId}">${tName} (${tId})</option>`;
+                                }
+                            }
+                        });
+                    }
+                });
+            </script>
+
 
 
         <div class="grid-2">
