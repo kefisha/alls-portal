@@ -235,30 +235,42 @@ app.get('/', (req, res) => {
 });
 
 app.post('/login', loginLimiter, (req, res) => {
+// ==========================================
+// 🔐 የተስተካከለ የሎጊን ራውት (Login Route)
+// ==========================================
+app.post('/login', (req, res) => {
     const lang = req.query.lang || 'am';
     const { role, username, password } = req.body;
     const uKey = (username || '').trim();
 
-    if (role === 'admin' && uKey === ADMIN_USER && password === ADMIN_PASS) {
-        req.session.isAdmin = true; return res.redirect(`/admin?lang=${lang}`);
+    if (role === 'admin') {
+        if (uKey === ADMIN_USER && password === ADMIN_PASS) {
+            req.session.isAdmin = true;
+            return res.redirect(`/admin?lang=${lang}`);
+        } else {
+            return res.redirect(`/?lang=${lang}&error=invalid`);
+        }
     } else if (role === 'teacher') {
         db.get(`SELECT * FROM teachers WHERE id = ?`, [uKey.toUpperCase()], (err, t) => {
             if (t && (bcrypt.compareSync(password, t.password) || password === t.password)) {
-                req.session.teacherId = t.id; return res.redirect(`/teacher-dashboard?lang=${lang}`);
+                req.session.teacherId = t.id;
+                return res.redirect(`/teacher-dashboard?lang=${lang}`);
             }
-            res.redirect(`/?lang=${lang}&error=invalid`);
+            return res.redirect(`/?lang=${lang}&error=invalid`);
         });
     } else if (role === 'student') {
         db.get(`SELECT * FROM students WHERE student_id = ?`, [uKey.toUpperCase()], (err, s) => {
             if (s && (bcrypt.compareSync(password, s.password) || password === s.password)) {
-                req.session.studentId = s.student_id; return res.redirect(`/student-dashboard?lang=${lang}`);
+                req.session.studentId = s.student_id;
+                return res.redirect(`/student-dashboard?lang=${lang}`);
             }
-            res.redirect(`/?lang=${lang}&error=invalid`);
+            return res.redirect(`/?lang=${lang}&error=invalid`);
         });
     } else {
-        res.redirect(`/?lang=${lang}&error=invalid`);
+        return res.redirect(`/?lang=${lang}&error=invalid`);
     }
 });
+
 
 app.get('/forgot-password', (req, res) => {
     const lang = req.query.lang === 'en' ? 'en' : 'am';
