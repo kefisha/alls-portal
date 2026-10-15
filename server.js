@@ -893,6 +893,78 @@ app.get('/admin/director-report', (req, res) => {
         });
     });
 });
+// ==========================================
+// 👨‍🎓 የተመዘገቡ ተማሪዎች ማህደር እና ዝርዝር ማሳያ (Registered Students Archive)
+// ==========================================
+app.get('/admin/registered-students', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+
+    db.all(`SELECT * FROM students ORDER BY class_level ASC, name ASC`, [], (err, students = []) => {
+        if (err) students = [];
+
+        const maleCount = students.filter(s => (s.gender || '').toLowerCase() === 'male' || s.gender === 'ወንድ').length;
+        const femaleCount = students.filter(s => (s.gender || '').toLowerCase() === 'female' || s.gender === 'ሴት').length;
+
+        const grouped = {};
+        students.forEach(s => {
+            const cls = s.class_level || 'Unassigned';
+            if (!grouped[cls]) grouped[cls] = [];
+            grouped[cls].push(s);
+        });
+
+        let groupedStudentsHtml = '';
+        Object.keys(grouped).sort().forEach(cls => {
+            groupedStudentsHtml += `
+                <h3 style="color:#1f4e79; border-bottom:2px solid #3498db; padding-bottom:5px; margin-top:25px;">🏫 ክፍል: ${cls} (${grouped[cls].length} ተማሪዎች)</h3>
+                <div style="overflow-x:auto;">
+                    <table style="width:100%; border-collapse:collapse; margin-bottom:15px; background:white;">
+                        <tr style="background:#1f4e79; color:white;">
+                            <th>ID</th>
+                            <th>ስም (Name)</th>
+                            <th>ፆታ</th>
+                            <th>ስልክ</th>
+                            <th>የእናት ስም</th>
+                            <th>አድራሻ</th>
+                            <th>ክፍያ / ደረሰኝ</th>
+                            <th>እርምጃ</th>
+                        </tr>
+            `;
+            grouped[cls].forEach(st => {
+                const slipDisplay = st.bank_slip_val && (st.bank_slip_val.includes('.') || st.bank_slip_val.startsWith('slip'))
+                    ? `<a href="/uploads/${st.bank_slip_val}" target="_blank" style="color:#27ae60; font-weight:bold;">📄 ክፈት</a>`
+                    : `<span style="color:#1f4e79; font-weight:bold;">🔢 ${st.bank_slip_val || '-'}</span>`;
+
+                groupedStudentsHtml += `
+                    <tr>
+                        <td><b>${st.student_id}</b></td>
+                        <td>${st.name}</td>
+                        <td>${st.gender}</td>
+                        <td>${st.phone || '-'}</td>
+                        <td>${st.mother_name || '-'}</td>
+                        <td>${st.region || '-'}/${st.woreda || '-'}</td>
+                        <td>${slipDisplay}</td>
+                        <td>
+                            <a href="/admin/edit-student/${st.student_id}" style="color:#f39c12; font-weight:bold; margin-right:8px; text-decoration:none;">✏️ አስተካክል</a>
+                            <a href="/admin/delete-student/${st.student_id}" onclick="return confirm('ይህንን ተማሪ መሰረዝ ፈልገዋል?')" style="color:white; background:#e74c3c; padding:4px 8px; border-radius:4px; text-decoration:none; font-size:12px;">🗑️ ሰርዝ</a>
+                        </td>
+                    </tr>
+                `;
+            });
+            groupedStudentsHtml += `</table></div>`;
+        });
+
+        if (students.length === 0) {
+            groupedStudentsHtml = `<p style="text-align:center; color:#7f8c8d; padding:30px;">ምንም የተመዘገበ ተማሪ የለም።</p>`;
+        }
+
+        res.render('registered-students', {
+            students,
+            maleCount,
+            femaleCount,
+            groupedStudentsHtml
+        });
+    });
+});
 
 // ==========================================
 // 🗄️ የመምህራን ውጤት ማስረከቢያ ሰንጠረዥ (Grade Submissions Table)
