@@ -112,20 +112,21 @@
                 </div>
             </div>
 
-                                    <!-- Teachers Management (With Section Options & Teacher Handover/Replacement) -->
-            <div class="card" style="border-color: #8e44ad;">
+                                                <!-- 👩‍🏫 Teachers Management (Multi-Section Assignment & Teacher Handover) -->
+            <div class="card" style="border-color: #8e44ad; grid-column: 1 / -1;">
                 <h3 style="color: #8e44ad; border-bottom-color: #f4ecf7;">
-                    👩‍🏫 <span class="am">መምህራን ምዝገባ እና የክፍል ምደባ</span><span class="en">Teachers Registration & Class Assignment</span>
+                    👩‍🏫 <span class="am">መምህራን ምዝገባ እና የብዙ ክፍል/ሴክሽን ምደባ</span><span class="en">Teachers Registration & Multi-Section Assignment</span>
                 </h3>
                 
-                <!-- 1. አዲስ መምህር መመዝገቢያ (ከሴክሽን ምርጫ ጋር) -->
+                <!-- 1. አዲስ መምህር መመዝገቢያ (ብዙ ክፍልና ሴክሽን መምረጫ ያለው) -->
                 <form action="/admin/register-teacher-full" method="POST" enctype="multipart/form-data" style="margin-bottom: 20px; background: #faf8fc; padding: 18px; border-radius: 10px; border: 1px solid #e8daef;">
                     <h4 style="margin-top:0; color:#8e44ad;">➕ <span class="am">1. አዲስ መምህር መመዝገቢያ</span><span class="en">1. Register New Teacher</span></h4>
 
-                    <label style="font-weight:bold; font-size:13px;"><span class="am">👤 የመምህሩ ሙሉ ስም *</span><span class="en">👤 Teacher Full Name *</span></label>
-                    <input type="text" name="name" placeholder="ሙሉ ስም (ከነአያት) / Full Name" required>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
+                        <div>
+                            <label style="font-weight:bold; font-size:13px;"><span class="am">👤 የመምህሩ ሙሉ ስም *</span><span class="en">👤 Teacher Full Name *</span></label>
+                            <input type="text" name="name" placeholder="ሙሉ ስም (ከነአያት) / Full Name" required>
+                        </div>
                         <div>
                             <label style="font-weight:bold; font-size:13px;"><span class="am">⚧ ፆታ *</span><span class="en">⚧ Gender *</span></label>
                             <select name="gender" required>
@@ -138,23 +139,10 @@
                             <label style="font-weight:bold; font-size:13px;"><span class="am">📞 ስልክ ቁጥር *</span><span class="en">📞 Phone Number *</span></label>
                             <input type="text" name="phone" placeholder="09... / 07..." required>
                         </div>
-                    </div>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                         <div>
                             <label style="font-weight:bold; font-size:13px;"><span class="am">📘 የሚያስተምሩት ትምህርት *</span><span class="en">📘 Subject *</span></label>
                             <input type="text" name="subject" placeholder="ምሳሌ: Maths, English..." required>
                         </div>
-                        <div>
-                            <label style="font-weight:bold; font-size:13px;"><span class="am">🏫 የሚመደቡበት ክፍል/ሴክሽን (Option) *</span><span class="en">🏫 Assign Class/Section *</span></label>
-                            <select name="assigned_sections" required>
-                                <option value="">ክፍልና ሴክሽን ይምረጡ / Select Section</option>
-                                <%- sectionOptions %>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                         <div>
                             <label style="font-weight:bold; font-size:13px;"><span class="am">🚨 የአደጋ ጊዜ ተጠሪ ስም *</span><span class="en">🚨 Emergency Contact Name *</span></label>
                             <input type="text" name="emergency_name" placeholder="ተጠሪ ስም / Contact Name" required>
@@ -165,38 +153,48 @@
                         </div>
                     </div>
 
-                    <label style="font-weight:bold; font-size:13px; display:block; margin-top:5px;">
+                    <!-- 🏫 ብዙ ክፍልና ሴክሽን በአንድ ጊዜ መምረጫ (Multi-Section Checkboxes) -->
+                    <label style="font-weight:bold; font-size:13.5px; color:#8e44ad; display:block; margin-top:8px; margin-bottom:6px;">
+                        🏫 <span class="am">የሚመደቡባቸውን ክፍሎች እና ሴክሽኖች ይምረጡ (ብዙ መምረጥ ይቻላል) *</span>
+                        <span class="en">Select Assigned Classes & Sections (Multiple Allowed) *</span>
+                    </label>
+                    <select id="rawSectionOptionsSource" style="display:none;"><%- sectionOptions %></select>
+                    <div id="regSectionCheckboxes" class="multi-sec-grid"></div>
+                    <input type="hidden" name="assigned_sections" id="regAssignedSectionsInput" required>
+
+                    <label style="font-weight:bold; font-size:13px; display:block; margin-top:10px;">
                         📷 <span class="am">የመምህሩ ፎቶ (ለመታወቂያ)</span><span class="en">Teacher Photo (For ID)</span>:
                     </label>
                     <input type="file" name="teacher_photo" accept="image/*" style="background: white;">
 
-                    <button type="submit" class="btn-green" style="width: 100%; background: #8e44ad; padding: 12px; font-size: 15px; margin-top: 8px;">
+                    <button type="submit" class="btn-green" style="width: 100%; background: #8e44ad; padding: 12px; font-size: 15px; margin-top: 8px; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">
                         🪪 <span class="am">መምህር መዝግብና መታወቂያ አውጣ</span><span class="en">Register & Generate Teacher ID</span>
                     </button>
                 </form>
 
-                <!-- 2. መምህር በመምህር መተኪያ እና ተጨማሪ ክፍል መመደቢያ (ውጤት ሳይጠፋ) -->
+                <!-- 2. ለመምህር ተጨማሪ ብዙ ክፍሎች መመደቢያ እና መምህር በመምህር መተኪያ (ውጤት ሳይጠፋ) -->
                 <div style="background: #eef7fa; padding: 18px; border-radius: 10px; border: 2px solid #3498db; margin-bottom: 20px;">
                     <h4 style="margin-top:0; color:#1f4e79;">
-                        🔄 <span class="am">2. የክፍል ምደባ ማስተካከያ እና መምህር በመምህር መተኪያ</span>
-                        <span class="en">2. Class Reassignment & Teacher Handover</span>
+                        🔄 <span class="am">2. ለመምህር ብዙ ክፍሎች መመደቢያ / መምህር በመምህር መተኪያ</span>
+                        <span class="en">2. Assign Multiple Sections / Teacher Handover</span>
                     </h4>
                     <p style="font-size: 12.5px; color: #555; margin-top: -5px; margin-bottom: 12px;">
-                        <span class="am">💡 አንድ መምህር ቢለቅ ወይም ቢቀየር፣ እዚህ ጋር ክፍሉን ለአዲሱ መምህር ሲያስተላልፉ <b>ቀድሞ የተሞሉ ውጤቶች ምንም ሳይጠፉ</b> አዲሱ መምህር ከቆመበት ይቀጥላል።</span>
-                        <span class="en">💡 Transferring a section to a new teacher preserves all previously entered student grades and records.</span>
+                        <span class="am">💡 ለአንድ መምህር ብዙ ክፍሎችን በአንድ ጊዜ መመደብ ይችላሉ። የሚለቅ መምህር ካለም ሲተኩት <b>ቀድሞ የተሞሉ ውጤቶች ሳይጠፉ</b> አዲሱ መምህር ከቆመበት ይቀጥላል።</span>
+                        <span class="en">💡 Assign one or multiple sections at once. Replacing a leaving teacher preserves all entered student grades.</span>
                     </p>
 
                     <form action="/admin/handover-section" method="POST">
-                        <label style="font-weight:bold; font-size:13px;"><span class="am">🏫 ክፍል እና ሴክሽን ይምረጡ (ለምሳሌ 2A) *</span><span class="en">🏫 Select Class & Section *</span></label>
-                        <select name="section_name" required>
-                            <option value="">ክፍል ይምረጡ / Select Class & Section</option>
-                            <%- sectionOptions %>
-                        </select>
+                        <label style="font-weight:bold; font-size:13px; color:#1f4e79; display:block; margin-bottom:6px;">
+                            🏫 <span class="am">ክፍሎች እና ሴክሽኖች ይምረጡ (1 ወይም ብዙ መምረጥ ይችላሉ) *</span>
+                            <span class="en">Select Class & Sections (One or Multiple) *</span>
+                        </label>
+                        <div id="handoverSectionCheckboxes" class="multi-sec-grid"></div>
+                        <input type="hidden" name="section_name" id="handoverSectionsInput" required>
 
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
                             <div>
                                 <label style="font-weight:bold; font-size:13px; color:#c0392b;">
-                                    <span class="am">📤 የሚለቀው መምህር (ካለ)</span><span class="en">📤 Leaving Teacher (Optional)</span>
+                                    <span class="am">📤 የሚለቀው መምህር (የሚተካ ከሆነ ብቻ)</span><span class="en">📤 Leaving Teacher (If replacing)</span>
                                 </label>
                                 <select name="old_teacher_id" id="oldTeacherSelect">
                                     <option value="">-- የለም (ተጨማሪ ምደባ) / None --</option>
@@ -204,7 +202,7 @@
                             </div>
                             <div>
                                 <label style="font-weight:bold; font-size:13px; color:#27ae60;">
-                                    <span class="am">📥 አዲሱ / ተተኪው መምህር *</span><span class="en">📥 New / Incoming Teacher *</span>
+                                    <span class="am">📥 የሚመደበው / ተተኪው መምህር *</span><span class="en">📥 Assigned / Incoming Teacher *</span>
                                 </label>
                                 <select name="new_teacher_id" id="newTeacherSelect" required>
                                     <option value="">መምህር ይምረጡ / Select Teacher</option>
@@ -212,8 +210,8 @@
                             </div>
                         </div>
 
-                        <button type="submit" style="width: 100%; background: #2980b9; padding: 11px; margin-top: 8px;">
-                            🔄 <span class="am">ክፍሉንና ውጤቶቹን ለአዲሱ መምህር አስተላልፍ</span><span class="en">Assign / Handover Section to Teacher</span>
+                        <button type="submit" style="width: 100%; background: #2980b9; color:white; border:none; border-radius:6px; font-weight:bold; padding: 12px; margin-top: 8px; cursor:pointer;">
+                            🔄 <span class="am">የተመረጡትን ክፍሎች ለመምህሩ መድብ / አስተላልፍ</span><span class="en">Assign / Handover Selected Sections</span>
                         </button>
                     </form>
                 </div>
@@ -233,7 +231,173 @@
                 </div>
             </div>
 
+            <!-- 📊 የዲሬክተር ሳምንታዊ እና ወርሃዊ ሪፖርት ካርድ (Director Weekly & Monthly Report) -->
+            <div class="card" id="directorReportCard" style="border-color: #16a085; grid-column: 1 / -1; background: linear-gradient(to right, #ffffff, #f4fbf9);">
+                <h3 style="color: #16a085; border-bottom-color: #d1f2eb;">
+                    📊 <span class="am">የዲሬክተር ሳምንታዊ እና ወርሃዊ ሪፖርት</span><span class="en">Director's Weekly & Monthly Report</span>
+                </h3>
+                <form action="/admin/director-report" method="GET" target="_blank" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; align-items: end;">
+                    <div>
+                        <label style="font-weight:bold; font-size:13.5px; color:#16a085;">
+                            📅 <span class="am">የሪፖርት አይነት ይምረጡ *</span><span class="en">Select Report Type *</span>
+                        </label>
+                        <select name="type" required style="margin-bottom:0;">
+                            <option value="weekly">📆 ሳምንታዊ ሪፖርት (Weekly Report)</option>
+                            <option value="monthly">🗓️ ወርሃዊ ሪፖርት (Monthly Report)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-weight:bold; font-size:13.5px; color:#16a085;">
+                            ✍️ <span class="am">የዲሬክተሩ ማጠቃለያ ማስታወሻ (ካለ)</span><span class="en">Director's Summary Note (Optional)</span>
+                        </label>
+                        <input type="text" name="note" placeholder="የሳምንቱ/የወሩ አበይት ክንውኖች..." style="margin-bottom:0;">
+                    </div>
+                    <div>
+                        <button type="submit" style="width:100%; background:#16a085; color:white; padding:12px; border:none; border-radius:6px; font-weight:bold; font-size:15px; cursor:pointer;">
+                            🖨️ <span class="am">ሪፖርት አዘጋጅና አውጣ (Generate & Print)</span><span class="en">Generate & Print Report</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <style>
+                /* ☑️ የብዙ ክፍል/ሴክሽን መምረጫ ሳጥኖች ንድፍ */
+                .multi-sec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 8px; background: white; padding: 12px; border: 1px solid #ccd1d9; border-radius: 8px; max-height: 165px; overflow-y: auto; margin-bottom: 10px; }
+                .sec-chk-label { display: flex; align-items: center; gap: 6px; background: #f8fafc; padding: 7px 10px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 13px; font-weight: 600; color: #2c3e50; cursor: pointer; transition: 0.2s; }
+                .sec-chk-label:hover { border-color: #3498db; background: #ebf5fb; }
+                .sec-chk-label input { width: 16px; height: 16px; margin: 0; cursor: pointer; }
+
+                /* 📉 አዲስ አመልካቾች ካርድ ማሳነሻ (Compact Applicants Card) */
+                .compact-applicants-card { padding: 14px !important; max-height: 310px !important; overflow-y: auto !important; }
+                .compact-applicants-card h3 { font-size: 16px !important; margin-bottom: 8px !important; padding-bottom: 6px !important; }
+                .compact-applicants-card table th, .compact-applicants-card table td { padding: 5px 6px !important; font-size: 12px !important; }
+
+                /* 📈 የትምህርት አይነቶች ካርድ ማሳደጊያ (Expanded Subjects Card) */
+                .expanded-subjects-card { grid-column: 1 / -1 !important; padding: 28px !important; border-width: 3px !important; }
+                .expanded-subjects-card h3 { font-size: 22px !important; }
+                .expanded-subjects-card input, .expanded-subjects-card select, .expanded-subjects-card button { font-size: 16px !important; padding: 12px !important; }
+                .expanded-subjects-card table th, .expanded-subjects-card table td { padding: 12px 15px !important; font-size: 15.5px !important; }
+            </style>
+
             <script>
+                document.addEventListener("DOMContentLoaded", function() {
+                    // 1. ☑️ የክፍልና ሴክሽን ምርጫዎችን ወደ Multi-Select Checkboxes መቀየር
+                    const rawSelect = document.getElementById("rawSectionOptionsSource");
+                    const regGrid = document.getElementById("regSectionCheckboxes");
+                    const handGrid = document.getElementById("handoverSectionCheckboxes");
+                    const regInput = document.getElementById("regAssignedSectionsInput");
+                    const handInput = document.getElementById("handoverSectionsInput");
+
+                    if (rawSelect) {
+                        Array.from(rawSelect.options).forEach(opt => {
+                            const val = opt.value.trim();
+                            const text = opt.textContent.trim();
+                            if (!val) return;
+
+                            // ለአዲስ መምህር መመዝገቢያ
+                            if (regGrid) {
+                                regGrid.innerHTML += `<label class="sec-chk-label"><input type="checkbox" class="reg-sec-chk" value="${val}"> <span>${text}</span></label>`;
+                            }
+                            // ለክፍል ምደባ እና መምህር መተኪያ
+                            if (handGrid) {
+                                handGrid.innerHTML += `<label class="sec-chk-label"><input type="checkbox" class="hand-sec-chk" value="${val}"> <span>${text}</span></label>`;
+                            }
+                        });
+
+                        document.querySelectorAll(".reg-sec-chk").forEach(chk => {
+                            chk.addEventListener("change", () => {
+                                const selected = Array.from(document.querySelectorAll(".reg-sec-chk:checked")).map(c => c.value);
+                                regInput.value = selected.join(", ");
+                            });
+                        });
+
+                        document.querySelectorAll(".hand-sec-chk").forEach(chk => {
+                            chk.addEventListener("change", () => {
+                                const selected = Array.from(document.querySelectorAll(".hand-sec-chk:checked")).map(c => c.value);
+                                handInput.value = selected.join(", ");
+                            });
+                        });
+                    }
+
+                    // 2. 👨‍🏫 መምህራንን ወደ Dropdown መሙላት
+                    const table = document.getElementById("teachersListTable");
+                    const oldSel = document.getElementById("oldTeacherSelect");
+                    const newSel = document.getElementById("newTeacherSelect");
+                    if (table && oldSel && newSel) {
+                        table.querySelectorAll("tr").forEach((row, index) => {
+                            if (index === 0) return;
+                            const cells = row.querySelectorAll("td");
+                            if (cells.length >= 2) {
+                                const tId = cells[0].innerText.trim();
+                                const tName = cells[1].innerText.trim();
+                                if (tId) {
+                                    oldSel.innerHTML += `<option value="${tId}">${tName} (${tId})</option>`;
+                                    newSel.innerHTML += `<option value="${tId}">${tName} (${tId})</option>`;
+                                }
+                            }
+                        });
+                    }
+
+                    // 3. 📉 "አዲስ አመልካቾች" ሳይዝ መቀነስ እና 📈 "የትምህርት አይነቶች" ሳይዝ መጨመር + Credit Hour ማጥፋት
+                    document.querySelectorAll(".card").forEach(card => {
+                        const heading = card.querySelector("h3, h2, h4");
+                        if (!heading) return;
+                        const text = heading.innerText;
+
+                        // ሀ. አዲስ አመልካቾች ሳይዝ መቀነስ
+                        if (text.includes("አዲስ አመልካቾች") || text.toLowerCase().includes("pending") || text.toLowerCase().includes("applicant")) {
+                            card.classList.add("compact-applicants-card");
+                        }
+
+                        // ለ. የትምህርት አይነቶች ሳይዝ መጨመር እና Credit Hour ማጥፋት
+                        if (text.includes("የትምህርት አይነቶች") || text.toLowerCase().includes("subject") || text.toLowerCase().includes("course")) {
+                            card.classList.add("expanded-subjects-card");
+
+                            // Credit Hour የሚል Input ካለ ማጥፋት
+                            card.querySelectorAll("input, label").forEach(el => {
+                                const attrText = (el.name || "") + " " + (el.placeholder || "") + " " + (el.innerText || "");
+                                if (attrText.toLowerCase().includes("credit") || attrText.toLowerCase().includes("cret") || attrText.includes("ክሬዲት") || attrText.includes("ሰዓት")) {
+                                    if (el.tagName === "INPUT") {
+                                        el.required = false;
+                                        el.value = "0";
+                                        el.style.display = "none";
+                                    } else {
+                                        el.style.display = "none";
+                                    }
+                                }
+                            });
+
+                            // በሰንጠረዡ ውስጥ Credit Hour የሚል አምድ (Column) ካለ ማጥፋት
+                            const subTable = card.querySelector("table");
+                            if (subTable) {
+                                let creditColIndex = -1;
+                                const ths = subTable.querySelectorAll("tr:first-child th");
+                                ths.forEach((th, idx) => {
+                                    const thTxt = th.innerText.toLowerCase();
+                                    if (thTxt.includes("credit") || thTxt.includes("cret") || thTxt.includes("ክሬዲት") || thTxt.includes("hr")) {
+                                        creditColIndex = idx;
+                                        th.style.display = "none";
+                                    }
+                                });
+                                if (creditColIndex > -1) {
+                                    subTable.querySelectorAll("tr").forEach((tr, rIdx) => {
+                                        if (rIdx === 0) return;
+                                        const tds = tr.querySelectorAll("td");
+                                        if (tds[creditColIndex]) tds[creditColIndex].style.display = "none";
+                                    });
+                                }
+                            }
+                        }
+
+                        // ሐ. የድሮ የማይሰራ የዲሬክተር ሪፖርት ካርድ ካለ መደበቅ (አዲሱ ስላለ)
+                        if (card.id !== "directorReportCard" && (text.includes("ሳምንታዊ") || text.includes("ወርሃዊ") || text.toLowerCase().includes("director"))) {
+                            card.style.display = "none";
+                        }
+                    });
+                });
+            </script>
+
+
                 // በሰንጠረዡ ውስጥ ያሉትን መምህራን ወደ ምርጫው (Dropdown) በራሱ እንዲያስገባ
                 document.addEventListener("DOMContentLoaded", function() {
                     const table = document.getElementById("teachersListTable");
