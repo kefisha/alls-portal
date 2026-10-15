@@ -86,6 +86,57 @@
             </div>
         </div>
 
+        <!-- 🏆 እርምጃ 3: የመምህራን ውጤት ማስረከቢያ፣ የተማሪ ካርድ በID መፈለጊያ እና የዓመቱ ጠቅላላ ሮስተር (Roster & Report Card Center) -->
+        <div class="card" style="border-color: #d35400; background: linear-gradient(to bottom, #ffffff, #fffdf9);">
+            <h3 style="color: #d35400; border-bottom-color: #fdebd0;">
+                🏆 <span class="am">የተማሪዎች ውጤት ማስረከቢያ፣ የ1 ገጽ ካርድ እና ጠቅላላ ሮስተር (Roster Center)</span>
+                <span class="en">Submitted Grades, 1-Page Student Report Card & All Student Roster</span>
+            </h3>
+
+            <!-- 1. 🔍 በተማሪው ID ብቻ ፈልጎ ሙሉ የ1 ገጽ ካርድ ከነፊርማ ማውጫ -->
+            <div style="background: #f8fafc; padding: 18px; border-radius: 10px; border: 2px solid #2980b9; margin-bottom: 22px;">
+                <h4 style="margin-top:0; color:#1f4e79;">
+                    🔍 <span class="am">1. በተማሪው መታወቂያ (ID) ብቻ ሙሉ የሁሉም ትምህርቶች ውጤት ካርድ ማውጫ (1-Page PDF)</span>
+                    <span class="en">1. Search Student by ID & Print 1-Page Full Course Report Card</span>
+                </h4>
+                <form action="/admin/student-report-card" method="GET" target="_blank" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; align-items: end;">
+                    <div>
+                        <label style="font-weight:bold; font-size:13px; color:#1f4e79;">🆔 <span class="am">የተማሪ መታወቂያ ቁጥር (Student ID) *</span><span class="en">Student ID Number *</span></label>
+                        <input type="text" name="student_id" placeholder="ምሳሌ: ALLS-4821" required style="margin-bottom:0; font-weight:bold;">
+                    </div>
+                    <div>
+                        <label style="font-weight:bold; font-size:13px; color:#1f4e79;">📅 <span class="am">ዓመተ ምህረት (Academic Year)</span><span class="en">Academic Year</span></label>
+                        <input type="text" name="year" value="2019 E.C" required style="margin-bottom:0;">
+                    </div>
+                    <div>
+                        <button type="submit" style="width:100%; background:#2980b9; color:white; padding:11px; border:none; border-radius:6px; font-weight:bold; font-size:15px;">
+                            📄 <span class="am">የተማሪውን ሙሉ ካርድ አውጣ (View & Print PDF)</span><span class="en">Generate 1-Page Report Card</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- 2. 👨‍🏫 መምህራን ከ 100% ሞልተው ያስረከቧቸው ክፍሎች (Submitted by Teachers) -->
+            <div style="margin-bottom: 22px;">
+                <h4 style="margin-top:0; color:#27ae60;">
+                    ✅ <span class="am">2. መምህራን ውጤት ሞልተው ያስረከቧቸው ክፍሎች ( በክፍል፣ በመምህሩ ስምና በዓመተ ምህረት )</span>
+                    <span class="en">2. Teacher Submitted Class Grades (By Class, Section, Teacher & Year)</span>
+                </h4>
+                <div id="submittedClassesButtons" style="display:flex; flex-wrap:wrap; gap:10px;">
+                    <span style="color:#7f8c8d; font-size:13.5px;">በመጫን ላይ...</span>
+                </div>
+            </div>
+
+            <!-- 3. 📂 የዓመቱ ጠቅላላ ተማሪዎች ሮስተር (e.g. 2019 E.C All Student Roster) -->
+            <div style="background: #fffcf5; padding: 18px; border-radius: 10px; border: 2px solid #f39c12;">
+                <h4 style="margin-top:0; color:#d35400;">
+                    📂 <span class="am">3. የዓመቱ ጠቅላላ ተማሪዎች ሮስተር (All Student Roster by Year & Class)</span>
+                    <span class="en">3. Academic Year Master Student Roster (Click Year to Open Classes)</span>
+                </h4>
+                <div id="yearlyRosterContainer"></div>
+            </div>
+        </div>
+
         <!-- Notification (With Rich Text Color, Font, Size) -->
         <div class="card">
             <h3>📢 <span class="am">አዲስ ማስታወቂያ መላኪያ</span><span class="en">Send New Notification</span></h3>
@@ -470,6 +521,51 @@
                     }
                 });
             }
+
+            // 🏆 6. Fetch Submitted Grades & Roster Summary for Admin Center
+            fetch('/api/admin/roster-summary')
+                .then(r => r.json())
+                .then(data => {
+                    const subBox = document.getElementById('submittedClassesButtons');
+                    const yearBox = document.getElementById('yearlyRosterContainer');
+
+                    if (data.submissions && data.submissions.length > 0) {
+                        subBox.innerHTML = data.submissions.map(s => `
+                            <a href="/admin/master-roster/${encodeURIComponent(s.academic_year)}/${encodeURIComponent(s.class_level)}" target="_blank"
+                               style="background:#27ae60; color:white; padding:10px 16px; border-radius:8px; text-decoration:none; font-size:13.5px; font-weight:bold; box-shadow:0 3px 8px rgba(39,174,96,0.25); display:inline-block;">
+                                🏫 ${s.class_level} | 📘 ${s.course_title} <br>
+                                <small style="color:#eafaf1;">👨‍🏫 መምህር: ${s.teacher_name} | 📅 ${s.academic_year}</small>
+                            </a>
+                        `).join('');
+                    } else {
+                        subBox.innerHTML = `<span style="color:#7f8c8d; font-size:13.5px;">እስካሁን መምህራን Submit ያደረጉት ክፍል የለም።</span>`;
+                    }
+
+                    const years = (data.years && data.years.length > 0) ? data.years : ['2019 E.C'];
+                    const sections = data.sections || [];
+
+                    yearBox.innerHTML = years.map((yr, idx) => {
+                        const secButtons = sections.map(sec => `
+                            <a href="/admin/master-roster/${encodeURIComponent(yr)}/${encodeURIComponent(sec.name)}" target="_blank"
+                               style="background:#1f4e79; color:white; padding:10px 18px; border-radius:6px; text-decoration:none; font-weight:bold; font-size:14px; display:inline-block;">
+                                🏫 ${sec.name} (Master Roster & PDF)
+                            </a>
+                        `).join('') || `<span style="color:#7f8c8d;">ምንም የተመዘገበ ሴክሽን የለም።</span>`;
+
+                        return `
+                            <div style="margin-bottom:12px;">
+                                <button type="button" onclick="const el = document.getElementById('roster_yr_${idx}'); el.style.display = el.style.display === 'none' ? 'flex' : 'none';"
+                                        style="width:100%; text-align:left; background:#e67e22; color:white; padding:14px 20px; border:none; border-radius:8px; font-size:16px; font-weight:bold; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+                                    <span>📁 ${yr} - All Student Roster (የሁሉም ክፍሎች ጠቅላላ ሮስተር)</span>
+                                    <span>🔽 ክፈት (Open Classes)</span>
+                                </button>
+                                <div id="roster_yr_${idx}" style="display:none; flex-wrap:wrap; gap:10px; padding:15px; background:white; border:1px solid #f39c12; border-radius:0 0 8px 8px; margin-top:4px;">
+                                    ${secButtons}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                });
         });
     </script>
 </body>
