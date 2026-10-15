@@ -98,6 +98,9 @@ async function initDB() {
         await pool.query(`CREATE TABLE IF NOT EXISTS absence_requests (
             id SERIAL PRIMARY KEY, student_id TEXT, student_name TEXT, class_level TEXT, reason TEXT, teacher_feedback TEXT, status TEXT, created_at TEXT, attachment TEXT
         )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS daily_attendance (
+            id SERIAL PRIMARY KEY, student_id TEXT, student_name TEXT, class_level TEXT, date TEXT, status TEXT
+        )`);
         await pool.query(`CREATE TABLE IF NOT EXISTS grade_submissions (
             id SERIAL PRIMARY KEY,
             academic_year TEXT,
@@ -114,11 +117,26 @@ async function initDB() {
             id SERIAL PRIMARY KEY, academic_year TEXT, student_id TEXT, student_name TEXT, class_level TEXT, courses_summary TEXT, total_score REAL, archived_date TEXT
         )`);
 
+        const extraStudentCols = ["mother_name TEXT", "region TEXT", "zone TEXT", "woreda TEXT", "kebele TEXT", "emergency_name TEXT", "emergency_phone TEXT"];
+        for (const col of extraStudentCols) {
+            try { await pool.query(`ALTER TABLE students ADD COLUMN ${col}`); } catch (e) {}
+            try { await pool.query(`ALTER TABLE pending_students ADD COLUMN ${col}`); } catch (e) {}
+        }
+
+        const extraTeacherCols = ["gender TEXT", "subject TEXT", "emergency_name TEXT", "emergency_phone TEXT", "photo TEXT", "plain_pin TEXT"];
+        for (const col of extraTeacherCols) {
+            try { await pool.query(`ALTER TABLE teachers ADD COLUMN ${col}`); } catch (e) {}
+        }
+
+        try { await pool.query(`ALTER TABLE sections ADD COLUMN class_monitor TEXT`); } catch(e) {}
+        try { await pool.query(`ALTER TABLE notifications ADD COLUMN attachment TEXT`); } catch(e) {}
+        try { await pool.query(`ALTER TABLE absence_requests ADD COLUMN attachment TEXT`); } catch(e) {}
+
         let tRes = await pool.query("SELECT COUNT(*) as count FROM teachers");
         if (tRes.rows[0].count == 0) {
             let hashedPass = bcrypt.hashSync('123456', 10);
-            await pool.query(`INSERT INTO teachers (id, name, password, phone, assigned_sections, assigned_grades, is_proctor) VALUES 
-            ('T-101', 'Dr. Teshale Kebede', $1, '0911001122', 'Grade 1 - Section A', 'Grade 1', 1)`, [hashedPass]);
+            await pool.query(`INSERT INTO teachers (id, name, password, phone, assigned_sections, assigned_grades, is_proctor, plain_pin) VALUES 
+            ('T-101', 'Dr. Teshale Kebede', $1, '0911001122', 'Grade 1 - Section A', 'Grade 1', 1, '123456')`, [hashedPass]);
         }
 
         let sRes = await pool.query("SELECT COUNT(*) as count FROM sections");
@@ -158,6 +176,15 @@ function generateStudentID() { return `ALLS-${Math.floor(1000 + Math.random() * 
 function generateTeacherID() { return `T-${Math.floor(100 + Math.random() * 900)}`; }
 function generate4DigitPIN() { return Math.floor(1000 + Math.random() * 9000).toString(); }
 
+function csvCell(val) {
+    if (val === null || val === undefined) return '""';
+    return `"${String(val).replace(/"/g, '""')}"`;
+}
+
+function ensureSectionExists(secName) {
+    db.run(`INSERT INTO sections (name, proctor_name, proctor_phone) VALUES (?, '', '') ON CONFLICT (name) DO NOTHING`, [secName]);
+}
+
 function isClassMatch(c1, c2) {
     if (!c1 || !c2) return false;
     let s1 = c1.toString().toLowerCase().trim();
@@ -179,6 +206,24 @@ function isClassMatch(c1, c2) {
     }
     return s1 === s2;
 }
+
+function assignClassSection(requestedYearLevel, callback) {
+    const letters = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N"];
+    let checkNext = (index) => {
+        if (index >= letters.length) return callback(`${requestedYearLevel} - Section Overflow`);
+        let secName = `${requestedYearLevel} - Section ${letters[index]}`;
+        db.get(`SELECT COUNT(*) as c FROM students WHERE class_level = ?`, [secName], (err, r1) => {
+            db.get(`SELECT COUNT(*) as c FROM pending_students WHERE class_level = ?`, [secName], (err, r2) => {
+                let total = (r1 && r1.c ? parseInt(r1.c) : 0) + (r2 && r2.c ? parseInt(r2.c) : 0);
+                if (total < 50) { ensureSectionExists(secName); callback(secName); }
+                else checkNext(index + 1);
+            });
+        });
+    };
+    checkNext(0);
+}
+
+function esc(v) { return v === null || v === undefined ? '' : String(v).replace(/"/g, '&quot;'); }
 
 // ================= PUBLIC & LOGIN ROUTES =================
 app.get('/', (req, res) => {
@@ -222,47 +267,208 @@ app.post('/login', (req, res) => {
 
 app.get('/logout', (req, res) => { req.session.destroy(() => res.redirect('/')); });
 
+app.get('/forgot-password', (req, res) => {
+    const lang = req.query.lang === 'en' ? 'en' : 'am';
+    const t = lang === 'en' ? {
+        title: "Reset My Password", desc: "Enter your phone number and your mother's name exactly as you registered them.",
+        ph: "Phone Number", mom: "Mother's Name", btn: "Reset Password", back: "Back to Login"
+    } : {
+        title: "የይለፍ ቃል ዳግም አስጀምር", desc: "በምዝገባ ጊዜ የተጠቀሙበትን ስልክ ቁጥር እና የእናትዎን ስም በትክክል ያስገቡ።",
+        ph: "ስልክ ቁጥር", mom: "የእናት ስም", btn: "የይለፍ ቃል ዳግም አስጀምር", back: "ወደ መግቢያ ተመለስ"
+    };
+
+    let alertScript = '';
+    if (req.query.error === 'notfound') {
+        alertScript = `<script>Swal.fire({icon: 'error', title: 'Oops...', text: '${lang==='en'?'Account Not Found!':'ተመሳሳይ አካውንት አልተገኘም!'}', confirmButtonColor: '#d33'})</script>`;
+    }
+
+    res.send(`<!DOCTYPE html><html lang="${lang}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${t.title}</title><script src="https://cdn.tailwindcss.com"></script><script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></head><body class="bg-gradient-to-br from-blue-50 to-gray-200 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md"><div class="text-center mb-6"><div class="inline-block p-4 bg-purple-100 rounded-full mb-4"><i class="fa-solid fa-key text-4xl text-purple-600"></i></div><h2 class="text-2xl font-extrabold text-gray-800">${t.title}</h2><p class="text-gray-500 mt-2 text-sm">${t.desc}</p></div><form action="/api/forgot-password?lang=${lang}" method="POST" class="space-y-5"><div class="relative"><i class="fa-solid fa-phone absolute left-3 top-3.5 text-gray-400"></i><input type="text" name="phone" placeholder="${t.ph}" required class="w-full pl-10 pr-3 py-3 rounded-lg border border-gray-300 focus:outline-none focus:border-purple-500"></div><div class="relative"><i class="fa-solid fa-person-breastfeeding absolute left-3 top-3.5 text-gray-400"></i><input type="text" name="mother_name" placeholder="${t.mom}" required class="w-full pl-10 pr-3 py-3 rounded-lg border border-gray-300 focus:outline-none focus:border-purple-500"></div><button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg shadow-md">${t.btn}</button></form><div class="mt-6 text-center"><a href="/?lang=${lang}" class="text-gray-600 hover:text-purple-600 font-bold"><i class="fa-solid fa-arrow-left mr-1"></i> ${t.back}</a></div></div>${alertScript}</body></html>`);
+});
+
+app.post('/api/forgot-password', (req, res) => {
+    const lang = req.query.lang || 'am';
+    const { phone, mother_name } = req.body;
+    db.get(`SELECT student_id FROM students WHERE phone = ? AND mother_name = ?`, [phone, mother_name], (err, s) => {
+        if (s) {
+            let newPin = generate4DigitPIN();
+            let hashedPIN = bcrypt.hashSync(newPin, 10); 
+            return db.run(`UPDATE students SET password = ? WHERE student_id = ?`, [hashedPIN, s.student_id], () => {
+                res.send(`<!DOCTYPE html><html><head><script src="https://cdn.tailwindcss.com"></script><script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script></head><body class="bg-gray-100 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center"><h2 class="text-2xl font-bold text-gray-800 mb-2">ፓስወርድ ተቀይሯል!</h2><p class="text-gray-600 mb-4">አዲሱ የይለፍ ቁጥርዎ ይህ ነው:</p><div class="text-5xl font-extrabold text-red-600 mb-6 bg-red-50 py-4 rounded-xl border border-red-200 tracking-widest shadow-inner">${newPin}</div><a href="/?lang=${lang}" class="block w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md">ወደ መግቢያ ተመለስ</a></div></body></html>`);
+            });
+        }
+        res.redirect(`/forgot-password?lang=${lang}&error=notfound`);
+    });
+});
+
+app.post('/api/recover-password', (req, res) => {
+    const { id, phone } = req.body;
+    db.get(`SELECT * FROM students WHERE student_id = ? AND phone = ?`, [id, phone], (err, student) => {
+        if (student) {
+            let newPassword = generate4DigitPIN(); 
+            let hashedPassword = bcrypt.hashSync(newPassword, 10);
+            db.run(`UPDATE students SET password = ? WHERE student_id = ?`, [hashedPassword, id], (updateErr) => {
+                if (updateErr) return res.json({ success: false });
+                res.json({ success: true, newPassword: newPassword });
+            });
+        } else {
+            db.get(`SELECT * FROM teachers WHERE id = ? AND phone = ?`, [id, phone], (err2, teacher) => {
+                if (teacher) {
+                    let newPassword = generate4DigitPIN(); 
+                    let hashedPassword = bcrypt.hashSync(newPassword, 10);
+                    db.run(`UPDATE teachers SET password = ?, plain_pin = ? WHERE id = ?`, [hashedPassword, newPassword, id], (updateErr) => {
+                        if (updateErr) return res.json({ success: false });
+                        res.json({ success: true, newPassword: newPassword });
+                    });
+                } else {
+                    res.json({ success: false });
+                }
+            });
+        }
+    });
+});
+
+// ================= STUDENT REGISTRATION & DIGITAL ID =================
+app.get('/student-register', (req, res) => {
+    const lang = req.query.lang === 'en' ? 'en' : 'am';
+    let gradeOptions = '';
+    for(let i=1; i<=12; i++) gradeOptions += `<option value="Grade ${i}">Grade ${i}</option>`;
+    res.send(`<!DOCTYPE html><html lang="${lang}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Student Registration</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-100 py-10 px-4"><div class="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden"><div class="bg-green-600 py-6 px-8 text-center text-white relative"><a href="/?lang=${lang}" class="absolute left-4 top-6">⬅️</a><h2 class="text-2xl font-bold">አዲስ ተማሪ ምዝገባ</h2></div><div class="p-8"><form action="/api/register?lang=${lang}" method="POST" enctype="multipart/form-data"><div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6"><div><label class="block text-sm font-bold mb-2">ሙሉ ስም</label><input type="text" name="name" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">የእናት ስም</label><input type="text" name="mother_name" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">ጾታ</label><select name="gender" class="w-full px-3 py-2 border rounded-lg"><option value="Male">ወንድ</option><option value="Female">ሴት</option></select></div><div><label class="block text-sm font-bold mb-2">ዕድሜ</label><input type="number" name="age" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">ስልክ ቁጥር</label><input type="text" name="phone" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">የአደጋ ጊዜ ተጠሪ ስልክ</label><input type="text" name="emergency_phone" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">ክልል</label><input type="text" name="region" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">ዞን</label><input type="text" name="zone" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">ወረዳ</label><input type="text" name="woreda" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">ቀበሌ</label><input type="text" name="kebele" required class="w-full px-3 py-2 border rounded-lg"></div></div><div class="mb-6"><label class="block text-sm font-bold mb-2">የሚገቡበት የክፍል ደረጃ</label><select name="year_level" class="w-full px-3 py-2 border rounded-lg">${gradeOptions}</select></div><div class="mb-6"><label class="block text-sm font-bold mb-2">የጉርድ ፎቶ</label><input type="file" name="student_photo" accept="image/*" required class="w-full p-2 border border-dashed rounded-lg"></div><div class="mb-8 p-4 border rounded-lg bg-gray-50"><label class="block text-sm font-bold mb-2">የክፍያ ማረጋገጫ</label><select name="payment_type" id="payType" onchange="document.getElementById('slipBox').style.display = this.value=='slip_file'?'block':'none'; document.getElementById('txnBox').style.display = this.value=='txn_id'?'block':'none';" class="w-full px-3 py-2 border rounded-lg mb-4"><option value="txn_id">የትራንዛክሽን ቁጥር (TXN ID)</option><option value="slip_file">የደረሰኝ ፎቶ (Bank Slip)</option></select><div id="txnBox"><input type="text" name="txn_id" placeholder="Transaction ID..." class="w-full px-3 py-2 border rounded-lg"></div><div id="slipBox" style="display:none;"><input type="file" name="bank_slip_file" accept="image/*,.pdf" class="w-full p-2 border border-dashed rounded-lg bg-white"></div></div><button type="submit" class="w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg text-lg">ምዝገባ ላክ</button></form></div></div></body></html>`);
+});
+
+app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 }, { name: 'bank_slip_file', maxCount: 1 }]), (req, res) => {
+    const lang = req.query.lang || 'am';
+    try {
+        let { name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, year_level, payment_type, txn_id } = req.body;
+        name = xss(name); mother_name = xss(mother_name); phone = xss(phone);
+        
+        let autoID = generateStudentID(); 
+        let autoPIN = generate4DigitPIN();
+        let hashedPIN = bcrypt.hashSync(autoPIN, 10); 
+
+        assignClassSection(year_level, (assignedSection) => {
+            let photoPath = (req.files && req.files['student_photo']) ? req.files['student_photo'][0].filename : '';
+            let slipPath = payment_type === 'slip_file' && (req.files && req.files['bank_slip_file']) ? req.files['bank_slip_file'][0].filename : xss(txn_id);
+
+            db.run(`INSERT INTO pending_students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            [autoID, hashedPIN, name, mother_name || '', gender || '', age || null, phone || '', emergency_phone || '', region || '', zone || '', woreda || '', kebele || '', assignedSection, payment_type, slipPath, photoPath], function(err) {
+                if (err) return res.redirect(`/student-register?lang=${lang}&error=db`);
+                res.send(`<!DOCTYPE html><html><head><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-100 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center"><h2 class="text-3xl font-bold text-gray-800 mb-6">ተሳክቷል!</h2><p class="text-gray-700"><strong>የመታወቂያ ቁጥር:</strong> ${autoID}</p><p class="text-gray-700"><strong>የይለፍ ቃል:</strong> ${autoPIN}</p><a href="/?lang=${lang}" class="block w-full bg-green-600 text-white font-bold py-3 rounded-lg mt-4">ወደ መግቢያ ተመለስ</a></div></body></html>`);
+            });
+        });
+    } catch (error) {
+        res.redirect(`/student-register?lang=${lang}&error=db`);
+    }
+});
+
+app.post('/register-student', upload.single('bank_slip'), (req, res) => {
+    const { name, mother_name, gender, phone, class_level, region, zone, woreda, kebele, emergency_name, emergency_phone, transaction_id } = req.body;
+    const paymentProof = req.file ? req.file.filename : (transaction_id ? transaction_id.trim() : '');
+
+    const autoID = generateStudentID();
+    const autoPIN = generate4DigitPIN();
+    const hashedPIN = bcrypt.hashSync(autoPIN, 10);
+
+    assignClassSection(class_level, (assignedSection) => {
+        const finalClass = assignedSection || class_level;
+        db.run(
+            `INSERT INTO pending_students (student_id, password, name, gender, phone, class_level, bank_slip_val, mother_name, region, zone, woreda, kebele, emergency_name, emergency_phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [autoID, hashedPIN, name, gender, phone, finalClass, paymentProof, mother_name || '', region || '', zone || '', woreda || '', kebele || '', emergency_name || '', emergency_phone || ''],
+            function(err) {
+                if (err) return res.redirect('/?error=db');
+                res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Registration Successful</title></head><body style="font-family:sans-serif; background:#eef2f5; display:flex; justify-content:center; align-items:center; min-height:100vh; margin:0;"><div style="background:white; padding:30px; border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,0.15); max-width:420px; width:90%; text-align:center; border-top:6px solid #27ae60;"><h2 style="color:#27ae60; margin-top:0;">✅ ምዝገባው ተሳክቷል!</h2><div style="background:#f8f9fa; padding:15px; border-radius:8px; border:1px solid #ddd; margin:20px 0; text-align:left; font-size:16px; line-height:1.8;"><b>👤 ስም (Name):</b> ${name}<br><b>🆔 መታወቂያ (ID):</b> <span style="color:#2980b9; font-weight:bold;">${autoID}</span><br><b>🔑 የይለፍ ቃል (PIN):</b> <span style="color:#e74c3c; font-weight:bold;">${autoPIN}</span><br><b>🏫 ክፍል (Class):</b> ${finalClass}</div><a href="/" style="display:inline-block; background:#2980b9; color:white; padding:12px 25px; text-decoration:none; border-radius:6px; font-weight:bold;">⬅️ ወደ መግቢያ ገጽ ተመለስ</a></div></body></html>`);
+            }
+        );
+    });
+});
+
+app.get('/student/digital-id', (req, res) => {
+    if (!req.session.studentId) return res.redirect('/');
+    db.get('SELECT * FROM students WHERE student_id = ?', [req.session.studentId], (err, student) => {
+        if (!student) return res.redirect('/');
+        res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><title>Digital ID - ${student.name}</title><style>body{font-family:sans-serif;background:#eef2f5;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.id-card{width:380px;background:white;border-radius:12px;box-shadow:0 8px 20px rgba(0,0,0,0.15);overflow:hidden;border:2px solid #1f4e79;}.header{background:#1f4e79;color:white;padding:12px 15px;display:flex;align-items:center;gap:12px;}.school-logo{width:45px;height:45px;border-radius:50%;object-fit:cover;background:white;border:2px solid white;}.content{padding:18px;display:flex;gap:15px;align-items:center;border-bottom:1px solid #eee;}.profile-img{width:95px;height:95px;border-radius:8px;object-fit:cover;border:2px solid #1f4e79;}.info{font-size:13px;line-height:1.5;color:#333;}.qr-section{padding:12px;text-align:center;background:#fafafa;}.actions{padding:10px;background:#fff;display:flex;gap:10px;}.btn{flex:1;padding:10px;font-size:14px;font-weight:bold;cursor:pointer;border:none;border-radius:6px;text-align:center;text-decoration:none;color:white;}@media print{.actions{display:none!important;}}</style></head><body><div class="id-card"><div class="header"><img src="/uploads/logo.jpg" class="school-logo"><div><h3 style="margin:0;font-size:15px;">AMANUEL LIGHT & LIFE SCHOOL</h3><p style="margin:2px 0 0;font-size:11px;">OFFICIAL DIGITAL STUDENT ID CARD</p></div></div><div class="content"><img src="/uploads/${student.photo || 'logo.jpg'}" onerror="this.src='/uploads/logo.jpg'" class="profile-img"><div class="info"><h3 style="margin:0 0 4px 0;color:#2c3e50;">${student.name}</h3><p><b>ID No:</b> ${student.student_id}</p><p><b>Class:</b> ${student.class_level}</p><p><b>Phone:</b> ${student.phone || '-'}</p></div></div><div class="qr-section"><img src="https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=${student.student_id}" style="width:80px;height:80px;"></div><div class="actions"><button onclick="window.print()" class="btn" style="background:#27ae60;">📥 Print PDF</button><a href="/student-dashboard" class="btn" style="background:#7f8c8d;">⬅️ ተመለስ</a></div></div></body></html>`);
+    });
+});
+
+app.get('/api/student/:id', (req, res) => {
+    const studentId = req.params.id.toUpperCase().trim();
+    db.get(`SELECT * FROM students WHERE student_id = ?`, [studentId], (err, student) => {
+        if (err || !student) return res.json({ success: false, message: 'Student not found' });
+        res.json({ success: true, student: student });
+    });
+});
+
 // ================= ADMIN DASHBOARD =================
 app.get('/admin', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const lang = req.query.lang || 'am';
 
     db.all(`SELECT * FROM pending_students`, [], (err, pending = []) => {
-        db.all(`SELECT student_id, name, class_level, phone, password, status, gender FROM students ORDER BY class_level, name`, [], (err, students = []) => {
-            db.all(`SELECT * FROM teachers`, [], (err, teachers = []) => {
+        db.all(`SELECT * FROM students ORDER BY class_level, name`, [], (err, students = []) => {
+            db.all(`SELECT * FROM teachers ORDER BY name`, [], (err, teachers = []) => {
                 db.all(`SELECT * FROM sections ORDER BY name`, [], (err, sections = []) => {
                     db.all(`SELECT * FROM courses ORDER BY class_level, code`, [], (err, courses = []) => {
                         db.all(`SELECT * FROM notifications WHERE sender_role = 'Admin' ORDER BY id DESC`, [], (err, adminNotifs = []) => {
+                            db.all(`SELECT * FROM course_assessments`, [], (err, assessments = []) => {
 
-                            let pRows = pending.map(s => `<tr><td>-</td><td>${s.student_id}</td><td>${s.name}</td><td>${s.payment_type === 'slip_file' || (s.bank_slip_val && s.bank_slip_val.includes('.')) ? `<a href="/uploads/${s.bank_slip_val}" target="_blank" style="color:#2980b9;">📄 እይ</a>` : `<b>TXN:</b> ${s.bank_slip_val || '-'}`}</td><td><a href="/admin/approve/${s.id}?lang=${lang}" style="color:green; font-weight:bold;">✅ Approve</a></td></tr>`).join('');
-                            let secRows = sections.map(sec => `<tr><td>${sec.name}</td><td>${sec.proctor_name || '-'}</td><td><a href="/admin/delete-section/${sec.id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑 Delete</a></td><td><a href="/attendance-sheet/${encodeURIComponent(sec.name)}" style="color:#2980b9; font-weight:bold;" target="_blank">📋 Attendance</a></td></tr>`).join('');
+                                let maleCount = students.filter(s => s.gender === 'Male').length;
+                                let femaleCount = students.filter(s => s.gender === 'Female').length;
+                                
+                                let excellent = 0, good = 0, average = 0, poor = 0;
+                                assessments.forEach(a => {
+                                    if (a.total >= 90) excellent++;
+                                    else if (a.total >= 75) good++;
+                                    else if (a.total >= 50) average++;
+                                    else poor++;
+                                });
 
-                            let sectionOptions = sections.map(sec => `<option value="${sec.name}">${sec.name}</option>`).join('');
-                            let teacherOptions = teachers.map(tc => `<option value="${tc.id}">${tc.name}</option>`).join('');
-                            let cRows = courses.map(c => `<tr><td>${c.code}</td><td>${c.title}</td><td>${c.class_level}</td><td>${c.teacher_name||'-'}</td><td><a href="/admin/delete-course/${c.id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td></tr>`).join('');
-                            let tRows = teachers.map(tc => `<tr><td>${tc.id}</td><td style="text-align:left;">${tc.name}</td><td>${tc.assigned_sections || 'None'}</td><td><span style="color:#d35400; font-weight:bold;">${tc.plain_pin || '[Hashed]'}</span></td><td><a href="/admin/delete-teacher/${tc.id}?lang=${lang}" onclick="return confirm('Remove?')" style="color:red; font-weight:bold;">🗑️ Remove</a></td></tr>`).join('');
-                            
-                            let adminNotiRows = adminNotifs.map(n => `
-                                <div style="background:#fdf2e9; padding:15px; margin-bottom:15px; border-radius:8px; border:1px solid #e67e22;">
-                                    <strong>🔔 ${n.sender_name} (${n.created_at})</strong>
-                                    <div style="margin-top:10px; background:white; padding:10px; border-radius:6px; border:1px solid #ddd;">${n.message}</div>
-                                    ${n.attachment ? `<br><a href="/uploads/${n.attachment}" target="_blank" style="color:blue; font-weight:bold;">📎 ፋይል ክፈት</a>` : ''}
-                                    <div style="margin-top:15px; border-top:1px solid #ccc; padding-top:10px; display:flex; gap:10px;">
-                                        <button onclick="document.getElementById('editNotif_${n.id}').style.display='block'" style="background:orange; color:white; border:none; padding:6px 14px; border-radius:4px; cursor:pointer; font-weight:bold;">✏️ Edit</button> 
-                                        <a href="/delete-notification/${n.id}" onclick="return confirm('እርግጠኛ ነዎት ይህ ማስታወቂያ ይጠፋ?')" style="background:red; color:white; padding:6px 14px; border-radius:4px; text-decoration:none; font-size:13px; font-weight:bold; display:inline-block;">🗑️ Delete</a>
+                                let pRows = pending.map(s => `<tr><td>-</td><td>${s.student_id}</td><td>${s.name}</td><td>${s.payment_type === 'slip_file' || (s.bank_slip_val && s.bank_slip_val.includes('.')) ? `<a href="/uploads/${s.bank_slip_val}" target="_blank" style="color:#2980b9;">📄 እይ</a>` : `<b>TXN:</b> ${s.bank_slip_val || '-'}`}</td><td><a href="/admin/approve/${s.id}?lang=${lang}" style="color:green; font-weight:bold;">✅ Approve</a></td></tr>`).join('');
+                                let secRows = sections.map(sec => `<tr><td><a href="/class-hub/${encodeURIComponent(sec.name)}" style="color:#16a085; font-weight:bold;" target="_blank">📂 ${sec.name}</a></td><td><form action="/admin/edit-section/${sec.id}?lang=${lang}" method="POST" style="display:flex; gap:4px;"><select name="proctor_name" style="width:140px;"><option value="${sec.proctor_name || ''}">${sec.proctor_name || '-- Select --'}</option>${teachers.map(tc => `<option value="${tc.name}">${tc.name}</option>`).join('')}</select><button type="submit">Save</button></form></td><td><a href="/admin/delete-section/${sec.id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑 Delete</a></td><td><a href="/attendance-sheet/${encodeURIComponent(sec.name)}" style="color:#2980b9; font-weight:bold; margin-right:10px;" target="_blank">📋 Attendance</a><a href="/admin/export-section-students/${encodeURIComponent(sec.name)}" style="background:#27ae60; color:white; padding:4px 8px; border-radius:3px; text-decoration:none; font-weight:bold;">📥 Excel</a></td></tr>`).join('');
+
+                                let sectionOptions = sections.map(sec => `<option value="${sec.name}">${sec.name}</option>`).join('');
+                                let teacherOptions = teachers.map(tc => `<option value="${tc.id}">${tc.name}</option>`).join('');
+                                let gradeCheckboxes = ''; for(let i=1; i<=12; i++) gradeCheckboxes += `<label style="margin-right:8px;"><input type="checkbox" name="grades" value="Grade ${i}"> Grade ${i}</label>`;
+                                let cRows = courses.map(c => `<tr><td>${c.code}</td><td>${c.title}</td><td style="display:none;">0</td><td>${c.class_level}</td><td>${c.teacher_name||'-'}</td><td><a href="/admin/delete-course/${c.id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td></tr>`).join('');
+                                
+                                // 👩‍🏫 የመምህራን ሰንጠረዥ (ከ Edit፣ ID Card እና Delete ቁልፎች ጋር)
+                                let tRows = teachers.map(tc => `
+                                    <tr>
+                                        <td><b>${tc.id}</b></td>
+                                        <td style="text-align:left; font-weight:bold;">${tc.name}</td>
+                                        <td>${tc.assigned_sections || 'None'}</td>
+                                        <td><span style="color:#d35400; font-weight:bold;">${tc.plain_pin || '****'}</span></td>
+                                        <td>
+                                            <a href="/admin/edit-teacher/${tc.id}" style="background:#f39c12; color:white; padding:5px 10px; border-radius:4px; text-decoration:none; font-weight:bold; font-size:12px; margin-right:4px;">✏️ Edit</a>
+                                            <a href="/admin/teacher-id/${tc.id}" style="background:#2980b9; color:white; padding:5px 10px; border-radius:4px; text-decoration:none; font-weight:bold; font-size:12px; margin-right:4px;">🪪 ID</a>
+                                            <a href="/admin/delete-teacher/${tc.id}?lang=${lang}" onclick="return confirm('ይህ መምህር ይሰረዝ?')" style="background:#e74c3c; color:white; padding:5px 10px; border-radius:4px; text-decoration:none; font-weight:bold; font-size:12px;">🗑️</a>
+                                        </td>
+                                    </tr>
+                                `).join('');
+
+                                // 🔔 ማስታወቂያዎች (ከለርና ፎንት ሳይጠፋ + Edit እና Delete)
+                                let adminNotiRows = adminNotifs.map(n => `
+                                    <div style="background:#fdf2e9; padding:15px; margin-bottom:15px; border-radius:8px; border:1px solid #e67e22;">
+                                        <strong>🔔 ${n.sender_name} (ለ: ${n.target_audience || 'ALL'} | ቀን: ${n.created_at})</strong>
+                                        <div style="margin-top:10px; background:white; padding:12px; border-radius:6px; border:1px solid #ddd;">${n.message}</div>
+                                        ${n.attachment ? `<div style="margin-top:8px;"><a href="/uploads/${n.attachment}" target="_blank" style="color:#2980b9; font-weight:bold;">📎 የተያያዘ ፋይል ክፈት</a></div>` : ''}
+                                        <div style="margin-top:12px; border-top:1px solid #ccc; padding-top:10px; display:flex; gap:10px;">
+                                            <button type="button" onclick="document.getElementById('editNotif_${n.id}').style.display='block'" style="background:#f39c12; color:white; border:none; padding:6px 14px; border-radius:4px; cursor:pointer; font-weight:bold;">✏️ Edit</button> 
+                                            <a href="/delete-notification/${n.id}" onclick="return confirm('እርግጠኛ ነዎት ይህ ማስታወቂያ ይጠፋ?')" style="background:#e74c3c; color:white; padding:6px 14px; border-radius:4px; text-decoration:none; font-size:13px; font-weight:bold; display:inline-block;">🗑️ Delete</a>
+                                        </div>
+                                        <form id="editNotif_${n.id}" action="/edit-notification/${n.id}" method="POST" enctype="multipart/form-data" style="display:none; margin-top:15px; background:#fff; padding:15px; border-radius:6px; border:1px solid #ccc;">
+                                            <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:5px;">ማስታወቂያውን ማስተካከል:</label>
+                                            <textarea name="message" rows="4" style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc; border-radius:4px;">${n.message}</textarea>
+                                            <input type="file" name="attachment" style="display:block; margin-bottom:10px;">
+                                            <button type="submit" style="background:#27ae60; color:white; border:none; padding:8px 18px; border-radius:4px; font-weight:bold; cursor:pointer;">💾 Save Changes</button>
+                                            <button type="button" onclick="document.getElementById('editNotif_${n.id}').style.display='none'" style="background:#7f8c8d; color:white; border:none; padding:8px 14px; border-radius:4px; cursor:pointer; margin-left:5px;">Cancel</button>
+                                        </form>
                                     </div>
-                                    <form id="editNotif_${n.id}" action="/edit-notification/${n.id}" method="POST" enctype="multipart/form-data" style="display:none; margin-top:15px; background:#fff; padding:15px; border-radius:6px; border:1px solid #ccc;">
-                                        <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:5px;">ማስታወቂያውን ማስተካከል:</label>
-                                        <textarea name="message" rows="4" style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc; border-radius:4px;">${n.message.replace(/<[^>]+>/g, '')}</textarea>
-                                        <input type="file" name="attachment" style="display:block; margin-bottom:10px;">
-                                        <button type="submit" style="background:green; color:white; border:none; padding:8px 18px; border-radius:4px; font-weight:bold; cursor:pointer;">💾 Save Changes</button>
-                                        <button type="button" onclick="document.getElementById('editNotif_${n.id}').style.display='none'" style="background:gray; color:white; border:none; padding:8px 14px; border-radius:4px; cursor:pointer; margin-left:5px;">Cancel</button>
-                                    </form>
-                                </div>
-                            `).join('');
+                                `).join('');
 
-                            res.render('admin', {
-                                lang, pRows, secRows, cRows, tRows, adminNotiRows, sectionOptions, teacherOptions
+                                res.render('admin', {
+                                    lang, excellent, good, average, poor, maleCount, femaleCount,
+                                    pRows, secRows, cRows, tRows, adminNotiRows, groupedStudentsHtml: '',
+                                    sectionOptions, teacherOptions, gradeCheckboxes
+                                });
                             });
                         });
                     });
@@ -272,6 +478,251 @@ app.get('/admin', (req, res) => {
     });
 });
 
+// ================= 📢 NOTIFICATION ROUTES (FIXED) =================
+app.post('/admin/save-notice', upload.single('attachment'), (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    const target_audience = req.body.target_audience || 'ALL';
+    const message = req.body.message || '';
+    const attachment = req.file ? req.file.filename : null;
+    const createdAt = new Date().toLocaleString('en-GB');
+
+    db.run(
+        `INSERT INTO notifications (sender_role, sender_name, target_audience, message, attachment, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+        ['Admin', 'School Admin', target_audience, message, attachment, createdAt],
+        () => res.redirect('/admin')
+    );
+});
+
+app.post('/admin/send-notification', upload.single('attachment'), (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    const target_audience = req.body.target_audience || 'ALL';
+    const message = req.body.message || '';
+    const attachment = req.file ? req.file.filename : null;
+    const createdAt = new Date().toLocaleString('en-GB');
+
+    db.run(
+        `INSERT INTO notifications (sender_role, sender_name, target_audience, message, attachment, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+        ['Admin', 'School Admin', target_audience, message, attachment, createdAt],
+        () => res.redirect('/admin')
+    );
+});
+
+app.get('/delete-notification/:id', (req, res) => {
+    if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
+    db.run(`DELETE FROM notifications WHERE id = ?`, [req.params.id], () => res.redirect('/admin'));
+});
+
+app.post('/edit-notification/:id', upload.single('attachment'), (req, res) => {
+    if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
+    const msg = req.body.message || '';
+    let q = req.file ? `UPDATE notifications SET message = ?, attachment = ? WHERE id = ?` : `UPDATE notifications SET message = ? WHERE id = ?`;
+    let p = req.file ? [msg, req.file.filename, req.params.id] : [msg, req.params.id];
+    db.run(q, p, () => res.redirect('/admin'));
+});
+
+// ================= ✏️ EDIT STUDENT INFORMATION (FULL FORM) =================
+app.get('/admin/edit-student/:id', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.get(`SELECT * FROM students WHERE student_id = ?`, [req.params.id], (err, s) => {
+        if (!s) return res.send('<h3 style="text-align:center;color:red;margin-top:40px;">ተማሪው አልተገኘም!</h3>');
+        db.all(`SELECT * FROM sections ORDER BY name`, [], (err2, sections = []) => {
+            let sectionOptions = sections.map(sec => `<option value="${esc(sec.name)}" ${sec.name===s.class_level?'selected':''}>${sec.name}</option>`).join('');
+            const field = (label, name, val, type='text') => `
+                <div style="margin-bottom:12px;">
+                    <label style="font-weight:bold; font-size:13.5px; color:#1f4e79; display:block; margin-bottom:4px;">${label}</label>
+                    <input type="${type}" name="${name}" value="${esc(val)}" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
+                </div>`;
+
+            res.send(`<!DOCTYPE html>
+<html lang="am">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Student - ${s.name}</title>
+</head>
+<body style="font-family:'Segoe UI',sans-serif; background:#eef2f5; padding:25px; margin:0;">
+    <div style="max-width:650px; margin:auto; background:white; padding:30px; border-radius:12px; box-shadow:0 8px 25px rgba(0,0,0,0.1); border-top:6px solid #2980b9;">
+        <h2 style="margin-top:0; color:#1f4e79;">✏️ የተማሪ መረጃ ማስተካከያ (Edit Student: ${s.student_id})</h2>
+        <form action="/admin/edit-student/${s.student_id}" method="POST" enctype="multipart/form-data">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                ${field('👤 የተማሪ ሙሉ ስም (Full Name)', 'name', s.name)}
+                ${field('👩 የእናት ስም (Mother Name)', 'mother_name', s.mother_name)}
+                <div style="margin-bottom:12px;">
+                    <label style="font-weight:bold; font-size:13.5px; color:#1f4e79; display:block; margin-bottom:4px;">⚧ ፆታ (Gender)</label>
+                    <select name="gender" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px;">
+                        <option value="Male" ${s.gender==='Male'?'selected':''}>ወንድ (Male)</option>
+                        <option value="Female" ${s.gender==='Female'?'selected':''}>ሴት (Female)</option>
+                    </select>
+                </div>
+                ${field('🎂 ዕድሜ (Age)', 'age', s.age, 'number')}
+                ${field('📞 ስልክ ቁጥር (Phone)', 'phone', s.phone)}
+                ${field('🚨 የአደጋ ጊዜ ስልክ (Emergency Phone)', 'emergency_phone', s.emergency_phone)}
+                ${field('📍 ክልል (Region)', 'region', s.region)}
+                ${field('📍 ዞን (Zone)', 'zone', s.zone)}
+                ${field('📍 ወረዳ (Woreda)', 'woreda', s.woreda)}
+                ${field('📍 ቀበሌ (Kebele)', 'kebele', s.kebele)}
+            </div>
+
+            <div style="margin-bottom:12px;">
+                <label style="font-weight:bold; font-size:13.5px; color:#1f4e79; display:block; margin-bottom:4px;">🏫 ክፍል እና ሴክሽን (Grade / Section)</label>
+                <select name="class_level" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px;">
+                    ${sectionOptions}
+                </select>
+            </div>
+
+            <div style="margin-bottom:12px; background:#fffcf5; padding:12px; border:1px dashed #f39c12; border-radius:6px;">
+                <label style="font-weight:bold; font-size:13.5px; color:#d35400; display:block; margin-bottom:4px;">🔑 አዲስ የይለፍ ቃል / PIN (መቀየር ከፈለጉ ብቻ ይጻፉ)</label>
+                <input type="text" name="new_password" placeholder="ፓስወርዱን መቀየር ካልፈለጉ ባዶ ይተዉት..." style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
+            </div>
+
+            <div style="margin-bottom:15px;">
+                <label style="font-weight:bold; font-size:13.5px; color:#1f4e79; display:block; margin-bottom:4px;">📄 አዲስ የክፍያ ደረሰኝ ፎቶ (አማራጭ)</label>
+                <input type="file" name="bank_slip" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px;">
+            </div>
+
+            <button type="submit" style="width:100%; padding:14px; background:#27ae60; color:white; border:none; border-radius:8px; font-weight:bold; font-size:16px; cursor:pointer;">
+                💾 የተስተካከለውን መረጃ አስቀምጥ (Save Changes)
+            </button>
+        </form>
+        <div style="margin-top:15px; text-align:center;">
+            <a href="/admin/registered-students" style="color:#2980b9; font-weight:bold; text-decoration:none;">⬅️ ወደ ተማሪዎች ዝርዝር ተመለስ (Back)</a>
+        </div>
+    </div>
+</body>
+</html>`);
+        });
+    });
+});
+
+app.post('/admin/edit-student/:id', upload.single('bank_slip'), (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    const studentId = req.params.id;
+    const { name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, new_password } = req.body;
+
+    const updatePassIfNeeded = (cb) => {
+        if (new_password && new_password.trim() !== '') {
+            const hashed = bcrypt.hashSync(new_password.trim(), 10);
+            db.run(`UPDATE students SET password = ? WHERE student_id = ?`, [hashed, studentId], () => cb());
+        } else {
+            cb();
+        }
+    };
+
+    updatePassIfNeeded(() => {
+        if (req.file) {
+            db.run(
+                `UPDATE students SET name=?, mother_name=?, gender=?, age=?, phone=?, emergency_phone=?, region=?, zone=?, woreda=?, kebele=?, class_level=?, bank_slip_val=? WHERE student_id=?`,
+                [name, mother_name || '', gender, age || null, phone || '', emergency_phone || '', region || '', zone || '', woreda || '', kebele || '', class_level, req.file.filename, studentId],
+                () => res.redirect('/admin/registered-students')
+            );
+        } else {
+            db.run(
+                `UPDATE students SET name=?, mother_name=?, gender=?, age=?, phone=?, emergency_phone=?, region=?, zone=?, woreda=?, kebele=?, class_level=? WHERE student_id=?`,
+                [name, mother_name || '', gender, age || null, phone || '', emergency_phone || '', region || '', zone || '', woreda || '', kebele || '', class_level, studentId],
+                () => res.redirect('/admin/registered-students')
+            );
+        }
+    });
+});
+
+// ================= ✏️ EDIT TEACHER INFORMATION (FULL FORM) =================
+app.get('/admin/edit-teacher/:id', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.get(`SELECT * FROM teachers WHERE id = ?`, [req.params.id], (err, t) => {
+        if (!t) return res.redirect('/admin');
+        db.all(`SELECT * FROM sections ORDER BY name`, [], (err2, sections = []) => {
+            const currentSecs = (t.assigned_sections || '').split(',').map(s => s.trim());
+            const secCheckboxes = sections.map(sec => `
+                <label style="display:flex; align-items:center; gap:6px; background:#f8fafc; padding:8px; border:1px solid #cbd5e1; border-radius:6px; cursor:pointer; font-size:13px; font-weight:bold;">
+                    <input type="checkbox" name="assigned_sections" value="${esc(sec.name)}" ${currentSecs.includes(sec.name) ? 'checked' : ''}>
+                    <span>${sec.name}</span>
+                </label>
+            `).join('');
+
+            const field = (label, name, val) => `
+                <div style="margin-bottom:12px;">
+                    <label style="font-weight:bold; font-size:13.5px; color:#8e44ad; display:block; margin-bottom:4px;">${label}</label>
+                    <input type="text" name="${name}" value="${esc(val)}" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
+                </div>`;
+
+            res.send(`<!DOCTYPE html>
+<html lang="am">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Teacher - ${t.name}</title>
+</head>
+<body style="font-family:'Segoe UI',sans-serif; background:#eef2f5; padding:25px; margin:0;">
+    <div style="max-width:650px; margin:auto; background:white; padding:30px; border-radius:12px; box-shadow:0 8px 25px rgba(0,0,0,0.1); border-top:6px solid #8e44ad;">
+        <h2 style="margin-top:0; color:#8e44ad;">✏️ የመምህር መረጃ ማስተካከያ (Edit Teacher: ${t.id})</h2>
+        <form action="/admin/edit-teacher/${t.id}" method="POST" enctype="multipart/form-data">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                ${field('👤 የመምህሩ ሙሉ ስም (Full Name)', 'name', t.name)}
+                <div style="margin-bottom:12px;">
+                    <label style="font-weight:bold; font-size:13.5px; color:#8e44ad; display:block; margin-bottom:4px;">⚧ ፆታ (Gender)</label>
+                    <select name="gender" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px;">
+                        <option value="Male" ${t.gender==='Male'?'selected':''}>ወንድ (Male)</option>
+                        <option value="Female" ${t.gender==='Female'?'selected':''}>ሴት (Female)</option>
+                    </select>
+                </div>
+                ${field('📞 ስልክ ቁጥር (Phone)', 'phone', t.phone)}
+                ${field('📘 የሚያስተምሩት ትምህርት (Subject)', 'subject', t.subject)}
+                ${field('🚨 የአደጋ ጊዜ ተጠሪ ስም (Emergency Name)', 'emergency_name', t.emergency_name)}
+                ${field('☎️ የአደጋ ጊዜ ተጠሪ ስልክ (Emergency Phone)', 'emergency_phone', t.emergency_phone)}
+            </div>
+
+            <div style="margin-bottom:15px;">
+                <label style="font-weight:bold; font-size:13.5px; color:#8e44ad; display:block; margin-bottom:6px;">🏫 የሚያስተምሩባቸው ክፍሎች እና ሴክሽኖች (Assigned Sections)</label>
+                <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:8px; max-height:180px; overflow-y:auto; padding:10px; border:1px solid #cbd5e1; border-radius:6px;">
+                    ${secCheckboxes}
+                </div>
+            </div>
+
+            <div style="margin-bottom:12px; background:#fffcf5; padding:12px; border:1px dashed #f39c12; border-radius:6px;">
+                <label style="font-weight:bold; font-size:13.5px; color:#d35400; display:block; margin-bottom:4px;">🔑 የይለፍ ቃል / PIN (የአሁኑ: ${t.plain_pin || '****'})</label>
+                <input type="text" name="plain_pin" value="${esc(t.plain_pin)}" placeholder="አዲስ PIN ያስገቡ..." style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
+            </div>
+
+            <div style="margin-bottom:15px;">
+                <label style="font-weight:bold; font-size:13.5px; color:#8e44ad; display:block; margin-bottom:4px;">📷 አዲስ የመምህር ፎቶ (መቀየር ከፈለጉ ብቻ)</label>
+                <input type="file" name="teacher_photo" accept="image/*" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px;">
+            </div>
+
+            <button type="submit" style="width:100%; padding:14px; background:#8e44ad; color:white; border:none; border-radius:8px; font-weight:bold; font-size:16px; cursor:pointer;">
+                💾 የመምህሩን መረጃ አስቀምጥ (Save Changes)
+            </button>
+        </form>
+        <div style="margin-top:15px; text-align:center;">
+            <a href="/admin" style="color:#8e44ad; font-weight:bold; text-decoration:none;">⬅️ ወደ አድሚን ዳሽቦርድ ተመለስ (Back to Admin)</a>
+        </div>
+    </div>
+</body>
+</html>`);
+        });
+    });
+});
+
+app.post('/admin/edit-teacher/:id', upload.single('teacher_photo'), (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    const teacherId = req.params.id;
+    const { name, gender, phone, subject, emergency_name, emergency_phone, assigned_sections, plain_pin } = req.body;
+    const sectionsStr = Array.isArray(assigned_sections) ? assigned_sections.join(', ') : (assigned_sections || '');
+
+    db.get(`SELECT * FROM teachers WHERE id = ?`, [teacherId], (err, t) => {
+        if (!t) return res.redirect('/admin');
+        const finalPin = (plain_pin && plain_pin.trim() !== '') ? plain_pin.trim() : (t.plain_pin || '1234');
+        const hashedPin = (plain_pin && plain_pin.trim() !== '') ? bcrypt.hashSync(finalPin, 10) : t.password;
+        const finalPhoto = req.file ? req.file.filename : t.photo;
+
+        db.run(
+            `UPDATE teachers SET name=?, gender=?, phone=?, subject=?, emergency_name=?, emergency_phone=?, assigned_sections=?, password=?, plain_pin=?, photo=? WHERE id=?`,
+            [name, gender || '', phone || '', subject || '', emergency_name || '', emergency_phone || '', sectionsStr, hashedPin, finalPin, finalPhoto, teacherId],
+            () => res.redirect('/admin')
+        );
+    });
+});
+
+// ================= OTHER ADMIN ACTIONS =================
 app.get('/admin/approve/:id', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     db.get(`SELECT * FROM pending_students WHERE id = ?`, [req.params.id], (err, st) => {
@@ -293,30 +744,71 @@ app.post('/admin/register-teacher-full', upload.single('teacher_photo'), (req, r
     const sectionsStr = Array.isArray(assigned_sections) ? assigned_sections.join(', ') : (assigned_sections || '');
 
     db.run(
-        `INSERT INTO teachers (id, name, phone, password, assigned_sections) VALUES (?, ?, ?, ?, ?)`,
-        [teacherID, name, phone, hashedPIN, sectionsStr],
-        function(err) {
-            db.run(
-                `UPDATE teachers SET gender = ?, subject = ?, emergency_name = ?, emergency_phone = ?, photo = ?, plain_pin = ? WHERE id = ?`,
-                [gender || '', subject || '', emergency_name || '', emergency_phone || '', photoFile, autoPIN, teacherID],
-                () => res.redirect(`/admin/teacher-id/${teacherID}?pin=${autoPIN}`)
-            );
-        }
+        `INSERT INTO teachers (id, name, phone, password, assigned_sections, gender, subject, emergency_name, emergency_phone, photo, plain_pin) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [teacherID, name, phone, hashedPIN, sectionsStr, gender || '', subject || '', emergency_name || '', emergency_phone || '', photoFile, autoPIN],
+        () => res.redirect(`/admin/teacher-id/${teacherID}?pin=${autoPIN}`)
     );
 });
 
 app.get('/admin/teacher-id/:id', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     db.get(`SELECT * FROM teachers WHERE id = ?`, [req.params.id], (err, t) => {
-        if (!t) return res.redirect('/admin');
+        if (err || !t) return res.redirect('/admin');
         const displayPin = req.query.pin || t.plain_pin || '****';
-        res.send(`<!DOCTYPE html><html><head><title>Teacher ID</title></head><body style="text-align:center;padding:40px;font-family:sans-serif;"><h2>✅ መምህር ተመዝግቧል!</h2><p><b>ID:</b> ${t.id} | <b>PIN:</b> <span style="color:red;font-size:20px;">${displayPin}</span></p><a href="/admin">ወደ አድሚን ተመለስ</a></body></html>`);
+        const avatarUrl = t.photo ? `/uploads/${t.photo}` : `/uploads/logo.jpg`;
+
+        res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><title>Teacher ID Card - ${t.name}</title><script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script><style>body{font-family:'Segoe UI',Tahoma,sans-serif;background:#eef2f5;margin:0;padding:25px;display:flex;flex-direction:column;align-items:center;}.top-bar{display:flex;gap:12px;margin-bottom:20px;}.btn{padding:10px 18px;border:none;border-radius:6px;font-weight:bold;cursor:pointer;text-decoration:none;color:white;font-size:14px;}.cred-box{background:#fffcf5;border:2px dashed #f39c12;border-radius:10px;padding:15px 25px;margin-bottom:25px;max-width:420px;width:100%;text-align:center;}.id-card{width:360px;background:white;border-radius:16px;overflow:hidden;box-shadow:0 15px 35px rgba(0,0,0,0.2);border:1px solid #d0d7de;}.id-header{background:linear-gradient(135deg,#1f4e79 0%,#0d2b45 100%);color:white;padding:20px 15px 45px 15px;text-align: center;border-bottom:5px solid #f39c12;}.id-header img.school-logo{width:52px;height:52px;border-radius:50%;border:2px solid #f39c12;background:white;object-fit:cover;}.photo-wrap{width:105px;height:105px;margin:-52px auto 10px auto;border-radius:50%;border:4px solid white;box-shadow:0 5px 15px rgba(0,0,0,0.2);overflow:hidden;background:#fff;}.photo-wrap img{width:100%;height:100%;object-fit:cover;}.id-body{padding:5px 22px 20px 22px;text-align:center;}.teacher-name{font-size:20px;font-weight:800;color:#1f4e79;margin:5px 0;}.teacher-subject{font-size:14px;font-weight:bold;color:#8e44ad;margin-bottom:12px;}.info-table{width:100%;text-align:left;font-size:13.5px;border-collapse:collapse;margin-bottom:12px;}.info-table td{padding:6px 4px;border-bottom:1px solid #f0f2f5;}.barcode-box{background:#f8fafc;padding:8px;border-radius:8px;border:1px solid #e2e8f0;margin-top:5px;}.id-footer{background:#1f4e79;color:white;font-size:11.5px;padding:8px;text-align:center;}@media print{.no-print{display:none!important;}body{background:white;}}</style></head><body><div class="top-bar no-print"><a href="/admin" class="btn" style="background:#7f8c8d;">⬅️ ወደ አድሚን ተመለስ</a><button onclick="window.print()" class="btn" style="background:#2980b9;">🖨️ ፕሪንት አድርግ</button></div><div class="cred-box no-print"><h3 style="margin:0 0 8px 0;color:#d35400;">✅ የመምህር መግቢያ መረጃ</h3><div style="font-size:16px;background:white;padding:10px;border-radius:6px;border:1px solid #fad7a0;"><b>🆔 ID:</b> <span style="color:#2980b9;font-weight:bold;">${t.id}</span> &nbsp;|&nbsp; <b>🔑 PIN:</b> <span style="color:#e74c3c;font-weight:bold;font-size:18px;">${displayPin}</span></div></div><div class="id-card"><div class="id-header"><img src="/uploads/logo.jpg" class="school-logo"><h3 style="margin:8px 0 3px 0;font-size:17px;">AMANUEL LIGHT & LIFE SCHOOL</h3><span style="background:#f39c12;color:#fff;font-size:11px;font-weight:bold;padding:3px 12px;border-radius:20px;">OFFICIAL TEACHER ID CARD</span></div><div class="photo-wrap"><img src="${avatarUrl}" onerror="this.src='/uploads/logo.jpg'"></div><div class="id-body"><div class="teacher-name">${t.name}</div><div class="teacher-subject">📘 ${t.subject || 'Teacher'}</div><table class="info-table"><tr><td><b>ID:</b></td><td style="color:#2980b9;font-weight:bold;">${t.id}</td></tr><tr><td><b>Gender:</b></td><td>${t.gender || '-'}</td></tr><tr><td><b>Sections:</b></td><td>${t.assigned_sections || '-'}</td></tr><tr><td><b>Phone:</b></td><td>${t.phone || '-'}</td></tr><tr><td><b>Emergency:</b></td><td>${t.emergency_name || '-'} (${t.emergency_phone || '-'})</td></tr></table><div class="barcode-box"><svg id="barcode"></svg></div></div><div class="id-footer">Property of Amanuel Light and Life School</div></div><script>JsBarcode("#barcode","${t.id}",{format:"CODE128",width:1.8,height:40,displayValue:true,fontSize:13,margin:0});</script></body></html>`);
+    });
+});
+
+app.post('/admin/handover-section', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    const { section_name, old_teacher_id, new_teacher_id } = req.body;
+    if (!section_name || !new_teacher_id) return res.redirect('/admin');
+
+    const selectedSections = (Array.isArray(section_name) ? section_name.join(',') : section_name)
+        .split(',').map(s => s.trim()).filter(Boolean);
+    if (selectedSections.length === 0) return res.redirect('/admin');
+
+    const removeOldTeacherSections = (callback) => {
+        if (!old_teacher_id) return callback();
+        db.get(`SELECT assigned_sections FROM teachers WHERE id = ?`, [old_teacher_id], (err, oldT) => {
+            if (err || !oldT) return callback();
+            let currentSecs = (oldT.assigned_sections || '').split(',').map(s => s.trim()).filter(s => s && !selectedSections.includes(s));
+            db.run(`UPDATE teachers SET assigned_sections = ? WHERE id = ?`, [currentSecs.join(', '), old_teacher_id], () => callback());
+        });
+    };
+
+    removeOldTeacherSections(() => {
+        db.get(`SELECT name, assigned_sections FROM teachers WHERE id = ?`, [new_teacher_id], (err, newT) => {
+            if (err || !newT) return res.redirect('/admin');
+            let newSecs = (newT.assigned_sections || '').split(',').map(s => s.trim()).filter(Boolean);
+            selectedSections.forEach(sec => { if (!newSecs.includes(sec)) newSecs.push(sec); });
+
+            db.run(`UPDATE teachers SET assigned_sections = ? WHERE id = ?`, [newSecs.join(', '), new_teacher_id], () => {
+                selectedSections.forEach(sec => {
+                    db.run(`UPDATE sections SET proctor_name = ? WHERE name = ?`, [newT.name, sec], () => {});
+                    if (old_teacher_id) {
+                        db.run(`UPDATE courses SET teacher_id = ?, teacher_name = ? WHERE class_level = ? AND teacher_id = ?`, [new_teacher_id, newT.name, sec, old_teacher_id], () => {});
+                        db.run(`UPDATE course_assessments SET teacher_id = ? WHERE teacher_id = ? AND student_id IN (SELECT student_id FROM students WHERE class_level = ?)`, [new_teacher_id, old_teacher_id, sec], () => {});
+                    } else {
+                        db.run(`UPDATE courses SET teacher_id = ?, teacher_name = ? WHERE class_level = ?`, [new_teacher_id, newT.name, sec], () => {});
+                    }
+                });
+                res.redirect('/admin');
+            });
+        });
     });
 });
 
 app.post('/admin/add-section', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
-    db.run(`INSERT INTO sections (name, proctor_name, proctor_phone) VALUES (?,?,?) ON CONFLICT(name) DO NOTHING`, [req.body.name, '', ''], () => res.redirect('/admin'));
+    db.run(`INSERT INTO sections (name, proctor_name, proctor_phone) VALUES (?,?,?) ON CONFLICT(name) DO NOTHING`, [req.body.name, req.body.proctor_name || '', ''], () => res.redirect('/admin'));
+});
+
+app.post('/admin/edit-section/:id', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.run(`UPDATE sections SET proctor_name=? WHERE id=?`, [req.body.proctor_name, req.params.id], () => res.redirect('/admin'));
 });
 
 app.get('/admin/delete-section/:id', (req, res) => {
@@ -342,17 +834,56 @@ app.get('/admin/delete-teacher/:id', (req, res) => {
     db.run(`DELETE FROM teachers WHERE id = ?`, [req.params.id], () => res.redirect('/admin'));
 });
 
-// ================= NOTIFICATIONS EDIT & DELETE ROUTES =================
-app.get('/delete-notification/:id', (req, res) => {
+app.get('/admin/delete-student/:id', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
-    db.run(`DELETE FROM notifications WHERE id = ?`, [req.params.id], () => res.redirect('/admin'));
+    db.run(`DELETE FROM students WHERE student_id = ?`, [req.params.id], () => {
+        db.run(`DELETE FROM course_assessments WHERE student_id = ?`, [req.params.id], () => res.redirect('/admin/registered-students'));
+    });
 });
 
-app.post('/edit-notification/:id', upload.single('attachment'), (req, res) => {
+app.get('/admin/remove-student/:id', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
-    let q = req.file ? `UPDATE notifications SET message = ?, attachment = ? WHERE id = ?` : `UPDATE notifications SET message = ? WHERE id = ?`;
-    let p = req.file ? [xss(req.body.message), req.file.filename, req.params.id] : [xss(req.body.message), req.params.id];
-    db.run(q, p, () => res.redirect('/admin'));
+    db.run(`DELETE FROM students WHERE student_id = ?`, [req.params.id], () => {
+        db.run(`DELETE FROM course_assessments WHERE student_id = ?`, [req.params.id], () => res.redirect('/admin/registered-students'));
+    });
+});
+
+app.get('/admin/export-section-students/:secName', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    let secName = decodeURIComponent(req.params.secName);
+    db.all(`SELECT student_id, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, status FROM students`, [], (err, allStudents = []) => {
+        let students = allStudents.filter(s => isClassMatch(s.class_level, secName));
+        let header = ['student_id','name','mother_name','gender','age','phone','emergency_phone','region','zone','woreda','kebele','class_level','payment_type','status'];
+        let rows = [header.join(',')];
+        students.forEach(s => rows.push(header.map(col => csvCell(s[col])).join(',')));
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename=students_${secName.replace(/\s+/g, '_')}.csv`);
+        res.send(rows.join('\r\n'));
+    });
+});
+
+app.get('/class-hub/:className', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    let className = decodeURIComponent(req.params.className);
+    db.all(`SELECT student_id, name, gender, class_level FROM students`, [], (err, allStudents = []) => {
+        let students = allStudents.filter(s => isClassMatch(s.class_level, className));
+        db.all(`SELECT * FROM course_assessments`, [], (err, assessments = []) => {
+            students.forEach(st => {
+                let st_ass = assessments.filter(a => a.student_id === st.student_id);
+                st.cumulative_total = st_ass.reduce((sum, a) => sum + (a.total || 0), 0);
+            });
+            students.sort((a, b) => b.cumulative_total - a.cumulative_total);
+            db.all(`SELECT * FROM sections`, [], (err, allSections = []) => {
+                let section = allSections.find(sec => isClassMatch(sec.name, className));
+                db.all(`SELECT * FROM courses`, [], (err, allCourses = []) => {
+                    let courses = allCourses.filter(c => isClassMatch(c.class_level, className));
+                    let sRows = students.map((s, idx) => `<tr><td><b>${idx + 1}</b></td><td>${s.student_id}</td><td style="text-align:left;">${s.name}</td><td>${s.gender}</td><td>${s.cumulative_total}</td></tr>`).join('');
+                    let cRows = courses.map(c => `<tr><td>${c.code}</td><td>${c.title}</td><td>${c.teacher_name || 'N/A'}</td></tr>`).join('');
+                    res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Class Hub - ${className}</title><style>body{font-family:sans-serif; padding:20px; background:#f4f7f6;} .card{background:white; padding:20px; border-radius:8px; margin-bottom:15px;} table{width:100%; border-collapse:collapse; margin-top:10px;} th,td{border:1px solid #ccc; padding:8px; text-align:center;} th{background:#1f4e79; color:white;}</style></head><body><a href="/admin" style="background:#7f8c8d; color:white; padding:8px 12px; text-decoration:none; border-radius:5px;">⬅️ Back to Admin Dashboard</a><h2>📂 Class Hub: ${className}</h2><div class="card"><p><strong>Proctor:</strong> ${section ? section.proctor_name : 'N/A'}</p><p><strong>Total Students:</strong> ${students.length}</p></div><div class="card"><h3>📚 Courses</h3><table><tr><th>Code</th><th>Title</th><th>Teacher</th></tr>${cRows||'<tr><td colspan="3">No courses</td></tr>'}</table></div><div class="card"><h3>🏆 Ranking</h3><table><tr><th>Rank</th><th>ID</th><th>Name</th><th>Gender</th><th>Total</th></tr>${sRows||'<tr><td colspan="5">No students</td></tr>'}</table></div></body></html>`);
+                });
+            });
+        });
+    });
 });
 
 // ================= 👨‍🎓 REGISTERED STUDENTS LIST & DIRECTOR REPORT =================
@@ -404,8 +935,8 @@ app.get('/admin/registered-students', (req, res) => {
                         <td>${st.region || '-'}/${st.woreda || '-'}</td>
                         <td>${slipDisplay}</td>
                         <td>
-                            <a href="/admin/edit-student/${st.student_id}" style="color:#f39c12; font-weight:bold; margin-right:8px; text-decoration:none;">✏️ አስተካክል</a>
-                            <a href="/admin/delete-student/${st.student_id}" onclick="return confirm('ይህንን ተማሪ መሰረዝ ፈልገዋል?')" style="color:white; background:#e74c3c; padding:4px 8px; border-radius:4px; text-decoration:none; font-size:12px;">🗑️ ሰርዝ</a>
+                            <a href="/admin/edit-student/${st.student_id}" style="background:#f39c12; color:white; padding:5px 10px; border-radius:4px; font-weight:bold; margin-right:6px; text-decoration:none; font-size:12px;">✏️ አስተካክል</a>
+                            <a href="/admin/delete-student/${st.student_id}" onclick="return confirm('ይህንን ተማሪ መሰረዝ ፈልገዋል?')" style="color:white; background:#e74c3c; padding:5px 10px; border-radius:4px; text-decoration:none; font-size:12px; font-weight:bold;">🗑️ ሰርዝ</a>
                         </td>
                     </tr>
                 `;
@@ -515,34 +1046,40 @@ app.get('/teacher-dashboard', (req, res) => {
 
                 db.all('SELECT * FROM course_assessments WHERE course_code = ?', [selectedCourse ? selectedCourse.code : ''], (err, assessments = []) => {
                     db.all('SELECT * FROM absence_requests WHERE class_level = ? ORDER BY id DESC', [selectedClass], (err, classAbsences = []) => {
-                        db.all("SELECT * FROM notifications WHERE sender_name = ? ORDER BY id DESC", [teacher.name], (err, mySentNotifs = []) => {
-                            let classOptions = assignedClasses.map(cls => `<option value="${cls}" ${cls === selectedClass ? 'selected' : ''}>${cls}</option>`).join('');
-                            let courseOptions = classCourses.map(c => `<option value="${c.id}" ${c.id.toString() === selectedCourseId ? 'selected' : ''}>${c.title} (${c.code})</option>`).join('');
+                        db.all('SELECT * FROM sections', [], (err, allSections = []) => {
+                            let currentSection = allSections.find(sec => isClassMatch(sec.name, selectedClass));
+                            let isProctor = currentSection && currentSection.proctor_name === teacher.name;
 
-                            let studentRows = studentsInClass.map((st, idx) => {
-                                let asm = assessments.find(a => a.student_id === st.student_id) || {};
-                                return `<tr>
-                                    <td>${idx + 1}</td>
-                                    <td><b>${st.student_id}</b></td>
-                                    <td style="text-align:left;">${st.name}</td>
-                                    <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="20" name="quiz" value="${asm.quiz !== undefined ? asm.quiz : 0}" style="width:65px; text-align:center;"></td>
-                                    <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="30" name="mid" value="${asm.mid !== undefined ? asm.mid : 0}" style="width:65px; text-align:center;"></td>
-                                    <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="50" name="final" value="${asm.final !== undefined ? asm.final : 0}" style="width:65px; text-align:center;"></td>
-                                    <td>
-                                        <form id="form_${st.student_id}" class="ajax-grade-form" action="/teacher/save-grade?course_id=${selectedCourseId}" method="POST">
-                                            <input type="hidden" name="student_id" value="${st.student_id}">
-                                            <input type="hidden" name="course_id" value="${selectedCourseId}">
-                                            <button type="submit" style="background:#27ae60; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-weight:bold;">💾 Save</button>
-                                        </form>
-                                    </td>
-                                </tr>`;
-                            }).join('');
+                            db.all("SELECT * FROM notifications WHERE sender_name = ? ORDER BY id DESC", [teacher.name], (err, mySentNotifs = []) => {
+                                let classOptions = assignedClasses.map(cls => `<option value="${cls}" ${cls === selectedClass ? 'selected' : ''}>${cls}</option>`).join('');
+                                let courseOptions = classCourses.map(c => `<option value="${c.id}" ${c.id.toString() === selectedCourseId ? 'selected' : ''}>${c.title} (${c.code})</option>`).join('');
 
-                            let absRows = classAbsences.map(ab => `<tr><td>${ab.student_name}</td><td>${ab.date || ''}</td><td>${ab.reason}</td><td>${ab.teacher_feedback || 'Pending'}</td></tr>`).join('');
-                            let teacherNotiRows = mySentNotifs.map(n => `<div style="background:#fdf2e9; padding:10px; margin-bottom:10px;">${n.message}</div>`).join('');
+                                let studentRows = studentsInClass.map((st, idx) => {
+                                    let asm = assessments.find(a => a.student_id === st.student_id) || {};
+                                    return `<tr>
+                                        <td>${idx + 1}</td>
+                                        <td><b>${st.student_id}</b></td>
+                                        <td style="text-align:left;">${st.name}</td>
+                                        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="20" name="quiz" value="${asm.quiz !== undefined ? asm.quiz : 0}" style="width:65px; text-align:center;"></td>
+                                        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="30" name="mid" value="${asm.mid !== undefined ? asm.mid : 0}" style="width:65px; text-align:center;"></td>
+                                        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="50" name="final" value="${asm.final !== undefined ? asm.final : 0}" style="width:65px; text-align:center;"></td>
+                                        <td>
+                                            <form id="form_${st.student_id}" class="ajax-grade-form" action="/teacher/save-grade?course_id=${selectedCourseId}" method="POST">
+                                                <input type="hidden" name="student_id" value="${st.student_id}">
+                                                <input type="hidden" name="course_id" value="${selectedCourseId}">
+                                                <button type="submit" style="background:#27ae60; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-weight:bold;">💾 Save</button>
+                                            </form>
+                                        </td>
+                                    </tr>`;
+                                }).join('');
 
-                            res.render('teacher', {
-                                lang: 'am', teacher, selectedClass, selectedCourseId, classOptions, courseOptions, studentRows, absRows, teacherNotiRows, proctorPanel: ''
+                                let absRows = classAbsences.map(ab => `<tr><td>${ab.student_name}</td><td>${ab.date || ab.created_at || ''}</td><td>${ab.reason}</td><td>${ab.teacher_feedback || 'Pending'}</td></tr>`).join('');
+                                let teacherNotiRows = mySentNotifs.map(n => `<div style="background:#fdf2e9; padding:10px; margin-bottom:10px; border-radius:5px;">${n.message}</div>`).join('');
+                                let proctorPanel = isProctor ? `<div class="card" style="background:#f9fcf7; border:1px solid #27ae60;"><h3>🟢 የፕሮክተር ፓነል</h3><a href="/attendance-sheet/${encodeURIComponent(selectedClass)}" target="_blank" style="background:#16a085; color:white; padding:8px 15px; border-radius:5px; text-decoration:none; font-weight:bold; display:inline-block;">📋 Attendance Sheet</a></div>` : '';
+
+                                res.render('teacher', {
+                                    lang: 'am', teacher, selectedClass, selectedCourseId, classOptions, courseOptions, studentRows, absRows, teacherNotiRows, proctorPanel
+                                });
                             });
                         });
                     });
@@ -552,22 +1089,18 @@ app.get('/teacher-dashboard', (req, res) => {
     });
 });
 
-pool.query(`CREATE TABLE IF NOT EXISTS grade_submissions (
-    id SERIAL PRIMARY KEY,
-    academic_year TEXT,
-    class_level TEXT,
-    course_id TEXT,
-    course_code TEXT,
-    course_title TEXT,
-    teacher_id TEXT,
-    teacher_name TEXT,
-    submitted_at TEXT,
-    UNIQUE(academic_year, class_level, course_code)
-)`).catch(err => console.error(err));
+app.post('/teacher/send-notification', upload.single('attachment'), (req, res) => {
+    if (!req.session.teacherId) return res.redirect('/');
+    let targetClass = req.query.cls || '';
+    db.get(`SELECT * FROM teachers WHERE id = ?`, [req.session.teacherId], (err, teacher) => {
+        if (!teacher) return res.redirect('/');
+        db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at, attachment) VALUES (?,?,?,?,?,?)`,
+            ['Teacher', teacher.name, targetClass, req.body.message || '', new Date().toLocaleString('en-GB'), req.file ? req.file.filename : null], () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}`));
+    });
+});
 
 app.post('/teacher/save-grade', (req, res) => {
     if (!req.session.teacherId) return res.json({ error: 'Unauthorized' });
-    
     let courseId = req.body.course_id || req.query.course_id || '';
     let { student_id, quiz, mid, final } = req.body;
     
@@ -621,6 +1154,55 @@ app.post('/teacher/submit-final-grades', (req, res) => {
     });
 });
 
+// ================= STUDENT DASHBOARD =================
+app.get('/student-dashboard', (req, res) => {
+    if (!req.session.studentId) return res.redirect('/');
+    db.get('SELECT s.* FROM students s WHERE s.student_id = ?', [req.session.studentId], (err, student) => {
+        if (!student) return res.redirect('/');
+        db.all('SELECT * FROM courses ORDER BY id', [], (err, allCourses = []) => {
+            let myCourses = allCourses.filter(c => isClassMatch(c.class_level, student.class_level));
+            db.all('SELECT * FROM course_assessments WHERE student_id = ?', [student.student_id], (err, myGrades = []) => {
+                db.all('SELECT * FROM notifications ORDER BY id DESC', [], (err, allNotifs = []) => {
+                    let myNotifs = allNotifs.filter(n => n.target_audience === 'ALL' || isClassMatch(n.target_audience, student.class_level));
+                    db.all('SELECT * FROM absence_requests WHERE student_id = ? ORDER BY id DESC', [student.student_id], (err, myAbsences = []) => {
+                        
+                        let notiRows = myNotifs.map(n => `<div style="background:#fff; padding:15px; margin-bottom:12px; border-radius:8px; border-left:4px solid #3498db; box-shadow:0 2px 4px rgba(0,0,0,0.05);"><strong style="color:#2c3e50; font-size:15px;">🔔 ${n.sender_name} (${n.created_at || ''})</strong><div style="margin-top:8px; color:#445; font-size:14px;">${n.message}</div>${n.attachment ? `<div style="margin-top:10px;"><a href="/uploads/${n.attachment}" target="_blank" style="background:#e8f4fd; color:#2980b9; padding:6px 12px; border-radius:4px; text-decoration:none; font-size:12px; font-weight:bold;">📎 ፋይል ክፈት</a></div>` : ''}</div>`).join('');
+                        let myAbsRows = myAbsences.map(ab => `<div style="background:#fdfdfd; padding:12px; margin-bottom:10px; border-radius:6px; border:1px solid #eee; border-left:4px solid ${ab.teacher_feedback ? '#27ae60' : '#f39c12'};"><strong>ቀን:</strong> ${ab.date || ab.created_at || 'N/A'}<br><strong>ምክንያት:</strong> ${ab.reason}<br><strong style="color: ${ab.teacher_feedback ? '#27ae60' : '#d35400'};">መልስ:</strong> ${ab.teacher_feedback || 'በመጠበቅ ላይ'}</div>`).join('');
+                        let gradesHtml = myCourses.map(c => {
+                            let asm = myGrades.find(a => a.course_code === c.code) || {};
+                            let total = (asm.quiz || 0) + (asm.mid || 0) + (asm.final || 0);
+                            let gradeLetter = total >= 90 ? 'A+' : total >= 80 ? 'A' : total >= 75 ? 'B+' : total >= 60 ? 'B' : total >= 50 ? 'C' : 'F';
+                            return `<tr><td>${c.code}</td><td style="text-align:left;"><b>${c.title}</b></td><td>${c.credit_hours || '-'}</td><td>${asm.quiz || 0}</td><td>${asm.mid || 0}</td><td>${asm.final || 0}</td><td><b>${total}</b></td><td><b>${gradeLetter}</b></td></tr>`;
+                        }).join('');
+
+                        res.render('student', { lang: 'am', student, gradesHtml, notiRows, myAbsRows });
+                    });
+                });
+            });
+        });
+    });
+});
+
+app.post('/student/update-photo', upload.single('new_photo'), (req, res) => {
+    if (!req.session.studentId) return res.redirect('/');
+    if (req.file) {
+        db.run('UPDATE students SET photo = ? WHERE student_id = ?', [req.file.filename, req.session.studentId], () => res.redirect('/student-dashboard'));
+    } else {
+        res.redirect('/student-dashboard');
+    }
+});
+
+app.post('/student/absence', upload.single('attachment'), (req, res) => {
+    if (!req.session.studentId) return res.redirect('/');
+    db.get('SELECT name, class_level FROM students WHERE student_id=?', [req.session.studentId], (err, st) => {
+        if(st) {
+            db.run(`INSERT INTO absence_requests (student_id, student_name, class_level, reason, teacher_feedback, status, created_at, attachment) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, 
+            [req.session.studentId, st.name, st.class_level, xss(req.body.reason), '', 'Pending', new Date().toLocaleString(), req.file ? req.file.filename : null], () => res.redirect('/student-dashboard'));
+        }
+    });
+});
+
+// ================= ROSTER, REPORT CARDS & ARCHIVES =================
 app.get('/api/admin/roster-summary', (req, res) => {
     if (!req.session.isAdmin) return res.json({ submissions: [], years: [], sections: [] });
     db.all(`SELECT * FROM grade_submissions ORDER BY academic_year DESC, class_level ASC`, [], (err, submissions = []) => {
@@ -643,7 +1225,6 @@ app.get('/admin/student-report-card', (req, res) => {
         if (!student) {
             return res.send(`<div style="font-family:sans-serif;text-align:center;padding:50px;">
                 <h2 style="color:#e74c3c;">❌ ተማሪው አልተገኘም! (${studentId})</h2>
-                <p>እባክዎ ትክክለኛ የተማሪ መታወቂያ (ID) ማስገባትዎን ያረጋግጡ።</p>
                 <a href="/admin" style="background:#2980b9;color:white;padding:10px 20px;text-decoration:none;border-radius:6px;">⬅️ ወደ አድሚን ተመለስ</a>
             </div>`);
         }
@@ -688,11 +1269,7 @@ app.get('/admin/student-report-card', (req, res) => {
                             <td><b>${grade}</b></td>
                             <td>${status}</td>
                         </tr>`;
-                    }).join('');
-
-                    if (!courseRowsHtml) {
-                        courseRowsHtml = `<tr><td colspan="10">ለዚህ ክፍል የተመዘገበ ትምህርት የለም።</td></tr>`;
-                    }
+                    }).join('') || `<tr><td colspan="10">ለዚህ ክፍል የተመዘገበ ትምህርት የለም።</td></tr>`;
 
                     res.send(`<!DOCTYPE html>
 <html lang="am">
@@ -707,8 +1284,8 @@ app.get('/admin/student-report-card', (req, res) => {
         .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #1f4e79; padding-bottom: 15px; margin-bottom: 20px; }
         .header img { width: 80px; height: 80px; border-radius: 50%; border: 2px solid #f39c12; object-fit: cover; }
         .header-center { text-align: center; flex: 1; }
-        .header-center h1 { margin: 0; font-size: 23px; color: #1f4e79; letter-spacing: 0.5px; }
-        .header-center h3 { margin: 5px 0 0; font-size: 15px; color: #d35400; text-transform: uppercase; }
+        .header-center h1 { margin: 0; font-size: 23px; color: #1f4e79; }
+        .header-center h3 { margin: 5px 0 0; font-size: 15px; color: #d35400; }
         .student-bio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #cbd5e1; margin-bottom: 20px; font-size: 14px; }
         table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13.5px; }
         th, td { border: 1px solid #94a3b8; padding: 9px 8px; text-align: center; }
@@ -795,15 +1372,9 @@ app.get('/admin/student-report-card', (req, res) => {
         </div>
 
         <div class="sig-section">
-            <div>
-                <div class="sig-line">የክፍል ተቆጣጣሪ መምህር ፊርማ<br><span style="font-size:11px;font-weight:normal;">Homeroom Teacher's Signature</span></div>
-            </div>
-            <div>
-                <div class="sig-line">የትምህርት ቤቱ ማህተም<br><span style="font-size:11px;font-weight:normal;">Official School Stamp</span></div>
-            </div>
-            <div>
-                <div class="sig-line">የዲሬክተሩ ስምና ፊርማ<br><span style="font-size:11px;font-weight:normal;">School Director's Signature</span></div>
-            </div>
+            <div><div class="sig-line">የክፍል ተቆጣጣሪ መምህር ፊርማ<br><span style="font-size:11px;font-weight:normal;">Homeroom Teacher's Signature</span></div></div>
+            <div><div class="sig-line">የትምህርት ቤቱ ማህተም<br><span style="font-size:11px;font-weight:normal;">Official School Stamp</span></div></div>
+            <div><div class="sig-line">የዲሬክተሩ ስምና ፊርማ<br><span style="font-size:11px;font-weight:normal;">School Director's Signature</span></div></div>
         </div>
     </div>
 </body>
@@ -933,7 +1504,6 @@ app.get('/admin/master-roster/:year/:className', (req, res) => {
         <a href="/admin" class="btn" style="background:#7f8c8d;">⬅️ ወደ አድሚን ተመለስ</a>
     </div>
 
-    <!-- 📋 1. የሙሉ ሴክሽን ማስተር ሮስተር ሰንጠረዥ -->
     <div class="roster-box" id="masterRosterSection">
         <div style="text-align:center; border-bottom:2px solid #1f4e79; padding-bottom:12px; margin-bottom:15px;">
             <img src="/uploads/logo.jpg" onerror="this.src='/uploads/logo.png'" style="width:70px;height:70px;border-radius:50%;border:2px solid #1f4e79;object-fit:cover;">
@@ -971,7 +1541,6 @@ app.get('/admin/master-roster/:year/:className', (req, res) => {
         </div>
     </div>
 
-    <!-- 🗂️ 2. የእያንዳንዱ ተማሪ የግል ካርድ (All Students Individual Cards) -->
     <div class="individual-cards-wrapper" id="allCardsSection">
         ${allIndividualCardsHtml}
     </div>
@@ -1001,5 +1570,55 @@ app.get('/admin/master-roster/:year/:className', (req, res) => {
     });
 });
 
-app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
+app.get('/attendance-sheet/:secName', (req, res) => {
+    if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
+    let sec = decodeURIComponent(req.params.secName);
+    let selectedDate = req.query.date || new Date().toISOString().split('T')[0];
+
+    db.all(`SELECT student_id, name, gender, class_level FROM students ORDER BY name ASC`, [], (err, allStudents = []) => {
+        let studentsInClass = allStudents.filter(s => isClassMatch(s.class_level, sec));
+        db.all(`SELECT * FROM daily_attendance WHERE class_level = ? AND date = ?`, [sec, selectedDate], (err, records = []) => {
+            let attendanceMap = {}; records.forEach(r => { attendanceMap[r.student_id] = r.status; });
+            let rowsHtml = '';
+            for (let i = 0; i < 50; i++) {
+                let st = studentsInClass[i];
+                if (st) {
+                    rowsHtml += `<tr><td>${i+1}</td><td>${st.student_id}</td><td style="text-align:left;">${st.name}</td><td>${st.gender}</td><td><label><input type="radio" name="status_${st.student_id}" value="Present" ${attendanceMap[st.student_id]==='Present'?'checked':''}> Present</label> &nbsp; <label><input type="radio" name="status_${st.student_id}" value="Absent" ${attendanceMap[st.student_id]==='Absent'?'checked':''}> Absent</label></td></tr>`;
+                } else { rowsHtml += `<tr><td>${i+1}</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>-</td></tr>`; }
+            }
+            res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Attendance</title></head><body><h2>Attendance - ${sec}</h2><form action="/save-attendance" method="POST"><input type="hidden" name="class_level" value="${sec}"><input type="hidden" name="date" value="${selectedDate}"><table border="1" style="border-collapse:collapse;width:100%;text-align:center;"><tr><th>No</th><th>ID</th><th>Name</th><th>Gender</th><th>Status</th></tr>${rowsHtml}</table><br><button type="submit" style="padding:10px 20px;background:#27ae60;color:white;border:none;border-radius:5px;">Save Attendance</button></form></body></html>`);
+        });
+    });
+});
+
+app.post('/admin/archive-year', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.run(`DELETE FROM course_assessments`, [], () => res.redirect('/admin'));
+});
+
+app.post('/admin/promote-students', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    const gradeMap = {
+        "Grade 1": "Grade 2", "Grade 2": "Grade 3", "Grade 3": "Grade 4",
+        "Grade 4": "Grade 5", "Grade 5": "Grade 6", "Grade 6": "Grade 7",
+        "Grade 7": "Grade 8", "Grade 8": "Grade 9", "Grade 9": "Grade 10",
+        "Grade 10": "Grade 11", "Grade 11": "Grade 12", "Grade 12": "Graduated"
+    };
+    db.all(`SELECT student_id, class_level FROM students`, [], (err, students = []) => {
+        students.forEach(st => {
+            let match = st.class_level ? st.class_level.match(/(Grade \d+)/i) : null;
+            if (match && gradeMap[match[0]]) {
+                let newGrade = gradeMap[match[0]];
+                let newClassLevel = st.class_level.replace(match[0], newGrade);
+                if (newGrade === "Graduated") {
+                    db.run(`UPDATE students SET status = 'Graduated' WHERE student_id = ?`, [st.student_id]);
+                } else {
+                    db.run(`UPDATE students SET class_level = ? WHERE student_id = ?`, [newClassLevel, st.student_id]);
+                }
+            }
+        });
+        res.redirect('/admin');
+    });
+});
+
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
