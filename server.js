@@ -1124,6 +1124,208 @@ newStudentCols.forEach(col => {
     db.run(`ALTER TABLE students ADD COLUMN ${col}`, () => {});
     db.run(`ALTER TABLE pending_students ADD COLUMN ${col}`, () => {});
 });
+// ==========================================
+// 👩‍🏫 የመምህራን ሙሉ ምዝገባ፣ ፓስወርድ እና ዲጂታል መታወቂያ (Teacher ID System)
+// ==========================================
+const teacherExtraCols = [
+    "gender TEXT",
+    "subject TEXT",
+    "emergency_name TEXT",
+    "emergency_phone TEXT",
+    "photo TEXT",
+    "plain_pin TEXT"
+];
+teacherExtraCols.forEach(col => {
+    db.run(`ALTER TABLE teachers ADD COLUMN ${col}`, () => {});
+});
+
+app.post('/admin/register-teacher-full', upload.single('teacher_photo'), (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+
+    const { name, gender, phone, subject, assigned_sections, emergency_name, emergency_phone } = req.body;
+    const photoFile = req.file ? req.file.filename : '';
+
+    // አውቶማቲክ የመምህር መታወቂያ (ምሳሌ: ALLS-T-4821) እና ባለ 4 ዲጂት ፓስወርድ መፍጠሪያ
+    const teacherID = 'ALLS-T-' + Math.floor(1000 + Math.random() * 9000);
+    const autoPIN = Math.floor(1000 + Math.random() * 9000).toString();
+    const hashedPIN = bcrypt.hashSync(autoPIN, 10);
+
+    db.run(
+        `INSERT INTO teachers (id, name, phone, password, assigned_sections) VALUES (?, ?, ?, ?, ?)`,
+        [teacherID, name, phone, hashedPIN, assigned_sections || ''],
+        function(err) {
+            if (err) {
+                console.error(err);
+                return res.redirect('/admin');
+            }
+            db.run(
+                `UPDATE teachers SET gender = ?, subject = ?, emergency_name = ?, emergency_phone = ?, photo = ?, plain_pin = ? WHERE id = ?`,
+                [gender || '', subject || '', emergency_name || '', emergency_phone || '', photoFile, autoPIN, teacherID],
+                () => {
+                    res.redirect(`/admin/teacher-id/${teacherID}?pin=${autoPIN}`);
+                }
+            );
+        }
+    );
+});
+
+// 🪪 የመምህሩን መታወቂያ ካርድ (ID Card) እና ፓስወርድ ማሳያ ገጽ
+app.get('/admin/teacher-id/:id', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+
+    const teacherID = req.params.id;
+    db.get(`SELECT * FROM teachers WHERE id = ?`, [teacherID], (err, t) => {
+        if (err || !t) return res.redirect('/admin');
+
+        const displayPin = req.query.pin || t.plain_pin || '****';
+        const avatarUrl = t.photo ? `/uploads/${t.photo}` : `/uploads/logo.jpg`;
+
+        res.send(`
+<!DOCTYPE html>
+<html lang="am">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher ID Card - ${t.name}</title>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #eef2f5; margin: 0; padding: 25px; display: flex; flex-direction: column; align-items: center; }
+        body.lang-am .en { display: none !important; }
+        body.lang-en .am { display: none !important; }
+
+        .top-bar { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
+        .btn { padding: 10px 18px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; text-decoration: none; color: white; font-size: 14px; }
+        .btn-back { background: #7f8c8d; }
+        .btn-print { background: #2980b9; }
+
+        /* 🔑 የፓስወርድ ማሳያ ሳጥን */
+        .cred-box { background: #fffcf5; border: 2px dashed #f39c12; border-radius: 10px; padding: 15px 25px; margin-bottom: 25px; max-width: 420px; width: 100%; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); box-sizing: border-box; }
+        
+        /* 🪪 ዘመናዊ የመምህር መታወቂያ ካርድ ዲዛይን */
+        .id-card { width: 360px; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 15px 35px rgba(0,0,0,0.2); border: 1px solid #d0d7de; position: relative; }
+        .id-header { background: linear-gradient(135deg, #1f4e79 0%, #0d2b45 100%); color: white; padding: 20px 15px 45px 15px; text-align: center; border-bottom: 5px solid #f39c12; }
+        .id-header img.school-logo { width: 52px; height: 52px; border-radius: 50%; border: 2px solid #f39c12; background: white; object-fit: cover; }
+        .id-header h3 { margin: 8px 0 3px 0; font-size: 17px; letter-spacing: 0.5px; }
+        .id-badge { display: inline-block; background: #f39c12; color: #fff; font-size: 11px; font-weight: bold; padding: 3px 12px; border-radius: 20px; text-transform: uppercase; margin-top: 4px; }
+
+        .photo-wrap { width: 105px; height: 105px; margin: -52px auto 10px auto; border-radius: 50%; border: 4px solid white; box-shadow: 0 5px 15px rgba(0,0,0,0.2); overflow: hidden; background: #fff; }
+        .photo-wrap img { width: 100%; height: 100%; object-fit: cover; }
+
+        .id-body { padding: 5px 22px 20px 22px; text-align: center; }
+        .teacher-name { font-size: 20px; font-weight: 800; color: #1f4e79; margin: 5px 0; }
+        .teacher-subject { font-size: 14px; font-weight: bold; color: #8e44ad; margin-bottom: 12px; }
+
+        .info-table { width: 100%; text-align: left; font-size: 13.5px; border-collapse: collapse; margin-bottom: 12px; }
+        .info-table td { padding: 6px 4px; border-bottom: 1px solid #f0f2f5; }
+        .info-table td.lbl { font-weight: bold; color: #555; width: 42%; }
+        .info-table td.val { font-weight: 600; color: #2c3e50; }
+
+        .barcode-box { background: #f8fafc; padding: 8px; border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 5px; }
+        .id-footer { background: #1f4e79; color: white; font-size: 11.5px; padding: 8px; text-align: center; }
+
+        @media print {
+            body { background: white; padding: 0; }
+            .no-print { display: none !important; }
+            .id-card { box-shadow: none; border: 2px solid #1f4e79; margin: 0 auto; }
+        }
+    </style>
+</head>
+<body class="lang-am">
+
+    <!-- 🔘 ከላይ ያሉ መቆጣጠሪያዎች (ፕሪንት ሲደረግ አይወጡም) -->
+    <div class="top-bar no-print">
+        <a href="/admin" class="btn btn-back">⬅️ <span class="am">ወደ አድሚን ተመለስ</span><span class="en">Back to Admin</span></a>
+        <button onclick="window.print()" class="btn btn-print">🖨️ <span class="am">መታወቂያውን ፕሪንት አድርግ</span><span class="en">Print ID Card</span></button>
+        <button onclick="setLang('am')" class="btn" style="background:#27ae60;">🇪🇹 አማርኛ</button>
+        <button onclick="setLang('en')" class="btn" style="background:#34495e;">🇬🇧 English</button>
+    </div>
+
+    <!-- 🔑 የመምህሩ መግቢያ ሚስጥር ቁጥር (Login Credentials) -->
+    <div class="cred-box no-print">
+        <h3 style="margin:0 0 8px 0; color:#d35400;">
+            ✅ <span class="am">መምህሩ በተሳካ ሁኔታ ተመዝግቧል!</span><span class="en">Teacher Registered Successfully!</span>
+        </h3>
+        <p style="font-size:13.5px; color:#555; margin:0 0 10px 0;">
+            <span class="am">መምህሩ ወደ ፖርታሉ የሚገቡበት መታወቂያ እና ፓስወርድ፦</span>
+            <span class="en">Teacher Login ID & Password:</span>
+        </p>
+        <div style="font-size:16px; background:white; padding:10px; border-radius:6px; border:1px solid #fad7a0;">
+            <b>🆔 ID:</b> <span style="color:#2980b9; font-weight:bold;">${t.id}</span> &nbsp;|&nbsp;
+            <b>🔑 PIN:</b> <span style="color:#e74c3c; font-weight:bold; font-size:18px;">${displayPin}</span>
+        </div>
+    </div>
+
+    <!-- 🪪 የመምህሩ መታወቂያ ካርድ (Teacher ID Card) -->
+    <div class="id-card">
+        <div class="id-header">
+            <img src="/uploads/logo.jpg" class="school-logo" alt="Logo">
+            <h3>AMANUEL LIGHT & LIFE SCHOOL</h3>
+            <span class="id-badge">
+                <span class="am">የመምህር መታወቂያ ካርድ</span><span class="en">OFFICIAL TEACHER ID CARD</span>
+            </span>
+        </div>
+
+        <div class="photo-wrap">
+            <img src="${avatarUrl}" alt="Teacher Photo">
+        </div>
+
+        <div class="id-body">
+            <div class="teacher-name">${t.name}</div>
+            <div class="teacher-subject">📘 ${t.subject || 'Teacher'}</div>
+
+            <table class="info-table">
+                <tr>
+                    <td class="lbl"><span class="am">መታወቂያ (ID):</span><span class="en">Teacher ID:</span></td>
+                    <td class="val" style="color:#2980b9; font-weight:bold;">${t.id}</td>
+                </tr>
+                <tr>
+                    <td class="lbl"><span class="am">ፆታ (Gender):</span><span class="en">Gender:</span></td>
+                    <td class="val">${t.gender || '-'}</td>
+                </tr>
+                <tr>
+                    <td class="lbl"><span class="am">ክፍል (Sections):</span><span class="en">Sections:</span></td>
+                    <td class="val">${t.assigned_sections || '-'}</td>
+                </tr>
+                <tr>
+                    <td class="lbl"><span class="am">ስልክ (Phone):</span><span class="en">Phone:</span></td>
+                    <td class="val">${t.phone || '-'}</td>
+                </tr>
+                <tr>
+                    <td class="lbl"><span class="am">የአደጋ ጊዜ ተጠሪ:</span><span class="en">Emergency:</span></td>
+                    <td class="val">${t.emergency_name || '-'} (${t.emergency_phone || '-'})</td>
+                </tr>
+            </table>
+
+            <div class="barcode-box">
+                <svg id="barcode"></svg>
+            </div>
+        </div>
+
+        <div class="id-footer">
+            <span class="am">ይህ መታወቂያ የትምህርት ቤቱ ንብረት ነው</span>
+            <span class="en">Property of Amanuel Light and Life School</span>
+        </div>
+    </div>
+
+    <script>
+        JsBarcode("#barcode", "${t.id}", {
+            format: "CODE128",
+            width: 1.8,
+            height: 40,
+            displayValue: true,
+            fontSize: 13,
+            margin: 0
+        });
+
+        function setLang(lang) {
+            document.body.className = 'lang-' + lang;
+        }
+    </script>
+</body>
+</html>
+        `);
+    });
+});
 
 app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
