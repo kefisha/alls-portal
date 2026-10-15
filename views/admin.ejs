@@ -395,33 +395,7 @@
                         }
                     });
                 });
-            </script>
-
-
-                // በሰንጠረዡ ውስጥ ያሉትን መምህራን ወደ ምርጫው (Dropdown) በራሱ እንዲያስገባ
-                document.addEventListener("DOMContentLoaded", function() {
-                    const table = document.getElementById("teachersListTable");
-                    const oldSel = document.getElementById("oldTeacherSelect");
-                    const newSel = document.getElementById("newTeacherSelect");
-                    if (table && oldSel && newSel) {
-                        const rows = table.querySelectorAll("tr");
-                        rows.forEach((row, index) => {
-                            if (index === 0) return; // የመጀመሪያውን የርዕስ መስመር ይዘለዋል
-                            const cells = row.querySelectorAll("td");
-                            if (cells.length >= 2) {
-                                const tId = cells[0].innerText.trim();
-                                const tName = cells[1].innerText.trim();
-                                if (tId) {
-                                    oldSel.innerHTML += `<option value="${tId}">${tName} (${tId})</option>`;
-                                    newSel.innerHTML += `<option value="${tId}">${tName} (${tId})</option>`;
-                                }
-                            }
-                        });
-                    }
-                });
-            </script>
-
-
+            
 
         <div class="grid-2">
             <!-- Sections -->
