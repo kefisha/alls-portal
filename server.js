@@ -16,6 +16,17 @@ process.on('uncaughtException', (err) => { console.error('CRITICAL ERROR:', err)
 process.on('unhandledRejection', (reason, p) => { console.error('UNHANDLED REJECTION:', reason); });
 
 const app = express();
+// ==========================================
+// 🛡️ 3. ፀረ-ሃክ እና የሰርቨር ደህንነት (Security Headers)
+// ==========================================
+app.disable('x-powered-by'); // ሰርቨሩ በምን እንደተሰራ እንዳይታወቅ ይደብቃል
+app.use((req, res, next) => {
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN'); // ዌብሳይቱን በሌላ ቦታ አስገብተው እንዳይሰርቁ (Clickjacking) ይከላከላል
+    res.setHeader('X-Content-Type-Options', 'nosniff'); // የቫይረስ ፋይሎች እንዳይከፈቱ ይከላከላል
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    next();
+});
+
 app.set('trust proxy', 1); 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -168,13 +179,75 @@ app.use(session({
     saveUninitialized: false, 
     cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 }
 }));
+// ==========================================
+// 🛡️ 3. ፀረ-ሃክ እና የሰርቨር ደህንነት (Security Headers)
+// ==========================================
+app.disable('x-powered-by'); 
+app.use((req, res, next) => {
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN'); 
+    res.setHeader('X-Content-Type-Options', 'nosniff'); 
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    next();
+});
+
+const safeFileFilter = (req, file, cb) => {
+    const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.pdf', '.doc', '.docx'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    
+    if (allowedExts.includes(ext) && allowedMimes.includes(file.mimetype)) {
+        cb(null, true);
+    } else {
+        cb(new Error('❌ ለደህንነት ሲባል ይህ የፋይል አይነት አይፈቀድም! (ፎቶ ወይም PDF ብቻ ይጫኑ)'), false);
+    }
+};
+
+const upload = multer({ 
+    storage: storage, 
+    limits: { fileSize: 5 * 1024 * 1024 }, 
+    fileFilter: safeFileFilter 
+});
 
 const ADMIN_USER = process.env.ADMIN_USER;
 const ADMIN_PASS = process.env.ADMIN_PASS;
 
 function generateStudentID() { return `ALLS-${Math.floor(1000 + Math.random() * 9000)}`; }
 function generateTeacherID() { return `T-${Math.floor(100 + Math.random() * 900)}`; }
-function generate4DigitPIN() { return Math.floor(1000 + Math.random() * 9000).toString(); }
+// ==========================================
+// 🔐 1. የይለፍ ቃል ጥንካሬ መቆጣጠሪያ (Strict Password Policy)
+// ==========================================
+function isWeakPIN(pin) {
+    if (!pin) return true;
+    const p = String(pin).trim();
+    if (p.length < 4) return true;
+
+    // 1. የተለመዱ ደካማ ፓስወርዶች
+    const blacklist = [
+        '1234', '4321', '0000', '1111', '2222', '3333', '4444', 
+        '5555', '6666', '7777', '8888', '9999', '12345', '54321', 
+        '123456', '654321', '1010', '2020', '1122', 'password', 'admin'
+    ];
+    if (blacklist.includes(p.toLowerCase())) return true;
+
+    // 2. ተከታታይ ቁጥሮችን መከልከል (ለምሳሌ: 1234, 2345, 9876, 4321)
+    const asc = '01234567890123456789';
+    const desc = '98765432109876543210';
+    if (asc.includes(p) || desc.includes(p)) return true;
+
+    // 3. አንድ አይነት ቁጥር ብቻ የተደጋገመ ከሆነ (ለምሳሌ: 7777)
+    if (/^(\d)\1+$/.test(p)) return true;
+
+    return false;
+}
+
+// ሲስተሙ በራሱ PIN ሲፈጥር ደካማ እንዳይሆን ማረጋገጫ
+function generate4DigitPIN() {
+    let pin = '';
+    do {
+        pin = Math.floor(1000 + Math.random() * 9000).toString();
+    } while (isWeakPIN(pin));
+    return pin;
+}
 
 function csvCell(val) {
     if (val === null || val === undefined) return '""';
@@ -233,37 +306,74 @@ app.get('/', (req, res) => {
 });
 
 app.post('/login', (req, res) => {
+// ==========================================
+// 🛑 2. የሎጊን ሙከራ ቆጣሪ (4, 3, 2, 1 Countdown Protection)
+// ==========================================
+const loginAttempts = new Map();
+
+app.post('/login', (req, res) => {
     const lang = req.query.lang || 'am';
     const { role, username, password } = req.body;
-    const uKey = (username || '').trim();
+    const uKey = (username || '').trim().toUpperCase();
+    const clientKey = `${req.ip}_${uKey}`;
+
+    const now = Date.now();
+    const lockDuration = 15 * 60 * 1000; // 15 ደቂቃ
+
+    let record = loginAttempts.get(clientKey) || { count: 0, lockUntil: 0 };
+
+    // ቀድሞ ታግዶ ከነበረና ጊዜው ካላለቀ
+    if (record.lockUntil > now) {
+        const minsLeft = Math.ceil((record.lockUntil - now) / 60000);
+        return res.redirect(`/?lang=${lang}&error=locked&mins=${minsLeft}`);
+    }
+
+    const handleFailedLogin = () => {
+        record.count += 1;
+        const remaining = 5 - record.count; // 4, 3, 2, 1 ይቀራል
+        if (remaining <= 0) {
+            record.lockUntil = now + lockDuration;
+            record.count = 0;
+            loginAttempts.set(clientKey, record);
+            return res.redirect(`/?lang=${lang}&error=locked&mins=15`);
+        } else {
+            loginAttempts.set(clientKey, record);
+            return res.redirect(`/?lang=${lang}&error=invalid&left=${remaining}`);
+        }
+    };
+
+    const clearAttempts = () => loginAttempts.delete(clientKey);
 
     if (role === 'admin') {
-        if (uKey === ADMIN_USER && password === ADMIN_PASS) {
+        if ((username || '').trim() === ADMIN_USER && password === ADMIN_PASS) {
+            clearAttempts();
             req.session.isAdmin = true;
             return res.redirect(`/admin?lang=${lang}`);
-        } else {
-            return res.redirect(`/?lang=${lang}&error=invalid`);
         }
+        return handleFailedLogin();
     } else if (role === 'teacher') {
-        db.get(`SELECT * FROM teachers WHERE id = ?`, [uKey.toUpperCase()], (err, t) => {
+        db.get(`SELECT * FROM teachers WHERE UPPER(id) = ?`, [uKey], (err, t) => {
             if (t && (bcrypt.compareSync(password, t.password) || password === t.password)) {
+                clearAttempts();
                 req.session.teacherId = t.id;
                 return res.redirect(`/teacher-dashboard?lang=${lang}`);
             }
-            return res.redirect(`/?lang=${lang}&error=invalid`);
+            return handleFailedLogin();
         });
     } else if (role === 'student') {
-        db.get(`SELECT * FROM students WHERE student_id = ?`, [uKey.toUpperCase()], (err, s) => {
+        db.get(`SELECT * FROM students WHERE UPPER(student_id) = ?`, [uKey], (err, s) => {
             if (s && (bcrypt.compareSync(password, s.password) || password === s.password)) {
+                clearAttempts();
                 req.session.studentId = s.student_id;
                 return res.redirect(`/student-dashboard?lang=${lang}`);
             }
-            return res.redirect(`/?lang=${lang}&error=invalid`);
+            return handleFailedLogin();
         });
     } else {
-        return res.redirect(`/?lang=${lang}&error=invalid`);
+        return handleFailedLogin();
     }
 });
+
 
 app.get('/logout', (req, res) => { req.session.destroy(() => res.redirect('/')); });
 
