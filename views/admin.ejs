@@ -48,7 +48,7 @@
 <body class="lang-am">
     <div class="container">
         
-        <!-- 🌐 1. Top Navigation (Language Toggle & Logout - Image A Fixed) -->
+        <!-- 🌐 1. Top Navigation (Language Toggle & Logout) -->
         <div style="display: flex; justify-content: flex-end; gap: 15px; align-items: center; margin-bottom: 20px;">
             <div style="background: white; padding: 6px 12px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); display: flex; gap: 8px;">
                 <button type="button" onclick="setLang('am')" id="btn-am" style="background:#27ae60; color:white; padding:8px 18px; border-radius:6px; border:none; cursor:pointer; font-weight:bold; font-size:14px;">🇪🇹 አማርኛ</button>
@@ -117,28 +117,19 @@
                 </div>
             </div>
 
-            <!-- 3. All Student Roster (Image B Fixed - Clickable Accordion) -->
+            <!-- 3. All Student Roster by Year & Class (Fixed Working Links) -->
             <div style="background: #fffcf5; padding: 18px; border-radius: 10px; border: 2px solid #f39c12;">
                 <h4 style="margin-top:0; color:#d35400;">
                     📂 <span class="am">3. የዓመቱ ጠቅላላ ተማሪዎች ሮስተር (All Student Roster by Year & Class)</span>
                     <span class="en">3. Academic Year Master Student Roster (Click Year to Open Classes)</span>
                 </h4>
                 <div id="yearlyRosterContainer">
-                    <div style="margin-bottom:12px;">
-                        <button type="button" onclick="const el = document.getElementById('roster_yr_0'); el.style.display = el.style.display === 'none' ? 'flex' : 'none';"
-                                style="width:100%; text-align:left; background:#e67e22; color:white; padding:14px 20px; border:none; border-radius:8px; font-size:16px; font-weight:bold; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
-                            <span>📁 2019 E.C - All Student Roster (የሁሉም ክፍሎች ጠቅላላ ሮስተር)</span>
-                            <span>🔽 ክፈት (Open Classes)</span>
-                        </button>
-                        <div id="roster_yr_0" style="display:flex; flex-wrap:wrap; gap:10px; padding:15px; background:white; border:1px solid #f39c12; border-radius:0 0 8px 8px; margin-top:4px;">
-                            <%- sectionOptions.replace(/value="/g, 'href="/admin/master-roster/2019 E.C/').replace(/>/g, '" target="_blank" style="background:#1f4e79; color:white; padding:10px 18px; border-radius:6px; text-decoration:none; font-weight:bold; font-size:14px; display:inline-block;">') %>
-                        </div>
-                    </div>
+                    <span style="color:#7f8c8d; font-size:13.5px;">በመጫን ላይ...</span>
                 </div>
             </div>
         </div>
 
-        <!-- 📢 Notification Form (Image B Fixed - Quill Editor Active) -->
+        <!-- 📢 Notification Form -->
         <div class="card">
             <h3>📢 <span class="am">አዲስ ማስታወቂያ መላኪያ</span><span class="en">Send New Notification</span></h3>
             <form id="notifForm" action="/admin/save-notice" method="POST" enctype="multipart/form-data">
@@ -201,7 +192,7 @@
             </div>
         </div>
 
-        <!-- 📊 Director Report (Image C Fixed - Buttons Active) -->
+        <!-- 📊 Director Report -->
         <div class="card" id="directorReportCard" style="border-color: #16a085; background: linear-gradient(to right, #ffffff, #f4fbf9);">
             <h3 style="color: #16a085; border-bottom-color: #d1f2eb;">
                 📊 <span class="am">የዲሬክተር ሳምንታዊ እና ወርሃዊ ሪፖርት (ሊስተካከል የሚችል)</span><span class="en">Director's Weekly & Monthly Report (Editable)</span>
@@ -452,11 +443,14 @@
             const regInput = document.getElementById("regAssignedSectionsInput");
             const handInput = document.getElementById("handoverSectionsInput");
 
+            const fallbackSections = [];
+
             if (rawSelect) {
                 Array.from(rawSelect.options).forEach(opt => {
                     const val = opt.value.trim();
                     const text = opt.textContent.trim();
                     if (!val) return;
+                    fallbackSections.push({ name: val });
 
                     if (regGrid) {
                         regGrid.innerHTML += `<label class="sec-chk-label"><input type="checkbox" class="reg-sec-chk" value="${val}"> <span>${text}</span></label>`;
@@ -510,6 +504,42 @@
                 });
             }
 
+            // 🏆 6. Populate Submitted Grades & All Student Roster by Year & Class (With Working Links!)
+            function renderYearlyRoster(yearsList, sectionsList) {
+                const yearBox = document.getElementById('yearlyRosterContainer');
+                if (!yearBox) return;
+                const years = (yearsList && yearsList.length > 0) ? yearsList : ['2019 E.C'];
+                const secs = (sectionsList && sectionsList.length > 0) ? sectionsList : fallbackSections;
+
+                yearBox.innerHTML = years.map((yr, idx) => {
+                    const secButtons = secs.map(sec => {
+                        const secName = sec.name || sec;
+                        return `
+                            <a href="/admin/master-roster/${encodeURIComponent(yr)}/${encodeURIComponent(secName)}" target="_blank"
+                               style="background:#1f4e79; color:white; padding:10px 18px; border-radius:6px; text-decoration:none; font-weight:bold; font-size:14px; display:inline-block; box-shadow:0 2px 5px rgba(0,0,0,0.15);">
+                                🏫 ${secName} (Master Roster & PDF)
+                            </a>
+                        `;
+                    }).join('') || `<span style="color:#7f8c8d;">ምንም የተመዘገበ ሴክሽን የለም።</span>`;
+
+                    return `
+                        <div style="margin-bottom:12px;">
+                            <button type="button" onclick="const el = document.getElementById('roster_yr_${idx}'); el.style.display = el.style.display === 'none' ? 'flex' : 'none';"
+                                    style="width:100%; text-align:left; background:#e67e22; color:white; padding:14px 20px; border:none; border-radius:8px; font-size:16px; font-weight:bold; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+                                <span>📁 ${yr} - All Student Roster (የሁሉም ክፍሎች ጠቅላላ ሮስተር)</span>
+                                <span>🔽 ክፈት (Open Classes)</span>
+                            </button>
+                            <div id="roster_yr_${idx}" style="display:flex; flex-wrap:wrap; gap:10px; padding:15px; background:white; border:1px solid #f39c12; border-radius:0 0 8px 8px; margin-top:4px;">
+                                ${secButtons}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // Render immediately with fallback sections so it never fails, then update from API
+            renderYearlyRoster(['2019 E.C'], fallbackSections);
+
             fetch('/api/admin/roster-summary')
                 .then(r => r.json())
                 .then(data => {
@@ -525,7 +555,10 @@
                     } else {
                         subBox.innerHTML = `<span style="color:#7f8c8d; font-size:13.5px;">እስካሁን መምህራን Submit ያደረጉት ክፍል የለም።</span>`;
                     }
-                });
+
+                    renderYearlyRoster(data.years, data.sections);
+                })
+                .catch(err => console.error('Roster summary load error:', err));
         });
     </script>
 </body>
