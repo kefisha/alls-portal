@@ -310,6 +310,38 @@
                 }
             }
         }
-    </script>
+    <script>
+    // 🔒 1. ኮድ ኮፒ ማድረግ (Right-Click, F12, Ctrl+U, Ctrl+Shift+I) ሙሉ በሙሉ ማገድ
+    document.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+    });
+
+    document.addEventListener('keydown', function(e) {
+        if (
+            e.keyCode === 123 || // F12
+            (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.keyCode === 74 || e.keyCode === 67)) || // Ctrl+Shift+I/J/C
+            (e.ctrlKey && (e.keyCode === 85 || e.keyCode === 83)) // Ctrl+U (View Source) ወይም Ctrl+S (Save Page)
+        ) {
+            e.preventDefault();
+            alert('🛑 ጥብቅ ማስጠንቀቂያ፦ የትምህርት ቤቱን ሲስተም ኮድ መቅዳት ወይም መመርመር በህግ የተከለከለ ነው!');
+            return false;
+        }
+    });
+
+    // ⚠️ 2. የይለፍ ቃል ሙከራ ገደብ (4, 3, 2, 1) ማስጠንቀቂያ ማሳያ
+    (function() {
+        const params = new URLSearchParams(window.location.search);
+        const err = params.get('error');
+        const left = params.get('left');
+        const mins = params.get('mins');
+
+        if (err === 'invalid' && left) {
+            alert(`❌ የተሳሳተ መታወቂያ ወይም የይለፍ ቃል!\n\n⚠️ ጥንቃቄ፦ ${left} ሙከራ ብቻ ይቀርዎታል! ከዚያ በኋላ አካውንትዎ ለ15 ደቂቃ ይቆለፋል።`);
+        } else if (err === 'locked') {
+            alert(`🔒 አካውንትዎ ተቆልፏል!\n\nበተደጋጋሚ የተሳሳተ የይለፍ ቃል ስላስገቡ ለደህንነት ሲባል ለ ${mins || 15} ደቂቃ ታግደዋል። እባክዎ ቆይተው ይሞክሩ ወይም "Forgot Password" ይጠቀሙ።`);
+        }
+    })();
+</script>
+
 </body>
 </html>
