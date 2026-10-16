@@ -27,7 +27,7 @@
         
         .editing-active [contenteditable="true"] {
             outline: 2px dashed #f39c12;
-            background-color: #fffef8;
+            background-color: #fffef8 !important;
             border-radius: 4px;
         }
         @media print {
@@ -64,34 +64,34 @@
     <div class="report-page" id="reportContainer">
         <div class="header">
             <img src="/uploads/logo.jpg" onerror="this.src='/uploads/logo.png'" alt="School Logo" crossorigin="anonymous">
-            <h1 editable-item>AMANUEL LIGHT AND LIFE SCHOOL</h1>
-            <div class="badge" editable-item>
+            <h1 contenteditable="false">AMANUEL LIGHT AND LIFE SCHOOL</h1>
+            <div class="badge" contenteditable="false">
                 <%= reportType === 'monthly' ? '🗓️ የዲሬክተር ወርሃዊ ሪፖርት (Monthly Director Report)' : '📆 የዲሬክተር ሳምንታዊ ሪፖርት (Weekly Director Report)' %>
             </div>
-            <p style="margin:8px 0 0 0; font-size:13.5px; color:#555;" editable-item>ቀን / Date: <b><%= todayStr %></b></p>
+            <p style="margin:8px 0 0 0; font-size:13.5px; color:#555;" contenteditable="false">ቀን / Date: <b><%= todayStr %></b></p>
         </div>
 
         <div class="stats-grid">
-            <div class="stat-card" editable-item>
+            <div class="stat-card" contenteditable="false">
                 <div class="num"><%= totalStudents %></div>
                 <div class="lbl">ጠቅላላ ተማሪዎች (ወ: <%= maleCount %> | ሴ: <%= femaleCount %>)</div>
             </div>
-            <div class="stat-card" style="border-left-color:#e67e22;" editable-item>
+            <div class="stat-card" style="border-left-color:#e67e22;" contenteditable="false">
                 <div class="num"><%= pendingCount %></div>
                 <div class="lbl">አዲስ አመልካቾች (Pending)</div>
             </div>
-            <div class="stat-card" style="border-left-color:#8e44ad;" editable-item>
+            <div class="stat-card" style="border-left-color:#8e44ad;" contenteditable="false">
                 <div class="num"><%= teacherCount %></div>
                 <div class="lbl">ጠቅላላ መምህራን (Teachers)</div>
             </div>
-            <div class="stat-card" style="border-left-color:#27ae60;" editable-item>
+            <div class="stat-card" style="border-left-color:#27ae60;" contenteditable="false">
                 <div class="num"><%= sectionCount %></div>
                 <div class="lbl">ጠቅላላ ሴክሽኖች (Sections)</div>
             </div>
         </div>
 
-        <h3 editable-item>1. የተማሪዎች ብዛት በየክፍሉ እና በፆታ (Student Enrollment by Class & Gender)</h3>
-        <table id="classReportTable" editable-item>
+        <h3 contenteditable="false">1. የተማሪዎች ብዛት በየክፍሉ እና በፆታ (Student Enrollment by Class & Gender)</h3>
+        <table id="classReportTable">
             <tr>
                 <th>ክፍል እና ሴክሽን (Class / Section)</th>
                 <th>ወንድ (Male)</th>
@@ -101,8 +101,8 @@
             <%- classRowsHtml %>
         </table>
 
-        <h3 editable-item>2. የመምህራን እና የክፍል ምደባ ዝርዝር (Teachers & Assigned Sections)</h3>
-        <table id="teacherReportTable" editable-item>
+        <h3 contenteditable="false">2. የመምህራን እና የክፍል ምደባ ዝርዝር (Teachers & Assigned Sections)</h3>
+        <table id="teacherReportTable">
             <tr>
                 <th>መታወቂያ (ID)</th>
                 <th>የመምህሩ ስም (Name)</th>
@@ -113,12 +113,12 @@
             <%- teacherRowsHtml %>
         </table>
 
-        <div class="note-box" editable-item>
+        <div class="note-box" contenteditable="false">
             <b>✍️ የዲሬክተሩ ማጠቃለያ ማስታወሻ (Director's Summary Note):</b>
             <p style="margin:8px 0 0 0; line-height:1.6;"><%= directorNote || 'በዚህ ሳምንት/ወር የመማር ማስተማር ሂደቱ በሰላም እና በተሳካ ሁኔታ ተከናውኗል።' %></p>
         </div>
 
-        <div class="sig-row" editable-item>
+        <div class="sig-row" contenteditable="false">
             <div>የዲሬክተሩ ስምና ፊርማ፦ ________________________</div>
             <div>የትምህርት ቤቱ ማህተም፦ ________________________</div>
         </div>
@@ -135,7 +135,10 @@
             const addTchBtn = document.getElementById('addTeacherRowBtn');
 
             container.classList.toggle('editing-active', isEditing);
-            document.querySelectorAll('[editable-item]').forEach(el => {
+            
+            // Toggle contenteditable on headings, text, cards, tables, and notes
+            const editableElements = container.querySelectorAll('h1, h3, p, .stat-card, .note-box, .sig-row, th, td');
+            editableElements.forEach(el => {
                 el.setAttribute('contenteditable', isEditing ? 'true' : 'false');
             });
 
@@ -157,13 +160,13 @@
         function addClassRow() {
             const tbl = document.getElementById('classReportTable');
             const row = tbl.insertRow(-1);
-            row.innerHTML = '<td><b>Grade - Section</b></td><td>0</td><td>0</td><td><b>0</b></td>';
+            row.innerHTML = '<td contenteditable="true">Grade - Section</td><td contenteditable="true">0</td><td contenteditable="true">0</td><td contenteditable="true">0</td>';
         }
 
         function addTeacherRow() {
             const tbl = document.getElementById('teacherReportTable');
             const row = tbl.insertRow(-1);
-            row.innerHTML = '<td><b>ALLS-T-0000</b></td><td>ስም</td><td>ትምህርት</td><td>ክፍል</td><td>09...</td>';
+            row.innerHTML = '<td contenteditable="true">ALLS-T-0000</td><td contenteditable="true">ስም</td><td contenteditable="true">ትምህርት</td><td contenteditable="true">ክፍል</td><td contenteditable="true">09...</td>';
         }
 
         function downloadDirectorPDF() {
@@ -177,21 +180,6 @@
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
             }).from(element).save();
         }
-  <script>
-    // 1. Right-Click ማሰናከል
-    document.addEventListener('contextmenu', e => e.preventDefault());
-
-    // 2. F12, Ctrl+Shift+I, Ctrl+U (Inspect & View Source) ማሰናከል
-    document.addEventListener('keydown', e => {
-        if (
-            e.key === 'F12' ||
-            (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) ||
-            (e.ctrlKey && (e.key === 'U' || e.key === 'u' || e.key === 'S' || e.key === 's'))
-        ) {
-            e.preventDefault();
-            return false;
-        }
-    });
-</script>
+    </script>
 </body>
 </html>
