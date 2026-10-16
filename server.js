@@ -17,16 +17,6 @@ process.on('unhandledRejection', (reason, p) => { console.error('UNHANDLED REJEC
 
 const app = express();
 app.set('trust proxy', 1); 
-// 🛡️ 1. HTTP Security Headers (Anti-Hacking & Anti-Iframe Copy)
-app.use((req, res, next) => {
-    res.setHeader('X-Frame-Options', 'SAMEORIGIN'); // ዌብሳይቱን በሌላ ሳይት ውስጥ አስገብቶ መስረቅን ይከለክላል
-    res.setHeader('X-Content-Type-Options', 'nosniff'); // የቫይረስ ፋይሎች እንደ ስክሪፕት እንዳይነበቡ ያግዳል
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('X-XSS-Protection', '1; mode=block');
-    res.removeHeader('X-Powered-By'); // ሰርቨሩ በ Node.js/Express መሰራቱን ከሃከሮች ይደብቃል
-    next();
-});
-
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 const PORT = process.env.PORT || 3000;
@@ -242,11 +232,9 @@ app.get('/', (req, res) => {
     res.render('login', { lang, error });
 });
 
-app.post('/login', loginLimiter, (req, res) => {
+app.post('/login', (req, res) => {
     const lang = req.query.lang || 'am';
     const { role, username, password } = req.body;
-    ...
-
     const uKey = (username || '').trim();
 
     if (role === 'admin') {
@@ -305,7 +293,7 @@ app.post('/api/forgot-password', (req, res) => {
             let newPin = generate4DigitPIN();
             let hashedPIN = bcrypt.hashSync(newPin, 10); 
             return db.run(`UPDATE students SET password = ? WHERE student_id = ?`, [hashedPIN, s.student_id], () => {
-                res.send(`<!DOCTYPE html><html><head><script src="https://cdn.tailwindcss.com"></script><script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script></head><body class="bg-gray-100 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center"><h2 class="text-2xl font-bold text-gray-800 mb-2">ፓስወርድ ተቀይሯል!</h2><p class="text-gray-600 mb-4">አዲሱ የይለፍ ቁጥርዎ ይህ ነው:</p><div class="text-5xl font-extrabold text-red-600 mb-6 bg-red-50 py-4 rounded-xl border border-red-200 tracking-widest shadow-inner">${newPin}</div><a href="/?lang=${lang}" class="block w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md">ወደ መግቢያ ተመለስ</a></div></body></html>`);
+                res.send(`<!DOCTYPE html><html><head><script src="https://cdn.tailwindcss.com"></script><script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script></head><body class="bg-gray-100 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center"><div class="inline-block p-3 bg-green-100 rounded-full mb-4"><svg class="w-12 h-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></div><h2 class="text-2xl font-bold text-gray-800 mb-2">ፓስወርድ ተቀይሯል!</h2><p class="text-gray-600 mb-4">አዲሱ የይለፍ ቁጥርዎ ይህ ነው:</p><div class="text-5xl font-extrabold text-red-600 mb-6 bg-red-50 py-4 rounded-xl border border-red-200 tracking-widest shadow-inner">${newPin}</div><a href="/?lang=${lang}" class="block w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md">ወደ መግቢያ ተመለስ</a></div></body></html>`);
             });
         }
         res.redirect(`/forgot-password?lang=${lang}&error=notfound`);
@@ -339,7 +327,7 @@ app.post('/api/recover-password', (req, res) => {
     });
 });
 
-// ================= STUDENT REGISTRATION & FULL-COLOR DIGITAL ID =================
+// ================= STUDENT REGISTRATION & DIGITAL ID =================
 app.get('/student-register', (req, res) => {
     const lang = req.query.lang === 'en' ? 'en' : 'am';
     let gradeOptions = '';
@@ -393,7 +381,6 @@ app.post('/register-student', upload.single('bank_slip'), (req, res) => {
     });
 });
 
-// 🪪 የተማሪ ዲጂታል መታወቂያ (በሙሉ ኦሪጅናል ከለር Download እና Print የሚሆን)
 app.get('/student/digital-id', (req, res) => {
     if (!req.session.studentId) return res.redirect('/');
     db.get('SELECT * FROM students WHERE student_id = ?', [req.session.studentId], (err, student) => {
@@ -840,7 +827,6 @@ app.post('/admin/register-teacher-full', upload.single('teacher_photo'), (req, r
     );
 });
 
-// 🪪 የመምህር ዲጂታል መታወቂያ (በሙሉ ኦሪጅናል ከለር Download እና Print የሚሆን)
 app.get('/admin/teacher-id/:id', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     db.get(`SELECT * FROM teachers WHERE id = ?`, [req.params.id], (err, t) => {
@@ -1908,7 +1894,7 @@ app.get('/admin/master-roster/:year/:className', (req, res) => {
             const element = document.getElementById('masterRosterSection');
             html2pdf().set({
                 margin: 8,
-                filename: 'Master_Roster_${className.replace(/\\s+/g, '_')}_${academicYear}.pdf',
+                filename: 'Master_Roster_${className.replace(/\s+/g, '_')}_${academicYear}.pdf',
                 image: { type: 'jpeg', quality: 1 },
                 html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
@@ -1920,7 +1906,7 @@ app.get('/admin/master-roster/:year/:className', (req, res) => {
             cardsEl.style.display = 'block';
             html2pdf().set({
                 margin: 8,
-                filename: 'All_Student_Cards_${className.replace(/\\s+/g, '_')}_${academicYear}.pdf',
+                filename: 'All_Student_Cards_${className.replace(/\s+/g, '_')}_${academicYear}.pdf',
                 image: { type: 'jpeg', quality: 1 },
                 html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
