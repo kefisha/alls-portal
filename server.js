@@ -54,6 +54,23 @@ const db = {
     }
 };
 
+// ==========================================
+// 🛡️ የደህንነት ማጣሪያዎች (Security Limiters & Password Policy)
+// ==========================================
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, 
+    max: 10, // ከ 10 ጊዜ በላይ የተሳሳተ ሙከራ ካደረጉ ለ 15 ደቂቃ ይቆልፋል
+    handler: (req, res) => {
+        res.send(`<script>alert('⚠️ የደህንነት ጥንቃቄ: እጅግ ብዙ የተሳሳተ የሎጊን ሙከራ ተደርጓል። እባክዎ ከ 15 ደቂቃ በኋላ እንደገና ይሞክሩ።'); window.location.href='/';</script>`);
+    }
+});
+
+const weakPasswords = ['1234', '0000', '1111', '12345', '123456', 'password', 'admin', 'abcd'];
+function isWeakPassword(pass) {
+    if (!pass || pass.trim().length < 4) return true;
+    return weakPasswords.includes(pass.toLowerCase().trim());
+}
+
 async function initDB() {
     try {
         await pool.query(`CREATE TABLE IF NOT EXISTS "session" (
@@ -155,23 +172,7 @@ const storage = multer.diskStorage({
     filename: (req, file, cb) => cb(null, Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname))
 });
 
-const safeFileFilter = (req, file, cb) => {
-    const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.pdf', '.doc', '.docx'];
-    const ext = path.extname(file.originalname).toLowerCase();
-    const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    
-    if (allowedExts.includes(ext) && allowedMimes.includes(file.mimetype)) {
-        cb(null, true);
-    } else {
-        cb(new Error('❌ ለደህንነት ሲባል ይህ የፋይል አይነት አይፈቀድም! (ፎቶ ወይም PDF ብቻ ይጫኑ)'), false);
-    }
-};
-
-const upload = multer({ 
-    storage: storage, 
-    limits: { fileSize: 5 * 1024 * 1024 }, 
-    fileFilter: safeFileFilter 
-});
+const upload = multer({ storage: storage, limits: { fileSize: 5 * 1024 * 1024 } });
 
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
@@ -184,14 +185,6 @@ app.use(session({
     saveUninitialized: false, 
     cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 }
 }));
-
-app.disable('x-powered-by');
-app.use((req, res, next) => {
-    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    next();
-});
 
 const ADMIN_USER = process.env.ADMIN_USER;
 const ADMIN_PASS = process.env.ADMIN_PASS;
@@ -256,10 +249,15 @@ app.get('/', (req, res) => {
     res.render('login', { lang, error });
 });
 
-app.post('/login', (req, res) => {
+app.post('/login', loginLimiter, (req, res) => {
     const lang = req.query.lang || 'am';
     const { role, username, password } = req.body;
-    const uKey = (username || '').trim();
+    let uKey = (username || '').trim();
+
+    // 🛑 ደካማ ፓስወርዶችን ማገድ (Weak Password Protection)
+    if (isWeakPassword(password)) {
+        return res.send(`<script>alert('❌ የደህንነት ጥንቃቄ: እጅግ ደካማ የይለፍ ቃል (ለምሳሌ 1234, 0000) መጠቀም የተከለከለ ነው። እባክዎ ጠንካራ ፒን (PIN) ይጠቀሙ።'); window.location.href='/?lang=${lang}&error=weak';</script>`);
+    }
 
     if (role === 'admin') {
         if (uKey === ADMIN_USER && password === ADMIN_PASS) {
@@ -351,7 +349,7 @@ app.post('/api/recover-password', (req, res) => {
     });
 });
 
-// ================= STUDENT REGISTRATION & DIGITAL ID =================
+// ================= STUDENT REGISTRATION & FULL-COLOR DIGITAL ID =================
 app.get('/student-register', (req, res) => {
     const lang = req.query.lang === 'en' ? 'en' : 'am';
     let gradeOptions = '';
