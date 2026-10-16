@@ -59,16 +59,24 @@ const db = {
 // ==========================================
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, 
-    max: 10, // ከ 10 ጊዜ በላይ የተሳሳተ ሙከራ ካደረጉ ለ 15 ደቂቃ ይቆልፋል
+    max: 25,
     handler: (req, res) => {
         res.send(`<script>alert('⚠️ የደህንነት ጥንቃቄ: እጅግ ብዙ የተሳሳተ የሎጊን ሙከራ ተደርጓል። እባክዎ ከ 15 ደቂቃ በኋላ እንደገና ይሞክሩ።'); window.location.href='/';</script>`);
     }
 });
 
-const weakPasswords = ['1234', '0000', '1111', '12345', '123456', 'password', 'admin', 'abcd'];
+const weakPasswords = ['1234', '4321', '0000', '1111', '2222', '3333', '4444', '5555', '6666', '7777', '8888', '9999', '12345', '123456'];
 function isWeakPassword(pass) {
-    if (!pass || pass.trim().length < 4) return true;
-    return weakPasswords.includes(pass.toLowerCase().trim());
+    if (!pass || String(pass).trim().length < 4) return true;
+    return weakPasswords.includes(String(pass).toLowerCase().trim());
+}
+
+function generateStrong4DigitPIN() {
+    let pin = '1234';
+    while (isWeakPassword(pin)) {
+        pin = Math.floor(1000 + Math.random() * 9000).toString();
+    }
+    return pin;
 }
 
 async function initDB() {
@@ -151,9 +159,9 @@ async function initDB() {
 
         let tRes = await pool.query("SELECT COUNT(*) as count FROM teachers");
         if (tRes.rows[0].count == 0) {
-            let hashedPass = bcrypt.hashSync('123456', 10);
+            let hashedPass = bcrypt.hashSync('5829', 10);
             await pool.query(`INSERT INTO teachers (id, name, password, phone, assigned_sections, assigned_grades, is_proctor, plain_pin) VALUES 
-            ('T-101', 'Dr. Teshale Kebede', $1, '0911001122', 'Grade 1 - Section A', 'Grade 1', 1, '123456')`, [hashedPass]);
+            ('T-101', 'Dr. Teshale Kebede', $1, '0911001122', 'Grade 1 - Section A', 'Grade 1', 1, '5829')`, [hashedPass]);
         }
 
         let sRes = await pool.query("SELECT COUNT(*) as count FROM sections");
@@ -191,7 +199,7 @@ const ADMIN_PASS = process.env.ADMIN_PASS;
 
 function generateStudentID() { return `ALLS-${Math.floor(1000 + Math.random() * 9000)}`; }
 function generateTeacherID() { return `T-${Math.floor(100 + Math.random() * 900)}`; }
-function generate4DigitPIN() { return Math.floor(1000 + Math.random() * 9000).toString(); }
+function generate4DigitPIN() { return generateStrong4DigitPIN(); }
 
 function csvCell(val) {
     if (val === null || val === undefined) return '""';
@@ -249,34 +257,31 @@ app.get('/', (req, res) => {
     res.render('login', { lang, error });
 });
 
+// ✅ የተስተካከለው የሎጊን ራውት (አድሚኑንም ሆነ ተጠቃሚዎችን ያለምንም የፓስወርድ እገዳ ያስገባል)
 app.post('/login', loginLimiter, (req, res) => {
     const lang = req.query.lang || 'am';
     const { role, username, password } = req.body;
     let uKey = (username || '').trim();
-
-    // 🛑 ደካማ ፓስወርዶችን ማገድ (Weak Password Protection)
-    if (isWeakPassword(password)) {
-        return res.send(`<script>alert('❌ የደህንነት ጥንቃቄ: እጅግ ደካማ የይለፍ ቃል (ለምሳሌ 1234, 0000) መጠቀም የተከለከለ ነው። እባክዎ ጠንካራ ፒን (PIN) ይጠቀሙ።'); window.location.href='/?lang=${lang}&error=weak';</script>`);
-    }
+    let pass = (password || '').trim();
 
     if (role === 'admin') {
-        if (uKey === ADMIN_USER && password === ADMIN_PASS) {
+        if (uKey === ADMIN_USER && pass === ADMIN_PASS) {
             req.session.isAdmin = true;
             return res.redirect(`/admin?lang=${lang}`);
         } else {
             return res.redirect(`/?lang=${lang}&error=invalid`);
         }
     } else if (role === 'teacher') {
-        db.get(`SELECT * FROM teachers WHERE id = ?`, [uKey.toUpperCase()], (err, t) => {
-            if (t && (bcrypt.compareSync(password, t.password) || password === t.password)) {
+        db.get(`SELECT * FROM teachers WHERE UPPER(id) = ?`, [uKey.toUpperCase()], (err, t) => {
+            if (t && (bcrypt.compareSync(pass, t.password) || pass === t.password || pass === t.plain_pin)) {
                 req.session.teacherId = t.id;
                 return res.redirect(`/teacher-dashboard?lang=${lang}`);
             }
             return res.redirect(`/?lang=${lang}&error=invalid`);
         });
     } else if (role === 'student') {
-        db.get(`SELECT * FROM students WHERE student_id = ?`, [uKey.toUpperCase()], (err, s) => {
-            if (s && (bcrypt.compareSync(password, s.password) || password === s.password)) {
+        db.get(`SELECT * FROM students WHERE UPPER(student_id) = ?`, [uKey.toUpperCase()], (err, s) => {
+            if (s && (bcrypt.compareSync(pass, s.password) || pass === s.password)) {
                 req.session.studentId = s.student_id;
                 return res.redirect(`/student-dashboard?lang=${lang}`);
             }
@@ -312,10 +317,10 @@ app.post('/api/forgot-password', (req, res) => {
     const { phone, mother_name } = req.body;
     db.get(`SELECT student_id FROM students WHERE phone = ? AND mother_name = ?`, [phone, mother_name], (err, s) => {
         if (s) {
-            let newPin = generate4DigitPIN();
+            let newPin = generateStrong4DigitPIN();
             let hashedPIN = bcrypt.hashSync(newPin, 10); 
             return db.run(`UPDATE students SET password = ? WHERE student_id = ?`, [hashedPIN, s.student_id], () => {
-                res.send(`<!DOCTYPE html><html><head><script src="https://cdn.tailwindcss.com"></script><script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script></head><body class="bg-gray-100 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center"><div class="inline-block p-3 bg-green-100 rounded-full mb-4"><svg class="w-12 h-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></div><h2 class="text-2xl font-bold text-gray-800 mb-2">ፓስወርድ ተቀይሯል!</h2><p class="text-gray-600 mb-4">አዲሱ የይለፍ ቁጥርዎ ይህ ነው:</p><div class="text-5xl font-extrabold text-red-600 mb-6 bg-red-50 py-4 rounded-xl border border-red-200 tracking-widest shadow-inner">${newPin}</div><a href="/?lang=${lang}" class="block w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md">ወደ መግቢያ ተመለስ</a></div></body></html>`);
+                res.send(`<!DOCTYPE html><html><head><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-100 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center"><h2 class="text-2xl font-bold text-gray-800 mb-2">ፓስወርድ ተቀይሯል!</h2><p class="text-gray-600 mb-4">አዲሱ የይለፍ ቁጥርዎ ይህ ነው:</p><div class="text-5xl font-extrabold text-red-600 mb-6 bg-red-50 py-4 rounded-xl border border-red-200 tracking-widest shadow-inner">${newPin}</div><a href="/?lang=${lang}" class="block w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md">ወደ መግቢያ ተመለስ</a></div></body></html>`);
             });
         }
         res.redirect(`/forgot-password?lang=${lang}&error=notfound`);
@@ -326,7 +331,7 @@ app.post('/api/recover-password', (req, res) => {
     const { id, phone } = req.body;
     db.get(`SELECT * FROM students WHERE student_id = ? AND phone = ?`, [id, phone], (err, student) => {
         if (student) {
-            let newPassword = generate4DigitPIN(); 
+            let newPassword = generateStrong4DigitPIN(); 
             let hashedPassword = bcrypt.hashSync(newPassword, 10);
             db.run(`UPDATE students SET password = ? WHERE student_id = ?`, [hashedPassword, id], (updateErr) => {
                 if (updateErr) return res.json({ success: false });
@@ -335,7 +340,7 @@ app.post('/api/recover-password', (req, res) => {
         } else {
             db.get(`SELECT * FROM teachers WHERE id = ? AND phone = ?`, [id, phone], (err2, teacher) => {
                 if (teacher) {
-                    let newPassword = generate4DigitPIN(); 
+                    let newPassword = generateStrong4DigitPIN(); 
                     let hashedPassword = bcrypt.hashSync(newPassword, 10);
                     db.run(`UPDATE teachers SET password = ?, plain_pin = ? WHERE id = ?`, [hashedPassword, newPassword, id], (updateErr) => {
                         if (updateErr) return res.json({ success: false });
@@ -349,12 +354,169 @@ app.post('/api/recover-password', (req, res) => {
     });
 });
 
-// ================= STUDENT REGISTRATION & FULL-COLOR DIGITAL ID =================
+// ================= 📝 STUDENT REGISTRATION (WITH AMHARIC/ENGLISH TOGGLE & WORKING TRANSACTION/SLIP OPTION) =================
 app.get('/student-register', (req, res) => {
     const lang = req.query.lang === 'en' ? 'en' : 'am';
     let gradeOptions = '';
     for(let i=1; i<=12; i++) gradeOptions += `<option value="Grade ${i}">Grade ${i}</option>`;
-    res.send(`<!DOCTYPE html><html lang="${lang}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Student Registration</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-100 py-10 px-4"><div class="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden"><div class="bg-green-600 py-6 px-8 text-center text-white relative"><a href="/?lang=${lang}" class="absolute left-4 top-6">⬅️</a><h2 class="text-2xl font-bold">አዲስ ተማሪ ምዝገባ</h2></div><div class="p-8"><form action="/api/register?lang=${lang}" method="POST" enctype="multipart/form-data"><div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6"><div><label class="block text-sm font-bold mb-2">ሙሉ ስም</label><input type="text" name="name" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">የእናት ስም</label><input type="text" name="mother_name" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">ጾታ</label><select name="gender" class="w-full px-3 py-2 border rounded-lg"><option value="Male">ወንድ</option><option value="Female">ሴት</option></select></div><div><label class="block text-sm font-bold mb-2">ዕድሜ</label><input type="number" name="age" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">ስልክ ቁጥር</label><input type="text" name="phone" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">የአደጋ ጊዜ ተጠሪ ስልክ</label><input type="text" name="emergency_phone" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">ክልል</label><input type="text" name="region" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">ዞን</label><input type="text" name="zone" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">ወረዳ</label><input type="text" name="woreda" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">ቀበሌ</label><input type="text" name="kebele" required class="w-full px-3 py-2 border rounded-lg"></div></div><div class="mb-6"><label class="block text-sm font-bold mb-2">የሚገቡበት የክፍል ደረጃ</label><select name="year_level" class="w-full px-3 py-2 border rounded-lg">${gradeOptions}</select></div><div class="mb-6"><label class="block text-sm font-bold mb-2">የጉርድ ፎቶ</label><input type="file" name="student_photo" accept="image/*" required class="w-full p-2 border border-dashed rounded-lg"></div><div class="mb-8 p-4 border rounded-lg bg-gray-50"><label class="block text-sm font-bold mb-2">የክፍያ ማረጋገጫ</label><select name="payment_type" id="payType" onchange="document.getElementById('slipBox').style.display = this.value=='slip_file'?'block':'none'; document.getElementById('txnBox').style.display = this.value=='txn_id'?'block':'none';" class="w-full px-3 py-2 border rounded-lg mb-4"><option value="txn_id">የትራንዛክሽን ቁጥር (TXN ID)</option><option value="slip_file">የደረሰኝ ፎቶ (Bank Slip)</option></select><div id="txnBox"><input type="text" name="txn_id" placeholder="Transaction ID..." class="w-full px-3 py-2 border rounded-lg"></div><div id="slipBox" style="display:none;"><input type="file" name="bank_slip_file" accept="image/*,.pdf" class="w-full p-2 border border-dashed rounded-lg bg-white"></div></div><button type="submit" class="w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg text-lg">ምዝገባ ላክ</button></form></div></div></body></html>`);
+
+    res.send(`<!DOCTYPE html>
+<html lang="${lang}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Registration - Amanuel Light & Life School</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body.lang-am .en { display: none !important; }
+        body.lang-am .am { display: inline !important; }
+        body.lang-en .am { display: none !important; }
+        body.lang-en .en { display: inline !important; }
+    </style>
+</head>
+<body class="lang-${lang} bg-gray-100 py-8 px-4">
+    <div class="max-w-3xl mx-auto">
+        <!-- 🌐 Language Toggle Bar -->
+        <div class="flex justify-between items-center mb-4">
+            <a href="/?lang=${lang}" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg shadow">
+                ⬅️ <span class="am">ወደ መግቢያ ተመለስ</span><span class="en">Back to Login</span>
+            </a>
+            <div class="bg-white p-1.5 rounded-lg shadow flex gap-2">
+                <button type="button" onclick="setRegLang('am')" id="btn-am" class="px-4 py-1.5 rounded font-bold text-sm bg-green-600 text-white">🇪🇹 አማርኛ</button>
+                <button type="button" onclick="setRegLang('en')" id="btn-en" class="px-4 py-1.5 rounded font-bold text-sm text-gray-700">🇬🇧 English</button>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-xl overflow-hidden border-t-4 border-green-600">
+            <div class="bg-green-600 py-5 px-8 text-center text-white">
+                <h2 class="text-2xl font-bold">
+                    🎓 <span class="am">የአዲስ ተማሪ ምዝገባ ቅጽ</span><span class="en">New Student Registration Form</span>
+                </h2>
+            </div>
+            <div class="p-8">
+                <form action="/api/register" method="POST" enctype="multipart/form-data">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+                        <div>
+                            <label class="block text-sm font-bold mb-1.5"><span class="am">👤 ሙሉ ስም *</span><span class="en">👤 Full Name *</span></label>
+                            <input type="text" name="name" required class="w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:border-green-600">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold mb-1.5"><span class="am">👩 የእናት ስም *</span><span class="en">👩 Mother's Name *</span></label>
+                            <input type="text" name="mother_name" required class="w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:border-green-600">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold mb-1.5"><span class="am">⚧ ፆታ *</span><span class="en">⚧ Gender *</span></label>
+                            <select name="gender" class="w-full px-3 py-2.5 border rounded-lg">
+                                <option value="Male">ወንድ (Male)</option>
+                                <option value="Female">ሴት (Female)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold mb-1.5"><span class="am">🎂 ዕድሜ *</span><span class="en">🎂 Age *</span></label>
+                            <input type="number" name="age" required class="w-full px-3 py-2.5 border rounded-lg">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold mb-1.5"><span class="am">📞 ስልክ ቁጥር *</span><span class="en">📞 Phone Number *</span></label>
+                            <input type="text" name="phone" required class="w-full px-3 py-2.5 border rounded-lg">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold mb-1.5"><span class="am">🚨 የአደጋ ጊዜ ተጠሪ ስልክ *</span><span class="en">🚨 Emergency Phone *</span></label>
+                            <input type="text" name="emergency_phone" required class="w-full px-3 py-2.5 border rounded-lg">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold mb-1.5"><span class="am">📍 ክልል *</span><span class="en">📍 Region *</span></label>
+                            <input type="text" name="region" required class="w-full px-3 py-2.5 border rounded-lg">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold mb-1.5"><span class="am">📍 ዞን *</span><span class="en">📍 Zone *</span></label>
+                            <input type="text" name="zone" required class="w-full px-3 py-2.5 border rounded-lg">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold mb-1.5"><span class="am">📍 ወረዳ *</span><span class="en">📍 Woreda *</span></label>
+                            <input type="text" name="woreda" required class="w-full px-3 py-2.5 border rounded-lg">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold mb-1.5"><span class="am">📍 ቀበሌ *</span><span class="en">📍 Kebele *</span></label>
+                            <input type="text" name="kebele" required class="w-full px-3 py-2.5 border rounded-lg">
+                        </div>
+                    </div>
+
+                    <div class="mb-6">
+                        <label class="block text-sm font-bold mb-1.5"><span class="am">🏫 የሚገቡበት የክፍል ደረጃ *</span><span class="en">🏫 Grade Level *</span></label>
+                        <select name="year_level" class="w-full px-3 py-2.5 border rounded-lg">${gradeOptions}</select>
+                    </div>
+
+                    <div class="mb-6">
+                        <label class="block text-sm font-bold mb-1.5"><span class="am">📷 የተማሪው የጉርድ ፎቶ *</span><span class="en">📷 Student Passport Photo *</span></label>
+                        <input type="file" name="student_photo" accept="image/*" required class="w-full p-2.5 border border-dashed rounded-lg bg-gray-50">
+                    </div>
+
+                    <!-- 💳 Working Payment Verification Option (TXN ID vs Bank Slip File) -->
+                    <div class="mb-8 p-5 border-2 border-blue-200 rounded-xl bg-blue-50">
+                        <label class="block text-sm font-bold mb-2 text-blue-900">
+                            💳 <span class="am">የክፍያ ማረጋገጫ መንገድ ይምረጡ *</span><span class="en">Select Payment Verification Method *</span>
+                        </label>
+                        <select name="payment_type" id="payTypeSelect" onchange="togglePaymentInput()" class="w-full px-3 py-2.5 border rounded-lg mb-4 bg-white font-semibold">
+                            <option value="txn_id">🔢 የትራንዛክሽን ቁጥር (Transaction / Reference ID)</option>
+                            <option value="slip_file">📄 የባንክ ደረሰኝ ፎቶ (Upload Bank Slip Photo/PDF)</option>
+                        </select>
+
+                        <div id="txnInputBox" style="display:block;">
+                            <label class="block text-xs font-bold mb-1 text-gray-700">
+                                <span class="am">የባንክ ትራንዛክሽን ቁጥሩን እዚህ ያስገቡ (ለምሳሌ FT24...):</span>
+                                <span class="en">Enter Bank Transaction / Reference Number:</span>
+                            </label>
+                            <input type="text" name="txn_id" id="txnInputField" placeholder="Transaction ID (e.g. FT24105...)" class="w-full px-3 py-2.5 border rounded-lg bg-white">
+                        </div>
+
+                        <div id="slipInputBox" style="display:none;">
+                            <label class="block text-xs font-bold mb-1 text-gray-700">
+                                <span class="am">የከፈሉበትን ደረሰኝ ፎቶ ወይም PDF ይምረጡ:</span>
+                                <span class="en">Upload Bank Slip Image or PDF:</span>
+                            </label>
+                            <input type="file" name="bank_slip_file" id="slipInputField" accept="image/*,.pdf" class="w-full p-2.5 border border-dashed rounded-lg bg-white">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg text-lg cursor-pointer">
+                        ✅ <span class="am">ምዝገባውን አጠናቅቅና ላክ</span><span class="en">Submit Registration</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function setRegLang(l) {
+            const clean = (l === 'en') ? 'en' : 'am';
+            document.body.className = 'lang-' + clean + ' bg-gray-100 py-8 px-4';
+            const btnAm = document.getElementById('btn-am');
+            const btnEn = document.getElementById('btn-en');
+            if (clean === 'am') {
+                btnAm.className = 'px-4 py-1.5 rounded font-bold text-sm bg-green-600 text-white';
+                btnEn.className = 'px-4 py-1.5 rounded font-bold text-sm text-gray-700';
+            } else {
+                btnEn.className = 'px-4 py-1.5 rounded font-bold text-sm bg-blue-600 text-white';
+                btnAm.className = 'px-4 py-1.5 rounded font-bold text-sm text-gray-700';
+            }
+        }
+
+        function togglePaymentInput() {
+            const val = document.getElementById('payTypeSelect').value;
+            const txnBox = document.getElementById('txnInputBox');
+            const slipBox = document.getElementById('slipInputBox');
+            if (val === 'slip_file') {
+                slipBox.style.display = 'block';
+                txnBox.style.display = 'none';
+            } else {
+                txnBox.style.display = 'block';
+                slipBox.style.display = 'none';
+            }
+        }
+        togglePaymentInput();
+    </script>
+</body>
+</html>`);
 });
 
 app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 }, { name: 'bank_slip_file', maxCount: 1 }]), (req, res) => {
@@ -364,17 +526,22 @@ app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 },
         name = xss(name); mother_name = xss(mother_name); phone = xss(phone);
         
         let autoID = generateStudentID(); 
-        let autoPIN = generate4DigitPIN();
+        let autoPIN = generateStrong4DigitPIN();
         let hashedPIN = bcrypt.hashSync(autoPIN, 10); 
 
-        assignClassSection(year_level, (assignedSection) => {
+        assignClassSection(year_level || 'Grade 1', (assignedSection) => {
             let photoPath = (req.files && req.files['student_photo']) ? req.files['student_photo'][0].filename : '';
-            let slipPath = payment_type === 'slip_file' && (req.files && req.files['bank_slip_file']) ? req.files['bank_slip_file'][0].filename : xss(txn_id);
+            let slipPath = '';
+            if (payment_type === 'slip_file' && req.files && req.files['bank_slip_file']) {
+                slipPath = req.files['bank_slip_file'][0].filename;
+            } else {
+                slipPath = xss(txn_id || '');
+            }
 
             db.run(`INSERT INTO pending_students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-            [autoID, hashedPIN, name, mother_name || '', gender || '', age || null, phone || '', emergency_phone || '', region || '', zone || '', woreda || '', kebele || '', assignedSection, payment_type, slipPath, photoPath], function(err) {
+            [autoID, hashedPIN, name, mother_name || '', gender || '', age || null, phone || '', emergency_phone || '', region || '', zone || '', woreda || '', kebele || '', assignedSection, payment_type || 'txn_id', slipPath, photoPath], function(err) {
                 if (err) return res.redirect(`/student-register?lang=${lang}&error=db`);
-                res.send(`<!DOCTYPE html><html><head><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-100 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center"><h2 class="text-3xl font-bold text-gray-800 mb-6">ተሳክቷል!</h2><p class="text-gray-700"><strong>የመታወቂያ ቁጥር:</strong> ${autoID}</p><p class="text-gray-700"><strong>የይለፍ ቃል:</strong> ${autoPIN}</p><a href="/?lang=${lang}" class="block w-full bg-green-600 text-white font-bold py-3 rounded-lg mt-4">ወደ መግቢያ ተመለስ</a></div></body></html>`);
+                res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-100 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center border-t-8 border-green-600"><h2 class="text-3xl font-bold text-green-600 mb-4">✅ ምዝገባው ተሳክቷል!</h2><p class="text-gray-600 mb-4">እባክዎ የሚከተሉትን መግቢያ መረጃዎች ጽፈው ይያዙ፦</p><div class="bg-gray-50 p-4 rounded-xl border text-left space-y-2 mb-6"><p><strong>👤 ስም:</strong> ${name}</p><p><strong>🆔 የመታወቂያ ቁጥር (ID):</strong> <span class="text-blue-600 font-bold text-lg">${autoID}</span></p><p><strong>🔑 የይለፍ ቃል (PIN):</strong> <span class="text-red-600 font-bold text-lg">${autoPIN}</span></p><p><strong>🏫 ክፍል:</strong> ${assignedSection}</p></div><a href="/?lang=${lang}" class="block w-full bg-green-600 text-white font-bold py-3 rounded-lg">⬅️ ወደ መግቢያ ተመለስ</a></div></body></html>`);
             });
         });
     } catch (error) {
@@ -383,18 +550,20 @@ app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 },
 });
 
 app.post('/register-student', upload.single('bank_slip'), (req, res) => {
-    const { name, mother_name, gender, phone, class_level, region, zone, woreda, kebele, emergency_name, emergency_phone, transaction_id } = req.body;
-    const paymentProof = req.file ? req.file.filename : (transaction_id ? transaction_id.trim() : '');
+    const { name, mother_name, gender, phone, class_level, region, zone, woreda, kebele, emergency_name, emergency_phone, transaction_id, txn_id, payment_type } = req.body;
+    const txVal = (transaction_id || txn_id || '').trim();
+    const paymentProof = req.file ? req.file.filename : txVal;
+    const finalPayType = req.file ? 'slip_file' : (payment_type || 'txn_id');
 
     const autoID = generateStudentID();
-    const autoPIN = generate4DigitPIN();
+    const autoPIN = generateStrong4DigitPIN();
     const hashedPIN = bcrypt.hashSync(autoPIN, 10);
 
-    assignClassSection(class_level, (assignedSection) => {
+    assignClassSection(class_level || 'Grade 1', (assignedSection) => {
         const finalClass = assignedSection || class_level;
         db.run(
-            `INSERT INTO pending_students (student_id, password, name, gender, phone, class_level, bank_slip_val, mother_name, region, zone, woreda, kebele, emergency_name, emergency_phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [autoID, hashedPIN, name, gender, phone, finalClass, paymentProof, mother_name || '', region || '', zone || '', woreda || '', kebele || '', emergency_name || '', emergency_phone || ''],
+            `INSERT INTO pending_students (student_id, password, name, gender, phone, class_level, payment_type, bank_slip_val, mother_name, region, zone, woreda, kebele, emergency_name, emergency_phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [autoID, hashedPIN, name, gender, phone, finalClass, finalPayType, paymentProof, mother_name || '', region || '', zone || '', woreda || '', kebele || '', emergency_name || '', emergency_phone || ''],
             function(err) {
                 if (err) return res.redirect('/?error=db');
                 res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Registration Successful</title></head><body style="font-family:sans-serif; background:#eef2f5; display:flex; justify-content:center; align-items:center; min-height:100vh; margin:0;"><div style="background:white; padding:30px; border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,0.15); max-width:420px; width:90%; text-align:center; border-top:6px solid #27ae60;"><h2 style="color:#27ae60; margin-top:0;">✅ ምዝገባው ተሳክቷል!</h2><div style="background:#f8f9fa; padding:15px; border-radius:8px; border:1px solid #ddd; margin:20px 0; text-align:left; font-size:16px; line-height:1.8;"><b>👤 ስም (Name):</b> ${name}<br><b>🆔 መታወቂያ (ID):</b> <span style="color:#2980b9; font-weight:bold;">${autoID}</span><br><b>🔑 የይለፍ ቃል (PIN):</b> <span style="color:#e74c3c; font-weight:bold;">${autoPIN}</span><br><b>🏫 ክፍል (Class):</b> ${finalClass}</div><a href="/" style="display:inline-block; background:#2980b9; color:white; padding:12px 25px; text-decoration:none; border-radius:6px; font-weight:bold;">⬅️ ወደ መግቢያ ገጽ ተመለስ</a></div></body></html>`);
@@ -489,7 +658,7 @@ app.get('/api/student/:id', (req, res) => {
     });
 });
 
-// ================= ADMIN DASHBOARD =================
+// ================= ADMIN DASHBOARD (FIXED INTERNAL SERVER ERROR) =================
 app.get('/admin', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const lang = req.query.lang || 'am';
@@ -513,10 +682,18 @@ app.get('/admin', (req, res) => {
                                     else poor++;
                                 });
 
-                                let pRows = pending.map(s => `<tr><td>-</td><td>${s.student_id}</td><td>${s.name}</td><td>${s.payment_type === 'slip_file' || (s.bank_slip_val && s.bank_slip_val.includes('.')) ? `<a href="/uploads/${s.bank_slip_val}" target="_blank" style="color:#2980b9;">📄 እይ</a>` : `<b>TXN:</b> ${s.bank_slip_val || '-'}`}</td><td><a href="/admin/approve/${s.id}?lang=${lang}" style="color:green; font-weight:bold;">✅ Approve</a></td></tr>`).join('');
+                                let pRows = pending.map(s => `<tr><td>-</td><td>${s.student_id}</td><td>${s.name}</td><td>${s.payment_type === 'slip_file' || (s.bank_slip_val && s.bank_slip_val.includes('.')) ? `<a href="/uploads/${s.bank_slip_val}" target="_blank" style="color:#2980b9; font-weight:bold;">📄 ደረሰኝ እይ</a>` : `<b>TXN:</b> ${s.bank_slip_val || '-'}`}</td><td><a href="/admin/approve/${s.id}?lang=${lang}" style="color:green; font-weight:bold;">✅ Approve</a></td></tr>`).join('');
                                 let secRows = sections.map(sec => `<tr><td><a href="/class-hub/${encodeURIComponent(sec.name)}" style="color:#16a085; font-weight:bold;" target="_blank">📂 ${sec.name}</a></td><td><form action="/admin/edit-section/${sec.id}?lang=${lang}" method="POST" style="display:flex; gap:4px;"><select name="proctor_name" style="width:140px;"><option value="${sec.proctor_name || ''}">${sec.proctor_name || '-- Select --'}</option>${teachers.map(tc => `<option value="${tc.name}">${tc.name}</option>`).join('')}</select><button type="submit">Save</button></form></td><td><a href="/admin/delete-section/${sec.id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑 Delete</a></td><td><a href="/attendance-sheet/${encodeURIComponent(sec.name)}" style="color:#2980b9; font-weight:bold; margin-right:10px;" target="_blank">📋 Attendance</a><a href="/admin/export-section-students/${encodeURIComponent(sec.name)}" style="background:#27ae60; color:white; padding:4px 8px; border-radius:3px; text-decoration:none; font-weight:bold;">📥 Excel</a></td></tr>`).join('');
 
                                 let sectionOptions = sections.map(sec => `<option value="${sec.name}">${sec.name}</option>`).join('');
+                                // ✅ ይህ ተለዋዋጭ ባለመኖሩ ነበር Internal Server Error ይመጣ የነበረው፤ አሁን ተካቷል!
+                                let rosterSectionButtons = sections.map(sec => `
+                                    <a href="/admin/master-roster/2019%20E.C/${encodeURIComponent(sec.name)}" target="_blank"
+                                       style="background:#1f4e79; color:white; padding:10px 18px; border-radius:6px; text-decoration:none; font-weight:bold; font-size:14px; display:inline-block; box-shadow:0 2px 5px rgba(0,0,0,0.15);">
+                                        🏫 ${sec.name} (Master Roster & PDF)
+                                    </a>
+                                `).join('') || `<span style="color:#7f8c8d;">ምንም የተመዘገበ ሴክሽን የለም።</span>`;
+
                                 let teacherOptions = teachers.map(tc => `<option value="${tc.id}">${tc.name}</option>`).join('');
                                 let gradeCheckboxes = ''; for(let i=1; i<=12; i++) gradeCheckboxes += `<label style="margin-right:8px;"><input type="checkbox" name="grades" value="Grade ${i}"> Grade ${i}</label>`;
                                 let cRows = courses.map(c => `<tr><td>${c.code}</td><td>${c.title}</td><td style="display:none;">0</td><td>${c.class_level}</td><td>${c.teacher_name||'-'}</td><td><a href="/admin/delete-course/${c.id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td></tr>`).join('');
@@ -557,7 +734,7 @@ app.get('/admin', (req, res) => {
                                 res.render('admin', {
                                     lang, excellent, good, average, poor, maleCount, femaleCount,
                                     pRows, secRows, cRows, tRows, adminNotiRows, groupedStudentsHtml: '',
-                                    sectionOptions, teacherOptions, gradeCheckboxes
+                                    sectionOptions, rosterSectionButtons, teacherOptions, gradeCheckboxes
                                 });
                             });
                         });
@@ -661,7 +838,7 @@ app.get('/admin/edit-student/:id', (req, res) => {
             </div>
 
             <div style="margin-bottom:12px; background:#fffcf5; padding:12px; border:1px dashed #f39c12; border-radius:6px;">
-                <label style="font-weight:bold; font-size:13.5px; color:#d35400; display:block; margin-bottom:4px;">🔑 አዲስ የይለፍ ቃል / PIN (መቀየር ከፈለጉ ብቻ ይጻፉ)</label>
+                <label style="font-weight:bold; font-size:13.5px; color:#d35400; display:block; margin-bottom:4px;">🔑 አዲስ የይለፍ ቃል / PIN (መቀየር ከፈለጉ ብቻ ይጻፉ - እንደ 1234 አይፈቀድም)</label>
                 <input type="text" name="new_password" placeholder="ፓስወርዱን መቀየር ካልፈለጉ ባዶ ይተዉት..." style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
             </div>
 
@@ -688,6 +865,10 @@ app.post('/admin/edit-student/:id', upload.single('bank_slip'), (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const studentId = req.params.id;
     const { name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, new_password } = req.body;
+
+    if (new_password && new_password.trim() !== '' && isWeakPassword(new_password)) {
+        return res.send(`<script>alert('❌ እንደ 1234 ወይም 0000 ያሉ ደካማ የይለፍ ቃሎች አይፈቀዱም!'); window.history.back();</script>`);
+    }
 
     const updatePassIfNeeded = (cb) => {
         if (new_password && new_password.trim() !== '') {
@@ -797,9 +978,13 @@ app.post('/admin/edit-teacher/:id', upload.single('teacher_photo'), (req, res) =
     const { name, gender, phone, subject, emergency_name, emergency_phone, assigned_sections, plain_pin } = req.body;
     const sectionsStr = Array.isArray(assigned_sections) ? assigned_sections.join(', ') : (assigned_sections || '');
 
+    if (plain_pin && plain_pin.trim() !== '' && isWeakPassword(plain_pin)) {
+        return res.send(`<script>alert('❌ እንደ 1234 ወይም 0000 ያሉ ደካማ የይለፍ ቃሎች አይፈቀዱም!'); window.history.back();</script>`);
+    }
+
     db.get(`SELECT * FROM teachers WHERE id = ?`, [teacherId], (err, t) => {
         if (!t) return res.redirect('/admin');
-        const finalPin = (plain_pin && plain_pin.trim() !== '') ? plain_pin.trim() : (t.plain_pin || '1234');
+        const finalPin = (plain_pin && plain_pin.trim() !== '') ? plain_pin.trim() : (t.plain_pin || '5829');
         const hashedPin = (plain_pin && plain_pin.trim() !== '') ? bcrypt.hashSync(finalPin, 10) : t.password;
         const finalPhoto = req.file ? req.file.filename : t.photo;
 
@@ -828,7 +1013,7 @@ app.post('/admin/register-teacher-full', upload.single('teacher_photo'), (req, r
     const { name, gender, phone, subject, assigned_sections, emergency_name, emergency_phone } = req.body;
     const photoFile = req.file ? req.file.filename : '';
     const teacherID = 'ALLS-T-' + Math.floor(1000 + Math.random() * 9000);
-    const autoPIN = Math.floor(1000 + Math.random() * 9000).toString();
+    const autoPIN = generateStrong4DigitPIN();
     const hashedPIN = bcrypt.hashSync(autoPIN, 10);
     const sectionsStr = Array.isArray(assigned_sections) ? assigned_sections.join(', ') : (assigned_sections || '');
 
