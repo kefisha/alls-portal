@@ -16,17 +16,6 @@ process.on('uncaughtException', (err) => { console.error('CRITICAL ERROR:', err)
 process.on('unhandledRejection', (reason, p) => { console.error('UNHANDLED REJECTION:', reason); });
 
 const app = express();
-// ==========================================
-// 🛡️ 3. ፀረ-ሃክ እና የሰርቨር ደህንነት (Security Headers)
-// ==========================================
-app.disable('x-powered-by'); // ሰርቨሩ በምን እንደተሰራ እንዳይታወቅ ይደብቃል
-app.use((req, res, next) => {
-    res.setHeader('X-Frame-Options', 'SAMEORIGIN'); // ዌብሳይቱን በሌላ ቦታ አስገብተው እንዳይሰርቁ (Clickjacking) ይከላከላል
-    res.setHeader('X-Content-Type-Options', 'nosniff'); // የቫይረስ ፋይሎች እንዳይከፈቱ ይከላከላል
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    next();
-});
-
 app.set('trust proxy', 1); 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -166,30 +155,6 @@ const storage = multer.diskStorage({
     filename: (req, file, cb) => cb(null, Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname))
 });
 
-const upload = multer({ storage: storage, limits: { fileSize: 5 * 1024 * 1024 } });
-
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(express.json({ limit: '10mb' }));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-app.use(session({
-    store: new pgSession({ pool: pool, tableName: 'session' }),
-    secret: process.env.SESSION_SECRET || 'school-full-system-session-fix', 
-    resave: false, 
-    saveUninitialized: false, 
-    cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 }
-}));
-// ==========================================
-// 🛡️ 3. ፀረ-ሃክ እና የሰርቨር ደህንነት (Security Headers)
-// ==========================================
-app.disable('x-powered-by'); 
-app.use((req, res, next) => {
-    res.setHeader('X-Frame-Options', 'SAMEORIGIN'); 
-    res.setHeader('X-Content-Type-Options', 'nosniff'); 
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    next();
-});
-
 const safeFileFilter = (req, file, cb) => {
     const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.pdf', '.doc', '.docx'];
     const ext = path.extname(file.originalname).toLowerCase();
@@ -208,46 +173,32 @@ const upload = multer({
     fileFilter: safeFileFilter 
 });
 
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '10mb' }));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+app.use(session({
+    store: new pgSession({ pool: pool, tableName: 'session' }),
+    secret: process.env.SESSION_SECRET || 'school-full-system-session-fix', 
+    resave: false, 
+    saveUninitialized: false, 
+    cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 }
+}));
+
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    next();
+});
+
 const ADMIN_USER = process.env.ADMIN_USER;
 const ADMIN_PASS = process.env.ADMIN_PASS;
 
 function generateStudentID() { return `ALLS-${Math.floor(1000 + Math.random() * 9000)}`; }
 function generateTeacherID() { return `T-${Math.floor(100 + Math.random() * 900)}`; }
-// ==========================================
-// 🔐 1. የይለፍ ቃል ጥንካሬ መቆጣጠሪያ (Strict Password Policy)
-// ==========================================
-function isWeakPIN(pin) {
-    if (!pin) return true;
-    const p = String(pin).trim();
-    if (p.length < 4) return true;
-
-    // 1. የተለመዱ ደካማ ፓስወርዶች
-    const blacklist = [
-        '1234', '4321', '0000', '1111', '2222', '3333', '4444', 
-        '5555', '6666', '7777', '8888', '9999', '12345', '54321', 
-        '123456', '654321', '1010', '2020', '1122', 'password', 'admin'
-    ];
-    if (blacklist.includes(p.toLowerCase())) return true;
-
-    // 2. ተከታታይ ቁጥሮችን መከልከል (ለምሳሌ: 1234, 2345, 9876, 4321)
-    const asc = '01234567890123456789';
-    const desc = '98765432109876543210';
-    if (asc.includes(p) || desc.includes(p)) return true;
-
-    // 3. አንድ አይነት ቁጥር ብቻ የተደጋገመ ከሆነ (ለምሳሌ: 7777)
-    if (/^(\d)\1+$/.test(p)) return true;
-
-    return false;
-}
-
-// ሲስተሙ በራሱ PIN ሲፈጥር ደካማ እንዳይሆን ማረጋገጫ
-function generate4DigitPIN() {
-    let pin = '';
-    do {
-        pin = Math.floor(1000 + Math.random() * 9000).toString();
-    } while (isWeakPIN(pin));
-    return pin;
-}
+function generate4DigitPIN() { return Math.floor(1000 + Math.random() * 9000).toString(); }
 
 function csvCell(val) {
     if (val === null || val === undefined) return '""';
@@ -306,76 +257,239 @@ app.get('/', (req, res) => {
 });
 
 app.post('/login', (req, res) => {
-// ==========================================
-// 🛑 2. የሎጊን ሙከራ ቆጣሪ (4, 3, 2, 1 Countdown Protection)
-// ==========================================
-const loginAttempts = new Map();
-
-app.post('/login', (req, res) => {
     const lang = req.query.lang || 'am';
     const { role, username, password } = req.body;
-    const uKey = (username || '').trim().toUpperCase();
-    const clientKey = `${req.ip}_${uKey}`;
-
-    const now = Date.now();
-    const lockDuration = 15 * 60 * 1000; // 15 ደቂቃ
-
-    let record = loginAttempts.get(clientKey) || { count: 0, lockUntil: 0 };
-
-    // ቀድሞ ታግዶ ከነበረና ጊዜው ካላለቀ
-    if (record.lockUntil > now) {
-        const minsLeft = Math.ceil((record.lockUntil - now) / 60000);
-        return res.redirect(`/?lang=${lang}&error=locked&mins=${minsLeft}`);
-    }
-
-    const handleFailedLogin = () => {
-        record.count += 1;
-        const remaining = 5 - record.count; // 4, 3, 2, 1 ይቀራል
-        if (remaining <= 0) {
-            record.lockUntil = now + lockDuration;
-            record.count = 0;
-            loginAttempts.set(clientKey, record);
-            return res.redirect(`/?lang=${lang}&error=locked&mins=15`);
-        } else {
-            loginAttempts.set(clientKey, record);
-            return res.redirect(`/?lang=${lang}&error=invalid&left=${remaining}`);
-        }
-    };
-
-    const clearAttempts = () => loginAttempts.delete(clientKey);
+    const uKey = (username || '').trim();
 
     if (role === 'admin') {
-        if ((username || '').trim() === ADMIN_USER && password === ADMIN_PASS) {
-            clearAttempts();
+        if (uKey === ADMIN_USER && password === ADMIN_PASS) {
             req.session.isAdmin = true;
             return res.redirect(`/admin?lang=${lang}`);
+        } else {
+            return res.redirect(`/?lang=${lang}&error=invalid`);
         }
-        return handleFailedLogin();
     } else if (role === 'teacher') {
-        db.get(`SELECT * FROM teachers WHERE UPPER(id) = ?`, [uKey], (err, t) => {
+        db.get(`SELECT * FROM teachers WHERE id = ?`, [uKey.toUpperCase()], (err, t) => {
             if (t && (bcrypt.compareSync(password, t.password) || password === t.password)) {
-                clearAttempts();
                 req.session.teacherId = t.id;
                 return res.redirect(`/teacher-dashboard?lang=${lang}`);
             }
-            return handleFailedLogin();
+            return res.redirect(`/?lang=${lang}&error=invalid`);
         });
     } else if (role === 'student') {
-        db.get(`SELECT * FROM students WHERE UPPER(student_id) = ?`, [uKey], (err, s) => {
+        db.get(`SELECT * FROM students WHERE student_id = ?`, [uKey.toUpperCase()], (err, s) => {
             if (s && (bcrypt.compareSync(password, s.password) || password === s.password)) {
-                clearAttempts();
                 req.session.studentId = s.student_id;
                 return res.redirect(`/student-dashboard?lang=${lang}`);
             }
-            return handleFailedLogin();
+            return res.redirect(`/?lang=${lang}&error=invalid`);
         });
     } else {
-        return handleFailedLogin();
+        return res.redirect(`/?lang=${lang}&error=invalid`);
     }
 });
 
-
 app.get('/logout', (req, res) => { req.session.destroy(() => res.redirect('/')); });
+
+app.get('/forgot-password', (req, res) => {
+    const lang = req.query.lang === 'en' ? 'en' : 'am';
+    const t = lang === 'en' ? {
+        title: "Reset My Password", desc: "Enter your phone number and your mother's name exactly as you registered them.",
+        ph: "Phone Number", mom: "Mother's Name", btn: "Reset Password", back: "Back to Login"
+    } : {
+        title: "የይለፍ ቃል ዳግም አስጀምር", desc: "በምዝገባ ጊዜ የተጠቀሙበትን ስልክ ቁጥር እና የእናትዎን ስም በትክክል ያስገቡ።",
+        ph: "ስልክ ቁጥር", mom: "የእናት ስም", btn: "የይለፍ ቃል ዳግም አስጀምር", back: "ወደ መግቢያ ተመለስ"
+    };
+
+    let alertScript = '';
+    if (req.query.error === 'notfound') {
+        alertScript = `<script>Swal.fire({icon: 'error', title: 'Oops...', text: '${lang==='en'?'Account Not Found!':'ተመሳሳይ አካውንት አልተገኘም!'}', confirmButtonColor: '#d33'})</script>`;
+    }
+
+    res.send(`<!DOCTYPE html><html lang="${lang}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${t.title}</title><script src="https://cdn.tailwindcss.com"></script><script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></head><body class="bg-gradient-to-br from-blue-50 to-gray-200 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md"><div class="text-center mb-6"><div class="inline-block p-4 bg-purple-100 rounded-full mb-4"><i class="fa-solid fa-key text-4xl text-purple-600"></i></div><h2 class="text-2xl font-extrabold text-gray-800">${t.title}</h2><p class="text-gray-500 mt-2 text-sm">${t.desc}</p></div><form action="/api/forgot-password?lang=${lang}" method="POST" class="space-y-5"><div class="relative"><i class="fa-solid fa-phone absolute left-3 top-3.5 text-gray-400"></i><input type="text" name="phone" placeholder="${t.ph}" required class="w-full pl-10 pr-3 py-3 rounded-lg border border-gray-300 focus:outline-none focus:border-purple-500"></div><div class="relative"><i class="fa-solid fa-person-breastfeeding absolute left-3 top-3.5 text-gray-400"></i><input type="text" name="mother_name" placeholder="${t.mom}" required class="w-full pl-10 pr-3 py-3 rounded-lg border border-gray-300 focus:outline-none focus:border-purple-500"></div><button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg shadow-md">${t.btn}</button></form><div class="mt-6 text-center"><a href="/?lang=${lang}" class="text-gray-600 hover:text-purple-600 font-bold"><i class="fa-solid fa-arrow-left mr-1"></i> ${t.back}</a></div></div>${alertScript}</body></html>`);
+});
+
+app.post('/api/forgot-password', (req, res) => {
+    const lang = req.query.lang || 'am';
+    const { phone, mother_name } = req.body;
+    db.get(`SELECT student_id FROM students WHERE phone = ? AND mother_name = ?`, [phone, mother_name], (err, s) => {
+        if (s) {
+            let newPin = generate4DigitPIN();
+            let hashedPIN = bcrypt.hashSync(newPin, 10); 
+            return db.run(`UPDATE students SET password = ? WHERE student_id = ?`, [hashedPIN, s.student_id], () => {
+                res.send(`<!DOCTYPE html><html><head><script src="https://cdn.tailwindcss.com"></script><script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script></head><body class="bg-gray-100 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center"><div class="inline-block p-3 bg-green-100 rounded-full mb-4"><svg class="w-12 h-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></div><h2 class="text-2xl font-bold text-gray-800 mb-2">ፓስወርድ ተቀይሯል!</h2><p class="text-gray-600 mb-4">አዲሱ የይለፍ ቁጥርዎ ይህ ነው:</p><div class="text-5xl font-extrabold text-red-600 mb-6 bg-red-50 py-4 rounded-xl border border-red-200 tracking-widest shadow-inner">${newPin}</div><a href="/?lang=${lang}" class="block w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md">ወደ መግቢያ ተመለስ</a></div></body></html>`);
+            });
+        }
+        res.redirect(`/forgot-password?lang=${lang}&error=notfound`);
+    });
+});
+
+app.post('/api/recover-password', (req, res) => {
+    const { id, phone } = req.body;
+    db.get(`SELECT * FROM students WHERE student_id = ? AND phone = ?`, [id, phone], (err, student) => {
+        if (student) {
+            let newPassword = generate4DigitPIN(); 
+            let hashedPassword = bcrypt.hashSync(newPassword, 10);
+            db.run(`UPDATE students SET password = ? WHERE student_id = ?`, [hashedPassword, id], (updateErr) => {
+                if (updateErr) return res.json({ success: false });
+                res.json({ success: true, newPassword: newPassword });
+            });
+        } else {
+            db.get(`SELECT * FROM teachers WHERE id = ? AND phone = ?`, [id, phone], (err2, teacher) => {
+                if (teacher) {
+                    let newPassword = generate4DigitPIN(); 
+                    let hashedPassword = bcrypt.hashSync(newPassword, 10);
+                    db.run(`UPDATE teachers SET password = ?, plain_pin = ? WHERE id = ?`, [hashedPassword, newPassword, id], (updateErr) => {
+                        if (updateErr) return res.json({ success: false });
+                        res.json({ success: true, newPassword: newPassword });
+                    });
+                } else {
+                    res.json({ success: false });
+                }
+            });
+        }
+    });
+});
+
+// ================= STUDENT REGISTRATION & DIGITAL ID =================
+app.get('/student-register', (req, res) => {
+    const lang = req.query.lang === 'en' ? 'en' : 'am';
+    let gradeOptions = '';
+    for(let i=1; i<=12; i++) gradeOptions += `<option value="Grade ${i}">Grade ${i}</option>`;
+    res.send(`<!DOCTYPE html><html lang="${lang}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Student Registration</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-100 py-10 px-4"><div class="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden"><div class="bg-green-600 py-6 px-8 text-center text-white relative"><a href="/?lang=${lang}" class="absolute left-4 top-6">⬅️</a><h2 class="text-2xl font-bold">አዲስ ተማሪ ምዝገባ</h2></div><div class="p-8"><form action="/api/register?lang=${lang}" method="POST" enctype="multipart/form-data"><div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6"><div><label class="block text-sm font-bold mb-2">ሙሉ ስም</label><input type="text" name="name" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">የእናት ስም</label><input type="text" name="mother_name" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">ጾታ</label><select name="gender" class="w-full px-3 py-2 border rounded-lg"><option value="Male">ወንድ</option><option value="Female">ሴት</option></select></div><div><label class="block text-sm font-bold mb-2">ዕድሜ</label><input type="number" name="age" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">ስልክ ቁጥር</label><input type="text" name="phone" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">የአደጋ ጊዜ ተጠሪ ስልክ</label><input type="text" name="emergency_phone" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">ክልል</label><input type="text" name="region" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">ዞን</label><input type="text" name="zone" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">ወረዳ</label><input type="text" name="woreda" required class="w-full px-3 py-2 border rounded-lg"></div><div><label class="block text-sm font-bold mb-2">ቀበሌ</label><input type="text" name="kebele" required class="w-full px-3 py-2 border rounded-lg"></div></div><div class="mb-6"><label class="block text-sm font-bold mb-2">የሚገቡበት የክፍል ደረጃ</label><select name="year_level" class="w-full px-3 py-2 border rounded-lg">${gradeOptions}</select></div><div class="mb-6"><label class="block text-sm font-bold mb-2">የጉርድ ፎቶ</label><input type="file" name="student_photo" accept="image/*" required class="w-full p-2 border border-dashed rounded-lg"></div><div class="mb-8 p-4 border rounded-lg bg-gray-50"><label class="block text-sm font-bold mb-2">የክፍያ ማረጋገጫ</label><select name="payment_type" id="payType" onchange="document.getElementById('slipBox').style.display = this.value=='slip_file'?'block':'none'; document.getElementById('txnBox').style.display = this.value=='txn_id'?'block':'none';" class="w-full px-3 py-2 border rounded-lg mb-4"><option value="txn_id">የትራንዛክሽን ቁጥር (TXN ID)</option><option value="slip_file">የደረሰኝ ፎቶ (Bank Slip)</option></select><div id="txnBox"><input type="text" name="txn_id" placeholder="Transaction ID..." class="w-full px-3 py-2 border rounded-lg"></div><div id="slipBox" style="display:none;"><input type="file" name="bank_slip_file" accept="image/*,.pdf" class="w-full p-2 border border-dashed rounded-lg bg-white"></div></div><button type="submit" class="w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg text-lg">ምዝገባ ላክ</button></form></div></div></body></html>`);
+});
+
+app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 }, { name: 'bank_slip_file', maxCount: 1 }]), (req, res) => {
+    const lang = req.query.lang || 'am';
+    try {
+        let { name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, year_level, payment_type, txn_id } = req.body;
+        name = xss(name); mother_name = xss(mother_name); phone = xss(phone);
+        
+        let autoID = generateStudentID(); 
+        let autoPIN = generate4DigitPIN();
+        let hashedPIN = bcrypt.hashSync(autoPIN, 10); 
+
+        assignClassSection(year_level, (assignedSection) => {
+            let photoPath = (req.files && req.files['student_photo']) ? req.files['student_photo'][0].filename : '';
+            let slipPath = payment_type === 'slip_file' && (req.files && req.files['bank_slip_file']) ? req.files['bank_slip_file'][0].filename : xss(txn_id);
+
+            db.run(`INSERT INTO pending_students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            [autoID, hashedPIN, name, mother_name || '', gender || '', age || null, phone || '', emergency_phone || '', region || '', zone || '', woreda || '', kebele || '', assignedSection, payment_type, slipPath, photoPath], function(err) {
+                if (err) return res.redirect(`/student-register?lang=${lang}&error=db`);
+                res.send(`<!DOCTYPE html><html><head><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-100 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center"><h2 class="text-3xl font-bold text-gray-800 mb-6">ተሳክቷል!</h2><p class="text-gray-700"><strong>የመታወቂያ ቁጥር:</strong> ${autoID}</p><p class="text-gray-700"><strong>የይለፍ ቃል:</strong> ${autoPIN}</p><a href="/?lang=${lang}" class="block w-full bg-green-600 text-white font-bold py-3 rounded-lg mt-4">ወደ መግቢያ ተመለስ</a></div></body></html>`);
+            });
+        });
+    } catch (error) {
+        res.redirect(`/student-register?lang=${lang}&error=db`);
+    }
+});
+
+app.post('/register-student', upload.single('bank_slip'), (req, res) => {
+    const { name, mother_name, gender, phone, class_level, region, zone, woreda, kebele, emergency_name, emergency_phone, transaction_id } = req.body;
+    const paymentProof = req.file ? req.file.filename : (transaction_id ? transaction_id.trim() : '');
+
+    const autoID = generateStudentID();
+    const autoPIN = generate4DigitPIN();
+    const hashedPIN = bcrypt.hashSync(autoPIN, 10);
+
+    assignClassSection(class_level, (assignedSection) => {
+        const finalClass = assignedSection || class_level;
+        db.run(
+            `INSERT INTO pending_students (student_id, password, name, gender, phone, class_level, bank_slip_val, mother_name, region, zone, woreda, kebele, emergency_name, emergency_phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [autoID, hashedPIN, name, gender, phone, finalClass, paymentProof, mother_name || '', region || '', zone || '', woreda || '', kebele || '', emergency_name || '', emergency_phone || ''],
+            function(err) {
+                if (err) return res.redirect('/?error=db');
+                res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Registration Successful</title></head><body style="font-family:sans-serif; background:#eef2f5; display:flex; justify-content:center; align-items:center; min-height:100vh; margin:0;"><div style="background:white; padding:30px; border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,0.15); max-width:420px; width:90%; text-align:center; border-top:6px solid #27ae60;"><h2 style="color:#27ae60; margin-top:0;">✅ ምዝገባው ተሳክቷል!</h2><div style="background:#f8f9fa; padding:15px; border-radius:8px; border:1px solid #ddd; margin:20px 0; text-align:left; font-size:16px; line-height:1.8;"><b>👤 ስም (Name):</b> ${name}<br><b>🆔 መታወቂያ (ID):</b> <span style="color:#2980b9; font-weight:bold;">${autoID}</span><br><b>🔑 የይለፍ ቃል (PIN):</b> <span style="color:#e74c3c; font-weight:bold;">${autoPIN}</span><br><b>🏫 ክፍል (Class):</b> ${finalClass}</div><a href="/" style="display:inline-block; background:#2980b9; color:white; padding:12px 25px; text-decoration:none; border-radius:6px; font-weight:bold;">⬅️ ወደ መግቢያ ገጽ ተመለስ</a></div></body></html>`);
+            }
+        );
+    });
+});
+
+app.get('/student/digital-id', (req, res) => {
+    if (!req.session.studentId) return res.redirect('/');
+    db.get('SELECT * FROM students WHERE student_id = ?', [req.session.studentId], (err, student) => {
+        if (!student) return res.redirect('/');
+        res.send(`<!DOCTYPE html>
+<html lang="am">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital ID - ${student.name}</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #eef2f5; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
+        .id-card { width: 380px; background: white; border-radius: 14px; box-shadow: 0 10px 25px rgba(0,0,0,0.18); overflow: hidden; border: 2px solid #1f4e79; }
+        .header { background: linear-gradient(135deg, #1f4e79 0%, #0d2b45 100%) !important; color: white !important; padding: 14px 16px; display: flex; align-items: center; gap: 12px; border-bottom: 4px solid #f39c12; }
+        .school-logo { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background: white; border: 2px solid #f39c12; }
+        .content { padding: 18px; display: flex; gap: 15px; align-items: center; border-bottom: 1px solid #eee; background: white !important; }
+        .profile-img { width: 95px; height: 95px; border-radius: 10px; object-fit: cover; border: 2.5px solid #1f4e79; }
+        .info { font-size: 13.5px; line-height: 1.6; color: #333; }
+        .info p { margin: 3px 0; }
+        .qr-section { padding: 12px; text-align: center; background: #f8fafc !important; }
+        .footer { background: #1f4e79 !important; color: white !important; padding: 7px; text-align: center; font-size: 10.5px; }
+        .actions { margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+        .btn { padding: 11px 18px; font-size: 14px; font-weight: bold; cursor: pointer; border: none; border-radius: 8px; text-align: center; text-decoration: none; color: white; }
+        @media print { .actions { display: none !important; } body { background: white; padding: 0; } .id-card { box-shadow: none; margin: auto; } }
+    </style>
+</head>
+<body>
+    <div id="studentIdCard" class="id-card">
+        <div class="header">
+            <img src="/uploads/logo.jpg" onerror="this.src='/uploads/logo.png'" class="school-logo" crossorigin="anonymous">
+            <div>
+                <h3 style="margin:0; font-size:15.5px;">AMANUEL LIGHT & LIFE SCHOOL</h3>
+                <p style="margin:3px 0 0; font-size:11px; color:#f39c12; font-weight:bold;">OFFICIAL DIGITAL STUDENT ID CARD</p>
+            </div>
+        </div>
+        <div class="content">
+            <img src="/uploads/${student.photo || 'logo.jpg'}" onerror="this.src='/uploads/logo.jpg'" class="profile-img" crossorigin="anonymous">
+            <div class="info">
+                <h3 style="margin:0 0 5px 0; color:#1f4e79; font-size:16px;">${student.name}</h3>
+                <p><b>ID No:</b> <span style="color:#2980b9; font-weight:bold;">${student.student_id}</span></p>
+                <p><b>Class:</b> ${student.class_level}</p>
+                <p><b>Gender:</b> ${student.gender || '-'}</p>
+                <p><b>Phone:</b> ${student.phone || '-'}</p>
+                <p><b>Status:</b> <span style="color:#27ae60; font-weight:bold;">Approved</span></p>
+            </div>
+        </div>
+        <div class="qr-section">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${student.student_id}" style="width:82px; height:82px;" crossorigin="anonymous">
+            <p style="font-size:10px; color:#64748b; margin:3px 0 0;">Scan to verify student status</p>
+        </div>
+        <div class="footer">Property of Amanuel Light and Life School</div>
+    </div>
+
+    <div class="actions">
+        <button onclick="downloadColorID()" class="btn" style="background:#27ae60;">📥 በኦሪጅናል ከለር Download PDF</button>
+        <button onclick="window.print()" class="btn" style="background:#2980b9;">🖨️ Print ID</button>
+        <a href="/student-dashboard" class="btn" style="background:#7f8c8d;">⬅️ ተመለስ</a>
+    </div>
+
+    <script>
+        function downloadColorID() {
+            const element = document.getElementById('studentIdCard');
+            html2pdf().set({
+                margin: 10,
+                filename: 'Student_ID_${student.student_id}.pdf',
+                image: { type: 'jpeg', quality: 1 },
+                html2canvas: { scale: 3, useCORS: true, backgroundColor: '#ffffff' },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            }).from(element).save();
+        }
+    </script>
+</body>
+</html>`);
+    });
+});
+
+app.get('/api/student/:id', (req, res) => {
+    const studentId = req.params.id.toUpperCase().trim();
+    db.get(`SELECT * FROM students WHERE student_id = ?`, [studentId], (err, student) => {
+        if (err || !student) return res.json({ success: false, message: 'Student not found' });
+        res.json({ success: true, student: student });
+    });
+});
 
 // ================= ADMIN DASHBOARD =================
 app.get('/admin', (req, res) => {
@@ -405,9 +519,6 @@ app.get('/admin', (req, res) => {
                                 let secRows = sections.map(sec => `<tr><td><a href="/class-hub/${encodeURIComponent(sec.name)}" style="color:#16a085; font-weight:bold;" target="_blank">📂 ${sec.name}</a></td><td><form action="/admin/edit-section/${sec.id}?lang=${lang}" method="POST" style="display:flex; gap:4px;"><select name="proctor_name" style="width:140px;"><option value="${sec.proctor_name || ''}">${sec.proctor_name || '-- Select --'}</option>${teachers.map(tc => `<option value="${tc.name}">${tc.name}</option>`).join('')}</select><button type="submit">Save</button></form></td><td><a href="/admin/delete-section/${sec.id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑 Delete</a></td><td><a href="/attendance-sheet/${encodeURIComponent(sec.name)}" style="color:#2980b9; font-weight:bold; margin-right:10px;" target="_blank">📋 Attendance</a><a href="/admin/export-section-students/${encodeURIComponent(sec.name)}" style="background:#27ae60; color:white; padding:4px 8px; border-radius:3px; text-decoration:none; font-weight:bold;">📥 Excel</a></td></tr>`).join('');
 
                                 let sectionOptions = sections.map(sec => `<option value="${sec.name}">${sec.name}</option>`).join('');
-                                // Fixed Roster Section dynamic buttons (Image B fix)
-                                let rosterSectionButtons = sections.map(sec => `<a href="/admin/master-roster/2019 E.C/${encodeURIComponent(sec.name)}" target="_blank" style="background:#1f4e79; color:white; padding:10px 18px; border-radius:6px; text-decoration:none; font-weight:bold; font-size:14px; display:inline-block;">🏫 ${sec.name} (Master Roster & PDF)</a>`).join('') || `<span style="color:#7f8c8d;">ምንም የተመዘገበ ሴክሽን የለም።</span>`;
-
                                 let teacherOptions = teachers.map(tc => `<option value="${tc.id}">${tc.name}</option>`).join('');
                                 let gradeCheckboxes = ''; for(let i=1; i<=12; i++) gradeCheckboxes += `<label style="margin-right:8px;"><input type="checkbox" name="grades" value="Grade ${i}"> Grade ${i}</label>`;
                                 let cRows = courses.map(c => `<tr><td>${c.code}</td><td>${c.title}</td><td style="display:none;">0</td><td>${c.class_level}</td><td>${c.teacher_name||'-'}</td><td><a href="/admin/delete-course/${c.id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td></tr>`).join('');
@@ -448,7 +559,7 @@ app.get('/admin', (req, res) => {
                                 res.render('admin', {
                                     lang, excellent, good, average, poor, maleCount, femaleCount,
                                     pRows, secRows, cRows, tRows, adminNotiRows, groupedStudentsHtml: '',
-                                    sectionOptions, rosterSectionButtons, teacherOptions, gradeCheckboxes
+                                    sectionOptions, teacherOptions, gradeCheckboxes
                                 });
                             });
                         });
@@ -1023,7 +1134,7 @@ app.get('/admin/registered-students', (req, res) => {
     });
 });
 
-// ================= 📊 DIRECTOR REPORT ROUTE (FIXED FOR EDITING & COLOR PDF) =================
+// ================= 📊 DIRECTOR REPORT ROUTE =================
 app.get('/admin/director-report', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
 
