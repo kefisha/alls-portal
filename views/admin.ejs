@@ -37,32 +37,22 @@
         .logout-btn { background: #e74c3c; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; }
         #editor { height: 180px; background: white; border-radius: 0 0 6px 6px; font-size: 15px; }
 
-        /* ☑️ Multi-Section Checkboxes Grid */
         .multi-sec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 8px; background: white; padding: 12px; border: 1px solid #ccd1d9; border-radius: 8px; max-height: 165px; overflow-y: auto; margin-bottom: 10px; }
-        .sec-chk-label { display: flex; align-items: center; gap: 6px; background: #f8fafc; padding: 7px 10px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 13px; font-weight: 600; color: #2c3e50; cursor: pointer; transition: 0.2s; }
+        .sec-chk-label { display: flex; align-items: center; gap: 6px; background: #f8fafc; padding: 7px 10px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 13px; font-weight: 600; color: #2c3e50; cursor: pointer; }
         .sec-chk-label:hover { border-color: #3498db; background: #ebf5fb; }
         .sec-chk-label input { width: 16px; height: 16px; margin: 0; cursor: pointer; }
-
-        /* 📉 Compact Applicants Card */
         .compact-applicants-card { padding: 15px !important; max-height: 320px !important; overflow-y: auto !important; }
-        .compact-applicants-card h3 { font-size: 17px !important; margin-bottom: 10px !important; padding-bottom: 6px !important; }
-        .compact-applicants-card table th, .compact-applicants-card table td { padding: 6px 8px !important; font-size: 12.5px !important; }
-
-        /* 📈 Expanded Courses Card */
         .expanded-subjects-card { grid-column: 1 / -1 !important; padding: 28px !important; border-width: 4px !important; }
-        .expanded-subjects-card h3 { font-size: 22px !important; }
-        .expanded-subjects-card input, .expanded-subjects-card select, .expanded-subjects-card button { font-size: 15.5px !important; padding: 12px !important; }
-        .expanded-subjects-card table th, .expanded-subjects-card table td { padding: 12px 15px !important; font-size: 15px !important; }
     </style>
 </head>
 <body class="lang-am">
     <div class="container">
         
-        <!-- Top Navigation (Language & Logout) -->
+        <!-- 🌐 1. Top Navigation (Language Toggle & Logout - Image A Fixed) -->
         <div style="display: flex; justify-content: flex-end; gap: 15px; align-items: center; margin-bottom: 20px;">
-            <div style="background: white; padding: 5px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-                <button type="button" onclick="setLang('am')" id="btn-am" style="background:#27ae60; color:white; padding:6px 16px; border-radius:5px; border:none; cursor:pointer; font-weight:bold;">🇪🇹 አማርኛ</button>
-                <button type="button" onclick="setLang('en')" id="btn-en" style="background:transparent; color:#333; padding:6px 16px; border-radius:5px; border:none; cursor:pointer; font-weight:bold;">🇬🇧 English</button>
+            <div style="background: white; padding: 6px 12px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); display: flex; gap: 8px;">
+                <button type="button" onclick="setLang('am')" id="btn-am" style="background:#27ae60; color:white; padding:8px 18px; border-radius:6px; border:none; cursor:pointer; font-weight:bold; font-size:14px;">🇪🇹 አማርኛ</button>
+                <button type="button" onclick="setLang('en')" id="btn-en" style="background:transparent; color:#333; padding:8px 18px; border-radius:6px; border:none; cursor:pointer; font-weight:bold; font-size:14px;">🇬🇧 English</button>
             </div>
             <a href="/logout" class="logout-btn">🚪 <span class="am">ውጣ</span><span class="en">Logout</span></a>
         </div>
@@ -127,17 +117,28 @@
                 </div>
             </div>
 
-            <!-- 3. All Student Roster -->
+            <!-- 3. All Student Roster (Image B Fixed - Clickable Accordion) -->
             <div style="background: #fffcf5; padding: 18px; border-radius: 10px; border: 2px solid #f39c12;">
                 <h4 style="margin-top:0; color:#d35400;">
                     📂 <span class="am">3. የዓመቱ ጠቅላላ ተማሪዎች ሮስተር (All Student Roster by Year & Class)</span>
                     <span class="en">3. Academic Year Master Student Roster (Click Year to Open Classes)</span>
                 </h4>
-                <div id="yearlyRosterContainer"></div>
+                <div id="yearlyRosterContainer">
+                    <div style="margin-bottom:12px;">
+                        <button type="button" onclick="const el = document.getElementById('roster_yr_0'); el.style.display = el.style.display === 'none' ? 'flex' : 'none';"
+                                style="width:100%; text-align:left; background:#e67e22; color:white; padding:14px 20px; border:none; border-radius:8px; font-size:16px; font-weight:bold; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+                            <span>📁 2019 E.C - All Student Roster (የሁሉም ክፍሎች ጠቅላላ ሮስተር)</span>
+                            <span>🔽 ክፈት (Open Classes)</span>
+                        </button>
+                        <div id="roster_yr_0" style="display:flex; flex-wrap:wrap; gap:10px; padding:15px; background:white; border:1px solid #f39c12; border-radius:0 0 8px 8px; margin-top:4px;">
+                            <%- sectionOptions.replace(/value="/g, 'href="/admin/master-roster/2019 E.C/').replace(/>/g, '" target="_blank" style="background:#1f4e79; color:white; padding:10px 18px; border-radius:6px; text-decoration:none; font-weight:bold; font-size:14px; display:inline-block;">') %>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- Notification (With Rich Text & Edit/Delete) -->
+        <!-- 📢 Notification Form (Image B Fixed - Quill Editor Active) -->
         <div class="card">
             <h3>📢 <span class="am">አዲስ ማስታወቂያ መላኪያ</span><span class="en">Send New Notification</span></h3>
             <form id="notifForm" action="/admin/save-notice" method="POST" enctype="multipart/form-data">
@@ -162,7 +163,7 @@
         </div>
 
         <div class="card">
-            <h3>🔔 <span class="am">ቀደም ሲል የተላኩ ማስታወቂያዎች (ማስተካከል / ማጥፋት ይቻላል)</span><span class="en">Previously Sent Notifications (Edit / Delete)</span></h3>
+            <h3>🔔 <span class="am">ቀደም ሲል የተላኩ ማስታወቂያዎች</span><span class="en">Previously Sent Notifications</span></h3>
             <div style="max-height: 400px; overflow-y: auto;">
                 <%- adminNotiRows %>
             </div>
@@ -170,7 +171,6 @@
 
         <!-- Pending Students & Registered Students Archive -->
         <div class="grid-2">
-            <!-- 🟢 Pending Students -->
             <div class="card compact-applicants-card" style="border-color: #27ae60;">
                 <h3 style="color: #27ae60; border-bottom-color: #d5f5e3;">🟢 <span class="am">አዲስ አመልካቾች</span><span class="en">Pending Approvals</span></h3>
                 <div style="overflow-x: auto;">
@@ -187,7 +187,6 @@
                 </div>
             </div>
 
-            <!-- 👨‍🎓 Registered Students Archive Card (OPEN REGISTERED STUDENTS LIST) -->
             <div class="card" style="border-color: #2980b9; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; background: linear-gradient(to bottom, #ffffff, #ebf5fb);">
                 <h3 style="color: #2980b9; border-bottom-color: #d4e6f1; width: 100%;">
                     👨‍🎓 <span class="am">የተመዘገቡ ተማሪዎች ማህደር</span><span class="en">Registered Students Archive</span>
@@ -202,10 +201,10 @@
             </div>
         </div>
 
-        <!-- 📊 Director's Weekly & Monthly Report Card (GENERATE & EDIT REPORT) -->
+        <!-- 📊 Director Report (Image C Fixed - Buttons Active) -->
         <div class="card" id="directorReportCard" style="border-color: #16a085; background: linear-gradient(to right, #ffffff, #f4fbf9);">
             <h3 style="color: #16a085; border-bottom-color: #d1f2eb;">
-                📊 <span class="am">የዲሬክተር ሳምንታዊ እና ወርሃዊ ሪፖርት (ማዘጋጀት እና ማስተካከል)</span><span class="en">Director's Weekly & Monthly Report (Generate & Edit)</span>
+                📊 <span class="am">የዲሬክተር ሳምንታዊ እና ወርሃዊ ሪፖርት (ሊስተካከል የሚችል)</span><span class="en">Director's Weekly & Monthly Report (Editable)</span>
             </h3>
             <form action="/admin/director-report" method="GET" target="_blank" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; align-items: end;">
                 <div>
@@ -225,7 +224,7 @@
                 </div>
                 <div>
                     <button type="submit" style="width:100%; background:#16a085; color:white; padding:12px; border:none; border-radius:6px; font-weight:bold; font-size:15px; cursor:pointer;">
-                        🖨️ <span class="am">ሪፖርት አዘጋጅና አስተካክል (Generate & Edit Report)</span><span class="en">Generate & Edit Report</span>
+                        🖨️ <span class="am">ሪፖርት አዘጋጅና አስተካክል (Generate & Edit)</span><span class="en">Generate & Edit Report</span>
                     </button>
                 </div>
             </form>
@@ -312,7 +311,7 @@
                             </select>
                         </div>
                         <div>
-                            <label style="font-weight:bold; font-size:13px; color:#27ae60;">
+                            <label style="font-weight:bold; font-size:13.5px; color:#27ae60;">
                                 <span class="am">📥 የሚመደበው / ተተኪው መምህር *</span><span class="en">📥 Assigned / Incoming Teacher *</span>
                             </label>
                             <select name="new_teacher_id" id="newTeacherSelect" required>
@@ -341,7 +340,7 @@
             </div>
         </div>
 
-        <!-- 🏫 Class Sections Card -->
+        <!-- Class Sections Card -->
         <div class="card">
             <h3>🏫 <span class="am">የክፍል ሴክሽኖች</span><span class="en">Class Sections</span></h3>
             <form action="/admin/add-section" method="POST" style="display: flex; gap: 10px; margin-bottom: 15px;">
@@ -361,7 +360,7 @@
             </div>
         </div>
 
-        <!-- 📚 Courses Card -->
+        <!-- Courses Card -->
         <div class="card expanded-subjects-card" style="border-color: #2980b9;">
             <h3>📚 <span class="am">የትምህርት አይነቶች ምዝገባ እና ዝርዝር</span><span class="en">Courses Registration & List</span></h3>
             <form action="/admin/add-course" method="POST" style="background: #f8fafc; padding: 18px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 20px;">
@@ -421,27 +420,30 @@
             const savedLang = localStorage.getItem('prefLang') || 'am';
             setLang(savedLang);
 
-            var quill = new Quill('#editor', {
-                theme: 'snow',
-                placeholder: 'መልዕክትዎን እዚህ ይጻፉ... / Write your notification here...',
-                modules: {
-                    toolbar: [
-                        [{ 'font': [] }, { 'size': ['small', false, 'large', 'huge'] }],
-                        [{ 'header': [1, 2, 3, false] }],
-                        ['bold', 'italic', 'underline', 'strike'],
-                        [{ 'color': [] }, { 'background': [] }],
-                        [{ 'align': [] }],
-                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                        ['clean']
-                    ]
-                }
-            });
-
-            const notifForm = document.getElementById('notifForm');
-            if (notifForm) {
-                notifForm.addEventListener('submit', function() {
-                    document.getElementById('hiddenMessage').value = quill.root.innerHTML;
+            // Quill Editor Initialization
+            if (document.getElementById('editor')) {
+                var quill = new Quill('#editor', {
+                    theme: 'snow',
+                    placeholder: 'መልዕክትዎን እዚህ ይጻፉ... / Write your notification here...',
+                    modules: {
+                        toolbar: [
+                            [{ 'font': [] }, { 'size': ['small', false, 'large', 'huge'] }],
+                            [{ 'header': [1, 2, 3, false] }],
+                            ['bold', 'italic', 'underline', 'strike'],
+                            [{ 'color': [] }, { 'background': [] }],
+                            [{ 'align': [] }],
+                            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                            ['clean']
+                        ]
+                    }
                 });
+
+                const notifForm = document.getElementById('notifForm');
+                if (notifForm) {
+                    notifForm.addEventListener('submit', function() {
+                        document.getElementById('hiddenMessage').value = quill.root.innerHTML;
+                    });
+                }
             }
 
             const rawSelect = document.getElementById("rawSectionOptionsSource");
@@ -512,8 +514,6 @@
                 .then(r => r.json())
                 .then(data => {
                     const subBox = document.getElementById('submittedClassesButtons');
-                    const yearBox = document.getElementById('yearlyRosterContainer');
-
                     if (data.submissions && data.submissions.length > 0) {
                         subBox.innerHTML = data.submissions.map(s => `
                             <a href="/admin/master-roster/${encodeURIComponent(s.academic_year)}/${encodeURIComponent(s.class_level)}" target="_blank"
@@ -525,50 +525,8 @@
                     } else {
                         subBox.innerHTML = `<span style="color:#7f8c8d; font-size:13.5px;">እስካሁን መምህራን Submit ያደረጉት ክፍል የለም።</span>`;
                     }
-
-                    const years = (data.years && data.years.length > 0) ? data.years : ['2019 E.C'];
-                    const sections = data.sections || [];
-
-                    yearBox.innerHTML = years.map((yr, idx) => {
-                        const secButtons = sections.map(sec => `
-                            <a href="/admin/master-roster/${encodeURIComponent(yr)}/${encodeURIComponent(sec.name)}" target="_blank"
-                               style="background:#1f4e79; color:white; padding:10px 18px; border-radius:6px; text-decoration:none; font-weight:bold; font-size:14px; display:inline-block;">
-                                🏫 ${sec.name} (Master Roster & PDF)
-                            </a>
-                        `).join('') || `<span style="color:#7f8c8d;">ምንም የተመዘገበ ሴክሽን የለም።</span>`;
-
-                        return `
-                            <div style="margin-bottom:12px;">
-                                <button type="button" onclick="const el = document.getElementById('roster_yr_${idx}'); el.style.display = el.style.display === 'none' ? 'flex' : 'none';"
-                                        style="width:100%; text-align:left; background:#e67e22; color:white; padding:14px 20px; border:none; border-radius:8px; font-size:16px; font-weight:bold; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
-                                    <span>📁 ${yr} - All Student Roster (የሁሉም ክፍሎች ጠቅላላ ሮስተር)</span>
-                                    <span>🔽 ክፈት (Open Classes)</span>
-                                </button>
-                                <div id="roster_yr_${idx}" style="display:none; flex-wrap:wrap; gap:10px; padding:15px; background:white; border:1px solid #f39c12; border-radius:0 0 8px 8px; margin-top:4px;">
-                                    ${secButtons}
-                                </div>
-                            </div>
-                        `;
-                    }).join('');
                 });
         });
-   
-<script>
-    // 1. Right-Click ማሰናከል
-    document.addEventListener('contextmenu', e => e.preventDefault());
-
-    // 2. F12, Ctrl+Shift+I, Ctrl+U (Inspect & View Source) ማሰናከል
-    document.addEventListener('keydown', e => {
-        if (
-            e.key === 'F12' ||
-            (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) ||
-            (e.ctrlKey && (e.key === 'U' || e.key === 'u' || e.key === 'S' || e.key === 's'))
-        ) {
-            e.preventDefault();
-            return false;
-        }
-    });
-
-</script>
+    </script>
 </body>
 </html>
