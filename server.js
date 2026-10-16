@@ -250,7 +250,7 @@ app.post('/login', (req, res) => {
             return res.redirect(`/admin?lang=${lang}`);
         } else {
             loginAttempts[clientIp].count++;
-            const left = Math.max(0, 5 - loginAttempts[clientIp].count);
+            const left = Math.max(0, 4 - loginAttempts[clientIp].count);
             return res.redirect(`/?lang=${lang}&error=invalid&attempts=${left}`);
         }
     } else if (role === 'teacher') {
@@ -261,7 +261,7 @@ app.post('/login', (req, res) => {
                 return res.redirect(`/teacher-dashboard?lang=${lang}`);
             } else {
                 loginAttempts[clientIp].count++;
-                const left = Math.max(0, 5 - loginAttempts[clientIp].count);
+                const left = Math.max(0, 4 - loginAttempts[clientIp].count);
                 return res.redirect(`/?lang=${lang}&error=invalid&attempts=${left}`);
             }
         });
@@ -273,7 +273,7 @@ app.post('/login', (req, res) => {
                 return res.redirect(`/student-dashboard?lang=${lang}`);
             } else {
                 loginAttempts[clientIp].count++;
-                const left = Math.max(0, 5 - loginAttempts[clientIp].count);
+                const left = Math.max(0, 4 - loginAttempts[clientIp].count);
                 return res.redirect(`/?lang=${lang}&error=invalid&attempts=${left}`);
             }
         });
@@ -1528,6 +1528,7 @@ app.get('/api/admin/roster-summary', (req, res) => {
     });
 });
 
+// 🎓 የተማሪ የ1 ገጽ ካርድ (100% ኦሪጅናል ከለር እንደ ፎቶ B የሚያወርድ)
 app.get('/admin/student-report-card', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const studentId = (req.query.student_id || '').trim().toUpperCase();
@@ -1717,6 +1718,7 @@ app.get('/admin/student-report-card', (req, res) => {
     });
 });
 
+// 🏆 የሙሉ ክፍል ሮስተር እና የሁሉም ተማሪዎች ካርድ (100% ኦሪጅናል ከለር PDF የሚያወርድ)
 app.get('/admin/master-roster/:year/:className', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const academicYear = decodeURIComponent(req.params.year);
