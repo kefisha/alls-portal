@@ -17,6 +17,16 @@ process.on('unhandledRejection', (reason, p) => { console.error('UNHANDLED REJEC
 
 const app = express();
 app.set('trust proxy', 1); 
+// 🛡️ 1. HTTP Security Headers (Anti-Hacking & Anti-Iframe Copy)
+app.use((req, res, next) => {
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN'); // ዌብሳይቱን በሌላ ሳይት ውስጥ አስገብቶ መስረቅን ይከለክላል
+    res.setHeader('X-Content-Type-Options', 'nosniff'); // የቫይረስ ፋይሎች እንደ ስክሪፕት እንዳይነበቡ ያግዳል
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.removeHeader('X-Powered-By'); // ሰርቨሩ በ Node.js/Express መሰራቱን ከሃከሮች ይደብቃል
+    next();
+});
+
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 const PORT = process.env.PORT || 3000;
@@ -232,9 +242,11 @@ app.get('/', (req, res) => {
     res.render('login', { lang, error });
 });
 
-app.post('/login', (req, res) => {
+app.post('/login', loginLimiter, (req, res) => {
     const lang = req.query.lang || 'am';
     const { role, username, password } = req.body;
+    ...
+
     const uKey = (username || '').trim();
 
     if (role === 'admin') {
