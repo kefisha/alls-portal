@@ -3,345 +3,243 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Amanuel Light and Life School - Portal</title>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <title>Login - Amanuel Light and Life School</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #1f4e79 0%, #3498db 100%); min-height: 100vh; margin: 0; display: flex; flex-direction: column; align-items: center; color: #333; padding-bottom: 40px; }
-        
-        /* 🌍 የቋንቋ መቀየሪያ ንድፍ */
-        .lang-toggle { position: fixed; top: 15px; right: 15px; background: rgba(255,255,255,0.95); padding: 5px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 1000; }
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body {
+            margin: 0; padding: 20px; min-height: 100vh;
+            background: linear-gradient(135deg, #1f4e79 0%, #0d2b45 100%);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        /* 🌐 Language Toggle CSS */
         body.lang-am .en { display: none !important; }
+        body.lang-am .am { display: inline !important; }
         body.lang-en .am { display: none !important; }
+        body.lang-en .en { display: inline !important; }
 
-        .header-text { text-align: center; color: white; margin-top: 65px; margin-bottom: 20px; text-shadow: 2px 2px 5px rgba(0,0,0,0.3); padding: 0 15px; }
-        .header-text h1 { margin: 0; font-size: 2.2em; }
-        
-        .card { background: white; border-radius: 12px; padding: 28px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); width: 92%; max-width: 500px; margin-bottom: 30px; box-sizing: border-box; }
-        .card h2 { text-align: center; margin-top: 0; color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; margin-bottom: 20px; font-size: 22px; }
-        
-        .field-label { font-weight: 600; color: #34495e; display: block; margin-bottom: 5px; font-size: 13.5px; }
-        input[type="text"], input[type="password"], input[type="tel"], select { width: 100%; padding: 11px 12px; margin-bottom: 14px; border: 1px solid #ccd1d9; border-radius: 6px; box-sizing: border-box; font-size: 14.5px; background: #fdfdfd; transition: 0.2s; }
-        input:focus, select:focus { border-color: #3498db; outline: none; background: white; box-shadow: 0 0 6px rgba(52,152,219,0.25); }
-        
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .section-divider { background: #f0f4f8; padding: 8px 12px; border-left: 4px solid #3498db; border-radius: 4px; font-weight: bold; color: #1f4e79; margin: 10px 0 15px 0; font-size: 14px; }
+        .lang-bar {
+            background: rgba(255,255,255,0.15); padding: 6px; border-radius: 10px;
+            display: flex; gap: 8px; margin-bottom: 18px; backdrop-filter: blur(5px);
+        }
+        .lang-btn {
+            border: none; padding: 8px 18px; border-radius: 7px; font-weight: bold;
+            cursor: pointer; font-size: 14px; transition: 0.2s;
+        }
 
-        .role-selector, .payment-selector { display: flex; justify-content: space-around; margin-bottom: 15px; background: #f4f6f9; padding: 10px; border-radius: 8px; border: 1px solid #e0e6ed; gap: 10px; }
-        .role-selector label, .payment-selector label { font-weight: bold; color: #1f4e79; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 5px; }
-        
-        button.action-btn { width: 100%; padding: 14px; border: none; border-radius: 6px; color: white; font-weight: bold; font-size: 16px; cursor: pointer; transition: background 0.3s ease; }
-        .btn-login { background: #e67e22; } .btn-login:hover { background: #d35400; }
-        .btn-register { background: #27ae60; } .btn-register:hover { background: #219653; }
-        
-        .file-upload { border: 2px dashed #bdc3c7; padding: 14px; text-align: center; border-radius: 6px; margin-bottom: 15px; background: #fafafa; }
-        .trans-box { border: 2px solid #3498db; padding: 14px; border-radius: 6px; margin-bottom: 15px; background: #f4f9fd; display: none; }
-        .forgot-btn { background: none; border: none; color: #3498db; text-decoration: underline; cursor: pointer; font-size: 14px; margin-top: 12px; width: 100%; text-align: center; }
+        .login-card {
+            background: white; width: 100%; max-width: 430px; border-radius: 16px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.3); overflow: hidden; border-top: 6px solid #f39c12;
+        }
+        .header {
+            text-align: center; padding: 25px 20px 15px; background: #f8fafc; border-bottom: 1px solid #e2e8f0;
+        }
+        .header img {
+            width: 80px; height: 80px; border-radius: 50%; object-fit: cover;
+            border: 3px solid #f39c12; box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        .header h2 { margin: 10px 0 4px; color: #1f4e79; font-size: 21px; }
+        .header p { margin: 0; color: #d35400; font-weight: bold; font-size: 13px; }
 
-        @media (max-width: 480px) {
-            .grid-2 { grid-template-columns: 1fr; gap: 0; }
-            .payment-selector { flex-direction: column; align-items: flex-start; }
+        .form-body { padding: 25px; }
+        label { display: block; font-weight: bold; font-size: 13.5px; color: #2c3e50; margin-bottom: 6px; }
+        select, input[type="text"], input[type="password"] {
+            width: 100%; padding: 12px; margin-bottom: 16px; border: 1.5px solid #cbd5e1;
+            border-radius: 8px; font-size: 15px; outline: none; transition: 0.2s;
+        }
+        select:focus, input:focus { border-color: #2980b9; box-shadow: 0 0 0 3px rgba(41,128,185,0.15); }
+
+        .btn-login {
+            width: 100%; background: #2980b9; color: white; border: none; padding: 13px;
+            border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s;
+        }
+        .btn-login:hover { background: #1f4e79; }
+
+        .links-box {
+            margin-top: 18px; padding-top: 15px; border-top: 1px solid #e2e8f0;
+            display: flex; flex-direction: column; gap: 10px; text-align: center;
+        }
+        .btn-register {
+            display: block; background: #27ae60; color: white; text-decoration: none;
+            padding: 12px; border-radius: 8px; font-weight: bold; font-size: 15px;
+        }
+        .btn-forgot {
+            background: #fef9e7; color: #d35400; border: 1px solid #f39c12; padding: 10px;
+            border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer; text-decoration: none; display: block;
+        }
+        .error-msg {
+            background: #fdecea; color: #c0392b; padding: 10px; border-radius: 6px;
+            border-left: 4px solid #e74c3c; margin-bottom: 15px; font-size: 13.5px; font-weight: bold; text-align: center;
+        }
+
+        /* Modal for Reset Password */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+            align-items: center; justify-content: center; padding: 20px; z-index: 999;
+        }
+        .modal-box {
+            background: white; width: 100%; max-width: 400px; border-radius: 14px;
+            padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); border-top: 6px solid #8e44ad;
         }
     </style>
 </head>
 <body class="lang-am">
-    
-    <!-- 🌍 ቋንቋ መምረጫ (Language Toggle) -->
-    <div class="lang-toggle">
-        <button onclick="setLang('am')" id="btn-am" style="background:#27ae60; color:white; padding:6px 14px; border-radius:5px; border:none; cursor:pointer; font-weight:bold;">🇪🇹 አማርኛ</button>
-        <button onclick="setLang('en')" id="btn-en" style="background:transparent; color:#333; padding:6px 14px; border-radius:5px; border:none; cursor:pointer; font-weight:bold;">🇬🇧 English</button>
+
+    <!-- 🌐 Language Switcher -->
+    <div class="lang-bar">
+        <button type="button" id="btn-am" class="lang-btn" onclick="switchPortalLang('am')" style="background:#27ae60; color:white;">🇪🇹 አማርኛ</button>
+        <button type="button" id="btn-en" class="lang-btn" onclick="switchPortalLang('en')" style="background:transparent; color:white;">🇬🇧 English</button>
     </div>
 
-    <!-- 🏫 ርዕስ እና ሎጎ -->
-    <div class="header-text">
-        <img src="/uploads/logo.jpg" alt="Amanuel Logo" style="width: 115px; height: 115px; border-radius: 50%; object-fit: cover; border: 4px solid white; box-shadow: 0 5px 15px rgba(0,0,0,0.3); margin-bottom: 10px; background: white;">
-        <h1> Amanuel Light and Life School</h1>
-        <p><span class="am">ወደ ትምህርት ቤታችን ፖርታል በሰላም መጡ!</span><span class="en">Welcome to our School Portal!</span></p>
+    <div class="login-card">
+        <div class="header">
+            <img src="/uploads/logo.jpg" onerror="this.src='/uploads/logo.png'" alt="School Logo">
+            <h2>AMANUEL LIGHT & LIFE SCHOOL</h2>
+            <p><span class="am">አማኑኤል ብርሃንና ሕይወት ትምህርት ቤት</span><span class="en">Official School Portal</span></p>
+        </div>
+
+        <div class="form-body">
+            <% if (typeof error !== 'undefined' && error) { %>
+                <div class="error-msg">
+                    ❌ <span class="am">የተሳሳተ መታወቂያ ወይም የይለፍ ቃል!</span><span class="en">Invalid Username/ID or Password!</span>
+                </div>
+            <% } %>
+
+            <form action="/login" method="POST" id="loginForm">
+                <label>👤 <span class="am">የተጠቃሚ ሚና ይምረጡ (Role):</span><span class="en">Select User Role:</span></label>
+                <select name="role" id="roleSelect" required>
+                    <option value="student">👨‍🎓 ተማሪ / ወላጅ (Student / Parent)</option>
+                    <option value="teacher">👩‍🏫 መምህር (Teacher)</option>
+                    <option value="admin">👑 ዲሬክተር / አድሚን (Director / Admin)</option>
+                </select>
+
+                <label>🆔 <span class="am">መታወቂያ ቁጥር / Username:</span><span class="en">ID Number / Username:</span></label>
+                <input type="text" name="username" id="usernameInput" placeholder="ምሳሌ: ALLS-1234 / ALLS-T-1234" required>
+
+                <label>🔑 <span class="am">የይለፍ ቃል (PIN / Password):</span><span class="en">Password / PIN:</span></label>
+                <input type="password" name="password" id="passwordInput" placeholder="****" required>
+
+                <button type="submit" class="btn-login">
+                    🔓 <span class="am">ወደ ፖርታሉ ግባ</span><span class="en">Login to Portal</span>
+                </button>
+            </form>
+
+            <div class="links-box">
+                <button type="button" onclick="openResetModal()" class="btn-forgot">
+                    🔑 <span class="am">የይለፍ ቃል ረስተዋል? (Reset Password)</span><span class="en">Forgot Password? (Reset PIN)</span>
+                </button>
+
+                <a href="/student-register" id="regLink" class="btn-register">
+                    📝 <span class="am">አዲስ ተማሪ ለመመዝገብ እዚህ ይጫኑ</span><span class="en">New Student Registration</span>
+                </a>
+            </div>
+        </div>
     </div>
 
-    <!--  1. መግቢያ ካርድ (Login) -->
-    <div class="card" style="border-top: 5px solid #e67e22;">
-        <h2> <span class="am">ወደ ፖርታል መግቢያ</span><span class="en">Login to Portal</span></h2>
-        <form action="/login" method="POST">
-            
-            <div class="role-selector">
-                <label><input type="radio" name="role" value="student" checked> <span class="am">ተማሪ</span><span class="en">Student</span></label>
-                <label><input type="radio" name="role" value="teacher"> <span class="am">መምህር</span><span class="en">Teacher</span></label>
-                <label><input type="radio" name="role" value="admin"> <span class="am">አድሚን</span><span class="en">Admin</span></label>
-            </div>
+    <!-- 🔑 Reset Password Modal (Works for Both Students & Teachers) -->
+    <div class="modal-overlay" id="resetModal">
+        <div class="modal-box">
+            <h3 style="margin-top:0; color:#8e44ad; text-align:center;">
+                🔑 <span class="am">የይለፍ ቃል ዳግም ማስጀመሪያ</span><span class="en">Reset Your Password / PIN</span>
+            </h3>
+            <p style="font-size:13px; color:#555; text-align:center; margin-bottom:15px;">
+                <span class="am">መታወቂያ ቁጥርዎን (ID) እና በምዝገባ ጊዜ ያስገቡትን ስልክ ቁጥር ያስገቡ፦</span>
+                <span class="en">Enter your ID Number and registered Phone Number:</span>
+            </p>
 
-            <label class="field-label">👤 <span class="am">መታወቂያ ቁጥር (ID):</span><span class="en">ID Number:</span></label>
-            <input type="text" name="username" data-am="ምሳሌ: ............" data-en="e.g. ALLS-1234 / ADMIN" placeholder="ALLS-1234 / ADMIN" required>
-            
-            <label class="field-label">🔑 <span class="am">የይለፍ ቃል (Password):</span><span class="en">Password:</span></label>
-            <input type="password" name="password" placeholder="••••••••" required>
-            
-            <button type="submit" class="action-btn btn-login"><span class="am">ግባ</span><span class="en">Sign In</span></button>
-        </form>
-        
-        <button class="forgot-btn" onclick="recoverPassword()">
-            <span class="am">የይለፍ ቃል ረስተዋል? (እዚህ ይጫኑ)</span>
-            <span class="en">Forgot Password? (Click here)</span>
-        </button>
-    </div>
+            <div id="resetResultBox" style="display:none; padding:12px; border-radius:8px; margin-bottom:15px; text-align:center; font-weight:bold;"></div>
 
-    <!-- 📝 2. አዲስ ተማሪ መመዝገቢያ (Student Registration) -->
-    <div class="card" style="border-top: 5px solid #27ae60;">
-        <h2>📝 <span class="am">አዲስ ተማሪ ምዝገባ</span><span class="en">New Student Registration</span></h2>
-        <form action="/register-student" method="POST" enctype="multipart/form-data">
-            
-            <!-- ሀ. የተማሪው መሰረታዊ መረጃ -->
-            <div class="section-divider">
-                👤 <span class="am">የተማሪው መሰረታዊ መረጃ</span><span class="en">Student Basic Information</span>
-            </div>
+            <form id="resetPassForm" onsubmit="submitPasswordReset(event)">
+                <label>🆔 <span class="am">መታወቂያ ቁጥር (Student / Teacher ID):</span><span class="en">ID Number (e.g. ALLS-...):</span></label>
+                <input type="text" id="resetIdInput" placeholder="ALLS-1234 ወይም ALLS-T-1234" required>
 
-            <label class="field-label"><span class="am">የተማሪው ሙሉ ስም (ከነአያት) *</span><span class="en">Student Full Name *</span></label>
-            <input type="text" name="name" data-am="የተማሪው ሙሉ ስም ያስገቡ" data-en="Enter student's full name" required>
+                <label>📞 <span class="am">ስልክ ቁጥር (Phone Number):</span><span class="en">Registered Phone Number:</span></label>
+                <input type="text" id="resetPhoneInput" placeholder="09... / 07..." required>
 
-            <label class="field-label"><span class="am">የእናት ሙሉ ስም *</span><span class="en">Mother's Full Name *</span></label>
-            <input type="text" name="mother_name" data-am="የእናት ሙሉ ስም ያስገቡ" data-en="Enter mother's full name" required>
-            
-            <div class="grid-2">
-                <div>
-                    <label class="field-label"><span class="am">ፆታ *</span><span class="en">Gender *</span></label>
-                    <select name="gender" required>
-                        <option value="" class="lang-opt" data-am="ፆታ ይምረጡ" data-en="Select Gender">ፆታ ይምረጡ</option>
-                        <option value="Male" class="lang-opt" data-am="ወንድ" data-en="Male">ወንድ</option>
-                        <option value="Female" class="lang-opt" data-am="ሴት" data-en="Female">ሴት</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="field-label"><span class="am">ስልክ ቁጥር *</span><span class="en">Phone Number *</span></label>
-                    <input type="tel" name="phone" data-am="09... / 07..." data-en="09... / 07..." required>
-                </div>
-            </div>
-
-            <label class="field-label"><span class="am">የሚገቡበት ክፍል *</span><span class="en">Class Level *</span></label>
-            <select name="class_level" required>
-                <option value="" class="lang-opt" data-am="የሚገቡበትን ክፍል ይምረጡ" data-en="Select Class Level">የሚገቡበትን ክፍል ይምረጡ</option>
-                <option value="KG 1">KG 1</option>
-                <option value="KG 2">KG 2</option>
-                <option value="KG 3">KG 3</option>
-                <option value="Grade 1" class="lang-opt" data-am="1ኛ ክፍል (Grade 1)" data-en="Grade 1">1ኛ ክፍል (Grade 1)</option>
-                <option value="Grade 2" class="lang-opt" data-am="2ኛ ክፍል (Grade 2)" data-en="Grade 2">2ኛ ክፍል (Grade 2)</option>
-                <option value="Grade 3" class="lang-opt" data-am="3ኛ ክፍል (Grade 3)" data-en="Grade 3">3ኛ ክፍል (Grade 3)</option>
-                <option value="Grade 4" class="lang-opt" data-am="4ኛ ክፍል (Grade 4)" data-en="Grade 4">4ኛ ክፍል (Grade 4)</option>
-                <option value="Grade 5" class="lang-opt" data-am="5ኛ ክፍል (Grade 5)" data-en="Grade 5">5ኛ ክፍል (Grade 5)</option>
-                <option value="Grade 6" class="lang-opt" data-am="6ኛ ክፍል (Grade 6)" data-en="Grade 6">6ኛ ክፍል (Grade 6)</option>
-                <option value="Grade 7" class="lang-opt" data-am="7ኛ ክፍል (Grade 7)" data-en="Grade 7">7ኛ ክፍል (Grade 7)</option>
-                <option value="Grade 8" class="lang-opt" data-am="8ኛ ክፍል (Grade 8)" data-en="Grade 8">8ኛ ክፍል (Grade 8)</option>
-                <option value="Grade 9" class="lang-opt" data-am="9ኛ ክፍል (Grade 9)" data-en="Grade 9">9ኛ ክፍል (Grade 9)</option>
-                <option value="Grade 10" class="lang-opt" data-am="10ኛ ክፍል (Grade 10)" data-en="Grade 10">10ኛ ክፍል (Grade 10)</option>
-                <option value="Grade 11" class="lang-opt" data-am="11ኛ ክፍል (Grade 11)" data-en="Grade 11">11ኛ ክፍል (Grade 11)</option>
-                <option value="Grade 12" class="lang-opt" data-am="12ኛ ክፍል (Grade 12)" data-en="Grade 12">12ኛ ክፍል (Grade 12)</option>
-            </select>
-
-            <!-- ለ. የመኖሪያ አድራሻ -->
-            <div class="section-divider">
-                📍 <span class="am">የመኖሪያ አድራሻ</span><span class="en">Residential Address</span>
-            </div>
-
-            <div class="grid-2">
-                <div>
-                    <label class="field-label"><span class="am">ክልል *</span><span class="en">Region *</span></label>
-                    <input type="text" name="region" data-am="ክልል ያስገቡ" data-en="Enter Region" required>
-                </div>
-                <div>
-                    <label class="field-label"><span class="am">ዞን *</span><span class="en">Zone *</span></label>
-                    <input type="text" name="zone" data-am="ዞን ያስገቡ" data-en="Enter Zone" required>
-                </div>
-            </div>
-
-            <div class="grid-2">
-                <div>
-                    <label class="field-label"><span class="am">ወረዳ *</span><span class="en">Woreda *</span></label>
-                    <input type="text" name="woreda" data-am="ወረዳ ያስገቡ" data-en="Enter Woreda" required>
-                </div>
-                <div>
-                    <label class="field-label"><span class="am">ቀበሌ *</span><span class="en">Kebele *</span></label>
-                    <input type="text" name="kebele" data-am="ቀበሌ ያስገቡ" data-en="Enter Kebele" required>
-                </div>
-            </div>
-
-            <!-- ሐ. የአደጋ ጊዜ ተጠሪ መረጃ -->
-            <div class="section-divider" style="border-left-color: #e74c3c;">
-                🚨 <span class="am">የአደጋ ጊዜ ተጠሪ መረጃ</span><span class="en">Emergency Contact Information</span>
-            </div>
-
-            <div class="grid-2">
-                <div>
-                    <label class="field-label"><span class="am">የአደጋ ጊዜ ተጠሪ ስም *</span><span class="en">Emergency Contact Name *</span></label>
-                    <input type="text" name="emergency_name" data-am="ሙሉ ስም ያስገቡ" data-en="Contact Full Name" required>
-                </div>
-                <div>
-                    <label class="field-label"><span class="am">የአደጋ ጊዜ ተጠሪ ስልክ *</span><span class="en">Emergency Contact Phone *</span></label>
-                    <input type="tel" name="emergency_phone" data-am="ስልክ ቁጥር ያስገቡ" data-en="Contact Phone Number" required>
-                </div>
-            </div>
-
-            <!-- መ. የባንክ ክፍያ ማረጋገጫ (Slip or Transaction Option) -->
-            <div class="section-divider" style="border-left-color: #27ae60;">
-                💳 <span class="am">የባንክ ክፍያ ማረጋገጫ</span><span class="en">Bank Payment Verification</span>
-            </div>
-
-            <div class="payment-selector">
-                <label>
-                    <input type="radio" name="payment_method" value="slip" checked onchange="togglePaymentOption('slip')">
-                    🧾 <span class="am">በደረሰኝ ፎቶ (Bank Slip)</span><span class="en">Upload Bank Slip</span>
-                </label>
-                <label>
-                    <input type="radio" name="payment_method" value="transaction" onchange="togglePaymentOption('transaction')">
-                    🔢 <span class="am">በትራንዛክሽን ቁጥር (Transaction ID)</span><span class="en">Transaction ID / Ref</span>
-                </label>
-            </div>
-
-            <!-- አማራጭ 1፡ የደረሰኝ ፎቶ መላኪያ -->
-            <div id="slipUploadBox" class="file-upload">
-                <label style="font-weight:bold; color:#555; display:block; margin-bottom:8px;">
-                    📷 <span class="am">የባንክ ክፍያ ደረሰኝ ፎቶ ያያይዙ *</span><span class="en">Attach Bank Receipt Photo *</span>
-                </label>
-                <input type="file" name="bank_slip" id="bankSlipInput" accept="image/*,.pdf" required style="border:none; padding:0; background:transparent; width: 100%;">
-            </div>
-
-            <!-- አማራጭ 2፡ የትራንዛክሽን ቁጥር መጻፊያ -->
-            <div id="transactionTextBox" class="trans-box">
-                <label class="field-label" style="color:#1f4e79;">
-                    🔢 <span class="am">የባንክ ትራንዛክሽን / Reference ቁጥር ያስገቡ *</span><span class="en">Enter Bank Transaction / Reference ID *</span>
-                </label>
-                <input type="text" name="transaction_id" id="transactionIdInput" data-am="ምሳሌ: FT24105... (CBE / Telebirr / ሌላ ባንክ)" data-en="e.g. FT24105... (CBE / Telebirr / Other Bank)" style="margin-bottom:0;">
-            </div>
-
-            <button type="submit" class="action-btn btn-register">
-                <span class="am">አሁን ተመዝገብ</span><span class="en">Register Now</span>
-            </button>
-        </form>
+                <button type="submit" id="resetSubmitBtn" style="width:100%; background:#8e44ad; color:white; border:none; padding:12px; border-radius:8px; font-weight:bold; font-size:15px; cursor:pointer;">
+                    🔄 <span class="am">አዲስ የይለፍ ቃል አውጣ</span><span class="en">Generate New PIN</span>
+                </button>
+                <button type="button" onclick="closeResetModal()" style="width:100%; margin-top:8px; background:#95a5a6; color:white; border:none; padding:10px; border-radius:8px; font-weight:bold; cursor:pointer;">
+                    ✖️ <span class="am">ዝጋ</span><span class="en">Close</span>
+                </button>
+            </form>
+        </div>
     </div>
 
     <script>
-        // 💳 የክፍያ ማረጋገጫ አማራጭ መቀያየሪያ (Slip vs Transaction ID)
-        function togglePaymentOption(method) {
-            const slipBox = document.getElementById('slipUploadBox');
-            const transBox = document.getElementById('transactionTextBox');
-            const slipInput = document.getElementById('bankSlipInput');
-            const transInput = document.getElementById('transactionIdInput');
+        function switchPortalLang(lang) {
+            const clean = (lang === 'en') ? 'en' : 'am';
+            document.body.className = 'lang-' + clean;
+            localStorage.setItem('prefLang', clean);
 
-            if (method === 'slip') {
-                slipBox.style.display = 'block';
-                transBox.style.display = 'none';
-                slipInput.required = true;
-                transInput.required = false;
-                transInput.value = '';
-            } else {
-                slipBox.style.display = 'none';
-                transBox.style.display = 'block';
-                slipInput.required = false;
-                transInput.required = true;
-                slipInput.value = '';
+            const btnAm = document.getElementById('btn-am');
+            const btnEn = document.getElementById('btn-en');
+            if (btnAm && btnEn) {
+                btnAm.style.background = clean === 'am' ? '#27ae60' : 'transparent';
+                btnEn.style.background = clean === 'en' ? '#2980b9' : 'transparent';
             }
+
+            const regLink = document.getElementById('regLink');
+            if (regLink) regLink.href = '/student-register?lang=' + clean;
+
+            const loginForm = document.getElementById('loginForm');
+            if (loginForm) loginForm.action = '/login?lang=' + clean;
         }
 
-        // 🌍 የቋንቋ መቀየሪያ
-        function setLang(lang) {
-            document.body.className = 'lang-' + lang;
-            localStorage.setItem('prefLang', lang);
-            
-            document.getElementById('btn-am').style.background = lang === 'am' ? '#27ae60' : 'transparent';
-            document.getElementById('btn-am').style.color = lang === 'am' ? 'white' : '#333';
-            document.getElementById('btn-en').style.background = lang === 'en' ? '#2980b9' : 'transparent';
-            document.getElementById('btn-en').style.color = lang === 'en' ? 'white' : '#333';
-
-            document.querySelectorAll('input[data-am]').forEach(inp => {
-                inp.placeholder = lang === 'am' ? inp.getAttribute('data-am') : inp.getAttribute('data-en');
-            });
-
-            document.querySelectorAll('option.lang-opt').forEach(opt => {
-                opt.textContent = lang === 'am' ? opt.getAttribute('data-am') : opt.getAttribute('data-en');
-            });
-        }
-
-        document.addEventListener("DOMContentLoaded", function() {
-            let savedLang = localStorage.getItem('prefLang') || 'am';
-            setLang(savedLang);
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const initialLang = urlParams.get('lang') || localStorage.getItem('prefLang') || 'am';
+            switchPortalLang(initialLang);
         });
 
-        // 🚨 የፓስወርድ ማግኛ (Forgot Password Logic)
-        async function recoverPassword() {
-            const isAm = document.body.classList.contains('lang-am');
-            const { value: formValues } = await Swal.fire({
-                title: isAm ? 'የይለፍ ቃል ማግኛ' : 'Password Recovery',
-                html:
-                    `<p style="font-size:14px; color:#555;">${isAm ? 'እባክዎ መታወቂያ (ID) እና ሲመዘገቡ የሰጡትን ስልክ ቁጥር ያስገቡ።' : 'Please enter your ID and registered phone number.'}</p>` +
-                    `<input id="swal-id" class="swal2-input" placeholder="${isAm ? 'መታወቂያ (ID)' : 'ID Number'}">` +
-                    `<input id="swal-phone" class="swal2-input" placeholder="${isAm ? 'ስልክ ቁጥር (Phone)' : 'Phone Number'}">`,
-                focusConfirm: false,
-                confirmButtonText: isAm ? 'ፈልግ (Search)' : 'Recover',
-                confirmButtonColor: '#3498db',
-                preConfirm: () => {
-                    return {
-                        id: document.getElementById('swal-id').value.toUpperCase(),
-                        phone: document.getElementById('swal-phone').value
-                    }
-                }
-            });
-
-            if (formValues && formValues.id && formValues.phone) {
-                const response = await fetch('/api/recover-password', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(formValues)
-                });
-                
-                const result = await response.json();
-                
-                if(result.success) {
-                    Swal.fire({
-                        icon: 'success',
-                        title: isAm ? 'ተሳክቷል!' : 'Success!',
-                        html: `<div style="font-size: 18px; margin-top:10px;">${isAm ? 'አዲሱ የይለፍ ቃልዎ:' : 'Your New Password:'} <br><br><b style="font-size:24px; color:#e74c3c; background:#f4f6f9; padding:10px; border-radius:5px;">${result.newPassword}</b></div>`,
-                        confirmButtonText: 'OK',
-                        confirmButtonColor: '#27ae60'
-                    });
-                } else {
-                    Swal.fire({
-                        icon: 'error',
-                        title: isAm ? 'ስህተት' : 'Error',
-                        text: isAm ? 'ያስገቡት መታወቂያ ወይም ስልክ ቁጥር ትክክል አይደለም።' : 'Invalid ID or Phone number.',
-                        confirmButtonColor: '#e74c3c'
-                    });
-                }
-            }
+        function openResetModal() {
+            document.getElementById('resetResultBox').style.display = 'none';
+            document.getElementById('resetModal').style.display = 'flex';
         }
-    <script>
-    // 🔒 1. ኮድ ኮፒ ማድረግ (Right-Click, F12, Ctrl+U, Ctrl+Shift+I) ሙሉ በሙሉ ማገድ
-    document.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-    });
 
-    document.addEventListener('keydown', function(e) {
-        if (
-            e.keyCode === 123 || // F12
-            (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.keyCode === 74 || e.keyCode === 67)) || // Ctrl+Shift+I/J/C
-            (e.ctrlKey && (e.keyCode === 85 || e.keyCode === 83)) // Ctrl+U (View Source) ወይም Ctrl+S (Save Page)
-        ) {
+        function closeResetModal() {
+            document.getElementById('resetModal').style.display = 'none';
+        }
+
+        function submitPasswordReset(e) {
             e.preventDefault();
-            alert('🛑 ጥብቅ ማስጠንቀቂያ፦ የትምህርት ቤቱን ሲስተም ኮድ መቅዳት ወይም መመርመር በህግ የተከለከለ ነው!');
-            return false;
+            const idVal = document.getElementById('resetIdInput').value.trim();
+            const phoneVal = document.getElementById('resetPhoneInput').value.trim();
+            const resBox = document.getElementById('resetResultBox');
+            const btn = document.getElementById('resetSubmitBtn');
+
+            btn.disabled = true;
+            btn.innerText = '⏳ በመፈለግ ላይ...';
+
+            fetch('/api/recover-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: idVal, phone: phoneVal })
+            })
+            .then(r => r.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.innerText = '🔄 አዲስ የይለፍ ቃል አውጣ';
+                resBox.style.display = 'block';
+                if (data.success) {
+                    resBox.style.background = '#d4edda';
+                    resBox.style.color = '#155724';
+                    resBox.style.border = '2px solid #27ae60';
+                    resBox.innerHTML = `✅ ተሳክቷል!<br>አዲሱ የይለፍ ቃልዎ (New PIN):<br><span style="font-size:28px; color:#e74c3c; letter-spacing:3px;">${data.newPassword}</span>`;
+                } else {
+                    resBox.style.background = '#f8d7da';
+                    resBox.style.color = '#721c24';
+                    resBox.style.border = '1px solid #e74c3c';
+                    resBox.innerHTML = `❌ መታወቂያ ቁጥሩ ወይም ስልክ ቁጥሩ አልተገኘም! እባክዎ ትክክለኛ መረጃ ያስገቡ።`;
+                }
+            })
+            .catch(() => {
+                btn.disabled = false;
+                btn.innerText = '🔄 አዲስ የይለፍ ቃል አውጣ';
+                resBox.style.display = 'block';
+                resBox.style.background = '#f8d7da';
+                resBox.innerHTML = '❌ የኔትወርክ ስህተት ተፈጥሯል!';
+            });
         }
-    });
-
-    // ⚠️ 2. የይለፍ ቃል ሙከራ ገደብ (4, 3, 2, 1) ማስጠንቀቂያ ማሳያ
-    (function() {
-        const params = new URLSearchParams(window.location.search);
-        const err = params.get('error');
-        const left = params.get('left');
-        const mins = params.get('mins');
-
-        if (err === 'invalid' && left) {
-            alert(`❌ የተሳሳተ መታወቂያ ወይም የይለፍ ቃል!\n\n⚠️ ጥንቃቄ፦ ${left} ሙከራ ብቻ ይቀርዎታል! ከዚያ በኋላ አካውንትዎ ለ15 ደቂቃ ይቆለፋል።`);
-        } else if (err === 'locked') {
-            alert(`🔒 አካውንትዎ ተቆልፏል!\n\nበተደጋጋሚ የተሳሳተ የይለፍ ቃል ስላስገቡ ለደህንነት ሲባል ለ ${mins || 15} ደቂቃ ታግደዋል። እባክዎ ቆይተው ይሞክሩ ወይም "Forgot Password" ይጠቀሙ።`);
-        }
-    })();
-</script>
-
+    </script>
 </body>
 </html>
