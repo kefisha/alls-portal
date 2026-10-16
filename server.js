@@ -229,53 +229,36 @@ function esc(v) { return v === null || v === undefined ? '' : String(v).replace(
 app.get('/', (req, res) => {
     const lang = req.query.lang === 'en' ? 'en' : 'am';
     const error = req.query.error;
-    const attempts = req.query.attempts || '';
-    res.render('login', { lang, error, attempts });
+    res.render('login', { lang, error });
 });
-
-const loginAttempts = {};
 
 app.post('/login', (req, res) => {
     const lang = req.query.lang || 'am';
     const { role, username, password } = req.body;
     const uKey = (username || '').trim();
-    const clientIp = req.ip || '127.0.0.1';
-
-    if (!loginAttempts[clientIp]) loginAttempts[clientIp] = { count: 0 };
 
     if (role === 'admin') {
         if (uKey === ADMIN_USER && password === ADMIN_PASS) {
-            delete loginAttempts[clientIp];
             req.session.isAdmin = true;
             return res.redirect(`/admin?lang=${lang}`);
         } else {
-            loginAttempts[clientIp].count++;
-            const left = Math.max(0, 4 - loginAttempts[clientIp].count);
-            return res.redirect(`/?lang=${lang}&error=invalid&attempts=${left}`);
+            return res.redirect(`/?lang=${lang}&error=invalid`);
         }
     } else if (role === 'teacher') {
         db.get(`SELECT * FROM teachers WHERE id = ?`, [uKey.toUpperCase()], (err, t) => {
             if (t && (bcrypt.compareSync(password, t.password) || password === t.password)) {
-                delete loginAttempts[clientIp];
                 req.session.teacherId = t.id;
                 return res.redirect(`/teacher-dashboard?lang=${lang}`);
-            } else {
-                loginAttempts[clientIp].count++;
-                const left = Math.max(0, 4 - loginAttempts[clientIp].count);
-                return res.redirect(`/?lang=${lang}&error=invalid&attempts=${left}`);
             }
+            return res.redirect(`/?lang=${lang}&error=invalid`);
         });
     } else if (role === 'student') {
         db.get(`SELECT * FROM students WHERE student_id = ?`, [uKey.toUpperCase()], (err, s) => {
             if (s && (bcrypt.compareSync(password, s.password) || password === s.password)) {
-                delete loginAttempts[clientIp];
                 req.session.studentId = s.student_id;
                 return res.redirect(`/student-dashboard?lang=${lang}`);
-            } else {
-                loginAttempts[clientIp].count++;
-                const left = Math.max(0, 4 - loginAttempts[clientIp].count);
-                return res.redirect(`/?lang=${lang}&error=invalid&attempts=${left}`);
             }
+            return res.redirect(`/?lang=${lang}&error=invalid`);
         });
     } else {
         return res.redirect(`/?lang=${lang}&error=invalid`);
@@ -344,7 +327,7 @@ app.post('/api/recover-password', (req, res) => {
     });
 });
 
-// ================= STUDENT REGISTRATION & DIGITAL ID =================
+// ================= STUDENT REGISTRATION & FULL-COLOR DIGITAL ID =================
 app.get('/student-register', (req, res) => {
     const lang = req.query.lang === 'en' ? 'en' : 'am';
     let gradeOptions = '';
@@ -419,7 +402,7 @@ app.get('/student/digital-id', (req, res) => {
         .profile-img { width: 95px; height: 95px; border-radius: 10px; object-fit: cover; border: 2.5px solid #1f4e79; }
         .info { font-size: 13.5px; line-height: 1.6; color: #333; }
         .info p { margin: 3px 0; }
-        .qr-section { padding: 12px; text-align: center; background: #fafafa !important; }
+        .qr-section { padding: 12px; text-align: center; background: #f8fafc !important; }
         .footer { background: #1f4e79 !important; color: white !important; padding: 7px; text-align: center; font-size: 10.5px; }
         .actions { margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
         .btn { padding: 11px 18px; font-size: 14px; font-weight: bold; cursor: pointer; border: none; border-radius: 8px; text-align: center; text-decoration: none; color: white; }
@@ -844,6 +827,7 @@ app.post('/admin/register-teacher-full', upload.single('teacher_photo'), (req, r
     );
 });
 
+// 🪪 የመምህር ዲጂታል መታወቂያ (በሙሉ ኦሪጅናል ከለር Download እና Print የሚሆን)
 app.get('/admin/teacher-id/:id', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     db.get(`SELECT * FROM teachers WHERE id = ?`, [req.params.id], (err, t) => {
@@ -1528,7 +1512,6 @@ app.get('/api/admin/roster-summary', (req, res) => {
     });
 });
 
-// 🎓 የተማሪ የ1 ገጽ ካርድ (100% ኦሪጅናል ከለር እንደ ፎቶ B የሚያወርድ)
 app.get('/admin/student-report-card', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const studentId = (req.query.student_id || '').trim().toUpperCase();
@@ -1718,7 +1701,6 @@ app.get('/admin/student-report-card', (req, res) => {
     });
 });
 
-// 🏆 የሙሉ ክፍል ሮስተር እና የሁሉም ተማሪዎች ካርድ (100% ኦሪጅናል ከለር PDF የሚያወርድ)
 app.get('/admin/master-roster/:year/:className', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const academicYear = decodeURIComponent(req.params.year);
