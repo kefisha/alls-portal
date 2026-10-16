@@ -233,7 +233,6 @@ app.get('/', (req, res) => {
     res.render('login', { lang, error, attempts });
 });
 
-// የሎጊን ሙከራ መከታተያ (Login Attempts Counter)
 const loginAttempts = {};
 
 app.post('/login', (req, res) => {
@@ -242,7 +241,7 @@ app.post('/login', (req, res) => {
     const uKey = (username || '').trim();
     const clientIp = req.ip || '127.0.0.1';
 
-    if (!loginAttempts[clientIp]) loginAttempts[clientIp] = { count: 0, timer: null };
+    if (!loginAttempts[clientIp]) loginAttempts[clientIp] = { count: 0 };
 
     if (role === 'admin') {
         if (uKey === ADMIN_USER && password === ADMIN_PASS) {
@@ -1529,7 +1528,6 @@ app.get('/api/admin/roster-summary', (req, res) => {
     });
 });
 
-// 🎓 የተማሪ የ1 ገጽ ካርድ (100% ኦሪጅናል ከለር እንደ ፎቶ B የሚያወርድ)
 app.get('/admin/student-report-card', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const studentId = (req.query.student_id || '').trim().toUpperCase();
@@ -1719,7 +1717,6 @@ app.get('/admin/student-report-card', (req, res) => {
     });
 });
 
-// 🏆 የሙሉ ክፍል ሮስተር እና የሁሉም ተማሪዎች ካርድ (100% ኦሪጅናል ከለር PDF የሚያወርድ)
 app.get('/admin/master-roster/:year/:className', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const academicYear = decodeURIComponent(req.params.year);
@@ -1963,7 +1960,7 @@ app.post('/admin/promote-students', (req, res) => {
                 if (newGrade === "Graduated") {
                     db.run(`UPDATE students SET status = 'Graduated' WHERE student_id = ?`, [st.student_id]);
                 } else {
-                    db.run(`UPDATE students-level = ? WHERE student_id = ?`, [newClassLevel, st.student_id]); // corrected query below
+                    db.run(`UPDATE students SET class_level = ? WHERE student_id = ?`, [newClassLevel, st.student_id]);
                 }
             }
         });
