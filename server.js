@@ -76,6 +76,21 @@ function generateStrong4DigitPIN() {
     return pin;
 }
 
+// 📅 ትክክለኛ የሰዓት፣ የቀን፣ የወር እና የዓመት ማህተም ማሰናጃ
+function getFormattedTimestamp() {
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = monthNames[now.getMonth()];
+    const year = now.getFullYear();
+    let hours = now.getHours();
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    return `${day} ${month} ${year}, ${hours}:${minutes} ${ampm}`;
+}
+
 async function initDB() {
     try {
         await pool.query(`CREATE TABLE IF NOT EXISTS "session" (
@@ -350,7 +365,7 @@ app.post('/api/recover-password', (req, res) => {
     });
 });
 
-// ================= STUDENT REGISTRATION & FULL-COLOR DIGITAL ID =================
+// ================= STUDENT REGISTRATION =================
 app.get('/student-register', (req, res) => {
     const lang = req.query.lang === 'en' ? 'en' : 'am';
     let gradeOptions = '';
@@ -559,7 +574,7 @@ app.post('/register-student', upload.single('bank_slip'), (req, res) => {
             [autoID, hashedPIN, name, gender, phone, finalClass, finalPayType, paymentProof, mother_name || '', region || '', zone || '', woreda || '', kebele || '', emergency_name || '', emergency_phone || ''],
             function(err) {
                 if (err) return res.redirect('/?error=db');
-                res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Registration Successful</title></head><body style="font-family:sans-serif; background:#eef2f5; display:flex; justify-content:center; align-items:center; min-height:100vh; margin:0;"><div style="background:white; padding:30px; border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,0.15); max-width:420px; width:90%; text-align:center; border-top:6px solid #27ae60;"><h2 style="color:#27ae60; margin-top:0;">✅ ምዝገባው ተሳክቷል!</h2><div style="background:#f8f9fa; padding:15px; border-radius:8px; border:1px solid #ddd; margin:20px 0; text-align:left; font-size:16px; line-height:1.8;"><b>👤 ስም (Name):</b> ${name}<br><b>🆔 መታወቂያ (ID):</b> <span style="color:#2980b9; font-weight:bold;">${autoID}</span><br><b>🔑 የይለፍ ቃል (PIN):</b> <span style="color:#e74c3c; font-weight:bold;">${autoPIN}</span><br><b>🏫 ክፍል (Class):</b> ${finalClass}</div><a href="/" style="display:inline-block; background:#2980b9; color:white; padding:12px 25px; text-decoration:none; border-radius:6px; font-weight:bold;">⬅️ ወደ መግቢያ ገጽ ተመለስ</a></div></body></html>`);
+                res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Registration Successful</title></head><body style="font-family:sans-serif; background:#eef2f5; display:flex; justify-content:center; align-items:center; min-height:100vh; margin:0;"><div style="background:white; padding:30px; border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,0.15); max-width:420px; width:90%; text-align:center; border-top:6px solid #27ae60;"><h2 style="color:#27ae60; margin-top:0;">✅ ምዝገባው ተሳክቷል!</h2><div style="background:#f8f9fa; padding:15px; border-radius:8px; border:1px solid #ddd; margin:20px 0; text-align:left; font-size:16px; line-height:1.8;"><b>👤 ስም (Name):</b> ${name}<br><b>🆔 መታወቂያ (ID):</b> <span style="color:#2980b9; font-weight:bold;">${autoID}</span><br><b>🔑 የይለፍ ቃል (PIN):</b> <span style="color:#e74c3c; font-weight:bold;">${autoPIN}</span><br><b>🏫 ክፍል (Class):</b> ${finalClass}</div><a href="/" style="display:inline-block; background:#2980b9; color:white; padding:12px 25px; text-decoration:none; border-radius:6px; font-weight:bold;">⬅️ ወደ መግቢያ ተመለስ</a></div></body></html>`);
             }
         );
     });
@@ -651,7 +666,7 @@ app.get('/api/student/:id', (req, res) => {
     });
 });
 
-// ================= ADMIN DASHBOARD (FULLY FIXED DYNAMIC TARGETS) =================
+// ================= ADMIN DASHBOARD =================
 app.get('/admin', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const lang = req.query.lang || 'am';
@@ -704,7 +719,7 @@ app.get('/admin', (req, res) => {
                                     </tr>
                                 `).join('');
 
-                                // 🎯 አድሚኑ ማስታወቂያ ሲልክ የሚመርጣቸው አማራጮች (ALL, Classes, Sections, Teachers, Students)
+                                // 🎯 አድሚኑ ማስታወቂያ ሲልክ የሚመርጣቸው አማራጮች (ALL, Sections, Teachers, Students)
                                 let adminTargetOptions = `
                                     <option value="ALL">🌍 ለሁሉም ተማሪዎች እና መምህራን (To All)</option>
                                     <optgroup label="🏫 በየክፍሉ / Sections">
@@ -751,13 +766,13 @@ app.get('/admin', (req, res) => {
     });
 });
 
-// ================= 📢 NOTIFICATION ROUTES (WITH FULL RECIPIENT LOGIC) =================
+// ================= 📢 NOTIFICATION ROUTES =================
 app.post('/admin/save-notice', upload.single('attachment'), (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const target_audience = req.body.target_audience || 'ALL';
     const message = req.body.message || '';
     const attachment = req.file ? req.file.filename : null;
-    const createdAt = new Date().toLocaleString('en-GB');
+    const createdAt = getFormattedTimestamp();
 
     db.run(
         `INSERT INTO notifications (sender_role, sender_name, target_audience, message, attachment, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
@@ -771,7 +786,7 @@ app.post('/admin/send-notification', upload.single('attachment'), (req, res) => 
     const target_audience = req.body.target_audience || 'ALL';
     const message = req.body.message || '';
     const attachment = req.file ? req.file.filename : null;
-    const createdAt = new Date().toLocaleString('en-GB');
+    const createdAt = getFormattedTimestamp();
 
     db.run(
         `INSERT INTO notifications (sender_role, sender_name, target_audience, message, attachment, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
@@ -795,7 +810,7 @@ app.post('/edit-notification/:id', upload.single('attachment'), (req, res) => {
     db.run(q, p, () => res.redirect(backUrl));
 });
 
-// ================= ✏️ EDIT STUDENT & TEACHER INFORMATION (PRESERVES EXISTING PHOTO) =================
+// ================= ✏️ EDIT STUDENT & TEACHER INFORMATION =================
 app.get('/admin/edit-student/:id', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     db.get(`SELECT * FROM students WHERE student_id = ?`, [req.params.id], (err, s) => {
@@ -1433,7 +1448,6 @@ app.get('/teacher-dashboard', (req, res) => {
                             let isProctor = currentSection && currentSection.proctor_name === teacher.name;
 
                             db.all("SELECT * FROM notifications ORDER BY id DESC", [], (err, allNotifs = []) => {
-                                // 🎯 መምህሩ የሚደርሱት እና የላኳቸው ማስታወቂያዎች (ልዩ የማሳያ ማጣሪያ)
                                 let mySentNotifs = allNotifs.filter(n => n.sender_name === teacher.name);
 
                                 let classOptions = assignedClasses.map(cls => `<option value="${cls}" ${cls === selectedClass ? 'selected' : ''}>${cls}</option>`).join('');
@@ -1441,7 +1455,6 @@ app.get('/teacher-dashboard', (req, res) => {
                                     ? classCourses.map(c => `<option value="${c.id}" ${c.id.toString() === selectedCourseId ? 'selected' : ''}>${c.title} (${c.code})</option>`).join('')
                                     : `<option value="default">${teacher.subject || 'General Course'} (${activeCourseCode})</option>`;
 
-                                // 🎯 መምህሩ ማስታወቂያ ሲልክ (ለአድሚን፣ ለሁሉም ክፍሎቹ፣ ለአንድ ክፍል ወይም ለተማሪ)
                                 let teacherTargetOptions = `
                                     <option value="ADMIN">👑 ለትምህርት ቤቱ አድሚን / ዲሬክተር (To Admin)</option>
                                     <option value="ALL_MY_CLASSES">🏫 ለሁሉም የምመራቸው ክፍሎች (All My Classes)</option>
@@ -1474,7 +1487,6 @@ app.get('/teacher-dashboard', (req, res) => {
 
                                 let absRows = classAbsences.map(ab => `<tr><td>${ab.student_name}</td><td>${ab.date || ab.created_at || ''}</td><td>${ab.reason}</td><td>${ab.teacher_feedback || 'Pending'}</td></tr>`).join('');
                                 
-                                // 🔔 መምህሩ የላካቸው ማስታወቂያዎች (ከ Edit እና Delete ቁልፎች ጋር)
                                 let teacherNotiRows = mySentNotifs.map(n => `
                                     <div style="background:#fdf2e9; padding:15px; margin-bottom:12px; border-radius:8px; border:1px solid #e67e22;">
                                         <strong>🔔 ለ: <span style="color:#2980b9;">${n.target_audience}</span> | ቀን: ${n.created_at || ''}</strong>
@@ -1514,7 +1526,7 @@ app.post('/teacher/send-notification', upload.single('attachment'), (req, res) =
     let chosenTarget = req.body.target_audience || returnClass || 'ALL';
     let msg = req.body.message || '';
     let file = req.file ? req.file.filename : null;
-    let nowStr = new Date().toLocaleString('en-GB');
+    let nowStr = getFormattedTimestamp();
 
     db.get(`SELECT * FROM teachers WHERE id = ?`, [req.session.teacherId], (err, teacher) => {
         if (!teacher) return res.redirect('/');
@@ -1605,7 +1617,7 @@ app.post('/teacher/submit-final-grades', (req, res) => {
             const cId = course ? String(course.id) : '0';
             const cCode = course ? course.code : ((teacher.subject || 'GEN').substring(0, 3).toUpperCase() + '-01');
             const cTitle = course ? course.title : (teacher.subject || 'General Course');
-            const nowStr = new Date().toLocaleDateString('en-GB');
+            const nowStr = getFormattedTimestamp();
 
             pool.query(
                 `INSERT INTO grade_submissions (academic_year, class_level, course_id, course_code, course_title, teacher_id, teacher_name, submitted_at)
@@ -1720,7 +1732,7 @@ app.post('/save-attendance', (req, res) => {
     });
 });
 
-// ================= STUDENT DASHBOARD (WITH INDIVIDUAL & CLASS NOTIFICATIONS FILTER) =================
+// ================= STUDENT DASHBOARD =================
 app.get('/student-dashboard', (req, res) => {
     if (!req.session.studentId) return res.redirect('/');
     db.get('SELECT s.* FROM students s WHERE s.student_id = ?', [req.session.studentId], (err, student) => {
@@ -1729,7 +1741,6 @@ app.get('/student-dashboard', (req, res) => {
             let myCourses = allCourses.filter(c => isClassMatch(c.class_level, student.class_level));
             db.all('SELECT * FROM course_assessments WHERE student_id = ?', [student.student_id], (err, myGrades = []) => {
                 db.all('SELECT * FROM notifications ORDER BY id DESC', [], (err, allNotifs = []) => {
-                    // 🎯 ተማሪው ማየት የሚችላቸው ማስታወቂያዎች (ለአል፣ ለክፍሉ ወይም ለእሱ በግል STUDENT:ID የተላኩ)
                     let myNotifs = allNotifs.filter(n => 
                         n.target_audience === 'ALL' || 
                         n.target_audience === 'STUDENT:' + student.student_id || 
@@ -1769,7 +1780,7 @@ app.post('/student/absence', upload.single('attachment'), (req, res) => {
     db.get('SELECT name, class_level FROM students WHERE student_id=?', [req.session.studentId], (err, st) => {
         if(st) {
             db.run(`INSERT INTO absence_requests (student_id, student_name, class_level, reason, teacher_feedback, status, created_at, attachment) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, 
-            [req.session.studentId, st.name, st.class_level, xss(req.body.reason), '', 'Pending', new Date().toLocaleString(), req.file ? req.file.filename : null], () => res.redirect('/student-dashboard'));
+            [req.session.studentId, st.name, st.class_level, xss(req.body.reason), '', 'Pending', getFormattedTimestamp(), req.file ? req.file.filename : null], () => res.redirect('/student-dashboard'));
         }
     });
 });
