@@ -54,9 +54,6 @@ const db = {
     }
 };
 
-// ==========================================
-// 🛡️ የደህንነት ማጣሪያዎች (Security Limiters & Password Policy)
-// ==========================================
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, 
     max: 25,
@@ -257,7 +254,6 @@ app.get('/', (req, res) => {
     res.render('login', { lang, error });
 });
 
-// ✅ የተስተካከለው የሎጊን ራውት (አድሚኑንም ሆነ ተጠቃሚዎችን ያለምንም የፓስወርድ እገዳ ያስገባል)
 app.post('/login', loginLimiter, (req, res) => {
     const lang = req.query.lang || 'am';
     const { role, username, password } = req.body;
@@ -354,12 +350,11 @@ app.post('/api/recover-password', (req, res) => {
     });
 });
 
-// ================= 📝 STUDENT REGISTRATION (WITH AMHARIC/ENGLISH TOGGLE & WORKING TRANSACTION/SLIP OPTION) =================
+// ================= STUDENT REGISTRATION & FULL-COLOR DIGITAL ID =================
 app.get('/student-register', (req, res) => {
     const lang = req.query.lang === 'en' ? 'en' : 'am';
     let gradeOptions = '';
     for(let i=1; i<=12; i++) gradeOptions += `<option value="Grade ${i}">Grade ${i}</option>`;
-
     res.send(`<!DOCTYPE html>
 <html lang="${lang}">
 <head>
@@ -376,7 +371,6 @@ app.get('/student-register', (req, res) => {
 </head>
 <body class="lang-${lang} bg-gray-100 py-8 px-4">
     <div class="max-w-3xl mx-auto">
-        <!-- 🌐 Language Toggle Bar -->
         <div class="flex justify-between items-center mb-4">
             <a href="/?lang=${lang}" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg shadow">
                 ⬅️ <span class="am">ወደ መግቢያ ተመለስ</span><span class="en">Back to Login</span>
@@ -451,7 +445,6 @@ app.get('/student-register', (req, res) => {
                         <input type="file" name="student_photo" accept="image/*" required class="w-full p-2.5 border border-dashed rounded-lg bg-gray-50">
                     </div>
 
-                    <!-- 💳 Working Payment Verification Option (TXN ID vs Bank Slip File) -->
                     <div class="mb-8 p-5 border-2 border-blue-200 rounded-xl bg-blue-50">
                         <label class="block text-sm font-bold mb-2 text-blue-900">
                             💳 <span class="am">የክፍያ ማረጋገጫ መንገድ ይምረጡ *</span><span class="en">Select Payment Verification Method *</span>
@@ -658,7 +651,7 @@ app.get('/api/student/:id', (req, res) => {
     });
 });
 
-// ================= ADMIN DASHBOARD (FIXED INTERNAL SERVER ERROR) =================
+// ================= ADMIN DASHBOARD (FULLY FIXED DYNAMIC TARGETS) =================
 app.get('/admin', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const lang = req.query.lang || 'am';
@@ -668,7 +661,7 @@ app.get('/admin', (req, res) => {
             db.all(`SELECT * FROM teachers ORDER BY name`, [], (err, teachers = []) => {
                 db.all(`SELECT * FROM sections ORDER BY name`, [], (err, sections = []) => {
                     db.all(`SELECT * FROM courses ORDER BY class_level, code`, [], (err, courses = []) => {
-                        db.all(`SELECT * FROM notifications WHERE sender_role = 'Admin' ORDER BY id DESC`, [], (err, adminNotifs = []) => {
+                        db.all(`SELECT * FROM notifications ORDER BY id DESC`, [], (err, allNotifs = []) => {
                             db.all(`SELECT * FROM course_assessments`, [], (err, assessments = []) => {
 
                                 let maleCount = students.filter(s => s.gender === 'Male').length;
@@ -686,7 +679,6 @@ app.get('/admin', (req, res) => {
                                 let secRows = sections.map(sec => `<tr><td><a href="/class-hub/${encodeURIComponent(sec.name)}" style="color:#16a085; font-weight:bold;" target="_blank">📂 ${sec.name}</a></td><td><form action="/admin/edit-section/${sec.id}?lang=${lang}" method="POST" style="display:flex; gap:4px;"><select name="proctor_name" style="width:140px;"><option value="${sec.proctor_name || ''}">${sec.proctor_name || '-- Select --'}</option>${teachers.map(tc => `<option value="${tc.name}">${tc.name}</option>`).join('')}</select><button type="submit">Save</button></form></td><td><a href="/admin/delete-section/${sec.id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑 Delete</a></td><td><a href="/attendance-sheet/${encodeURIComponent(sec.name)}" style="color:#2980b9; font-weight:bold; margin-right:10px;" target="_blank">📋 Attendance</a><a href="/admin/export-section-students/${encodeURIComponent(sec.name)}" style="background:#27ae60; color:white; padding:4px 8px; border-radius:3px; text-decoration:none; font-weight:bold;">📥 Excel</a></td></tr>`).join('');
 
                                 let sectionOptions = sections.map(sec => `<option value="${sec.name}">${sec.name}</option>`).join('');
-                                // ✅ ይህ ተለዋዋጭ ባለመኖሩ ነበር Internal Server Error ይመጣ የነበረው፤ አሁን ተካቷል!
                                 let rosterSectionButtons = sections.map(sec => `
                                     <a href="/admin/master-roster/2019%20E.C/${encodeURIComponent(sec.name)}" target="_blank"
                                        style="background:#1f4e79; color:white; padding:10px 18px; border-radius:6px; text-decoration:none; font-weight:bold; font-size:14px; display:inline-block; box-shadow:0 2px 5px rgba(0,0,0,0.15);">
@@ -712,9 +704,23 @@ app.get('/admin', (req, res) => {
                                     </tr>
                                 `).join('');
 
-                                let adminNotiRows = adminNotifs.map(n => `
+                                // 🎯 አድሚኑ ማስታወቂያ ሲልክ የሚመርጣቸው አማራጮች (ALL, Classes, Sections, Teachers, Students)
+                                let adminTargetOptions = `
+                                    <option value="ALL">🌍 ለሁሉም ተማሪዎች እና መምህራን (To All)</option>
+                                    <optgroup label="🏫 በየክፍሉ / Sections">
+                                        ${sections.map(sec => `<option value="${sec.name}">ክፍል: ${sec.name}</option>`).join('')}
+                                    </optgroup>
+                                    <optgroup label="👩‍🏫 በየመምህሩ / Individual Teachers">
+                                        ${teachers.map(tc => `<option value="TEACHER:${tc.id}">መምህር: ${tc.name} (${tc.id})</option>`).join('')}
+                                    </optgroup>
+                                    <optgroup label="👨‍🎓 በየተማሪው / Individual Students">
+                                        ${students.map(st => `<option value="STUDENT:${st.student_id}">ተማሪ: ${st.name} (${st.student_id})</option>`).join('')}
+                                    </optgroup>
+                                `;
+
+                                let adminNotiRows = allNotifs.filter(n => n.sender_role === 'Admin' || n.target_audience === 'ADMIN').map(n => `
                                     <div style="background:#fdf2e9; padding:15px; margin-bottom:15px; border-radius:8px; border:1px solid #e67e22;">
-                                        <strong>🔔 ${n.sender_name} (ለ: ${n.target_audience || 'ALL'} | ቀን: ${n.created_at})</strong>
+                                        <strong>🔔 ${n.sender_name} (ለ: <span style="color:#2980b9;">${n.target_audience || 'ALL'}</span> | ቀን: ${n.created_at})</strong>
                                         <div style="margin-top:10px; background:white; padding:12px; border-radius:6px; border:1px solid #ddd;">${n.message}</div>
                                         ${n.attachment ? `<div style="margin-top:8px;"><a href="/uploads/${n.attachment}" target="_blank" style="color:#2980b9; font-weight:bold;">📎 የተያያዘ ፋይል ክፈት</a></div>` : ''}
                                         <div style="margin-top:12px; border-top:1px solid #ccc; padding-top:10px; display:flex; gap:10px;">
@@ -734,7 +740,7 @@ app.get('/admin', (req, res) => {
                                 res.render('admin', {
                                     lang, excellent, good, average, poor, maleCount, femaleCount,
                                     pRows, secRows, cRows, tRows, adminNotiRows, groupedStudentsHtml: '',
-                                    sectionOptions, rosterSectionButtons, teacherOptions, gradeCheckboxes
+                                    sectionOptions, rosterSectionButtons, teacherOptions, gradeCheckboxes, adminTargetOptions
                                 });
                             });
                         });
@@ -745,7 +751,7 @@ app.get('/admin', (req, res) => {
     });
 });
 
-// ================= 📢 NOTIFICATION ROUTES =================
+// ================= 📢 NOTIFICATION ROUTES (WITH FULL RECIPIENT LOGIC) =================
 app.post('/admin/save-notice', upload.single('attachment'), (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const target_audience = req.body.target_audience || 'ALL';
@@ -776,18 +782,20 @@ app.post('/admin/send-notification', upload.single('attachment'), (req, res) => 
 
 app.get('/delete-notification/:id', (req, res) => {
     if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
-    db.run(`DELETE FROM notifications WHERE id = ?`, [req.params.id], () => res.redirect('/admin'));
+    const backUrl = req.session.isAdmin ? '/admin' : '/teacher-dashboard';
+    db.run(`DELETE FROM notifications WHERE id = ?`, [req.params.id], () => res.redirect(backUrl));
 });
 
 app.post('/edit-notification/:id', upload.single('attachment'), (req, res) => {
     if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
+    const backUrl = req.session.isAdmin ? '/admin' : '/teacher-dashboard';
     const msg = req.body.message || '';
     let q = req.file ? `UPDATE notifications SET message = ?, attachment = ? WHERE id = ?` : `UPDATE notifications SET message = ? WHERE id = ?`;
     let p = req.file ? [msg, req.file.filename, req.params.id] : [msg, req.params.id];
-    db.run(q, p, () => res.redirect('/admin'));
+    db.run(q, p, () => res.redirect(backUrl));
 });
 
-// ================= ✏️ EDIT STUDENT & TEACHER INFORMATION =================
+// ================= ✏️ EDIT STUDENT & TEACHER INFORMATION (PRESERVES EXISTING PHOTO) =================
 app.get('/admin/edit-student/:id', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     db.get(`SELECT * FROM students WHERE student_id = ?`, [req.params.id], (err, s) => {
@@ -838,13 +846,16 @@ app.get('/admin/edit-student/:id', (req, res) => {
             </div>
 
             <div style="margin-bottom:12px; background:#fffcf5; padding:12px; border:1px dashed #f39c12; border-radius:6px;">
-                <label style="font-weight:bold; font-size:13.5px; color:#d35400; display:block; margin-bottom:4px;">🔑 አዲስ የይለፍ ቃል / PIN (መቀየር ከፈለጉ ብቻ ይጻፉ - እንደ 1234 አይፈቀድም)</label>
+                <label style="font-weight:bold; font-size:13.5px; color:#d35400; display:block; margin-bottom:4px;">🔑 አዲስ የይለፍ ቃል / PIN (መቀየር ከፈለጉ ብቻ ይጻፉ)</label>
                 <input type="text" name="new_password" placeholder="ፓስወርዱን መቀየር ካልፈለጉ ባዶ ይተዉት..." style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
             </div>
 
-            <div style="margin-bottom:15px;">
-                <label style="font-weight:bold; font-size:13.5px; color:#1f4e79; display:block; margin-bottom:4px;">📄 አዲስ የክፍያ ደረሰኝ ፎቶ (አማራጭ)</label>
-                <input type="file" name="bank_slip" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px;">
+            <div style="margin-bottom:15px; display:flex; align-items:center; gap:15px;">
+                <img src="/uploads/${s.photo || 'logo.jpg'}" style="width:60px; height:60px; border-radius:50%; object-fit:cover; border:2px solid #2980b9;">
+                <div style="flex:1;">
+                    <label style="font-weight:bold; font-size:13.5px; color:#1f4e79; display:block; margin-bottom:4px;">📄 አዲስ ፎቶ ወይም የክፍያ ደረሰኝ (አማራጭ - ካልቀየሩት ነባሩ ይጠበቃል)</label>
+                    <input type="file" name="bank_slip" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px;">
+                </div>
             </div>
 
             <button type="submit" style="width:100%; padding:14px; background:#27ae60; color:white; border:none; border-radius:8px; font-weight:bold; font-size:16px; cursor:pointer;">
@@ -870,29 +881,26 @@ app.post('/admin/edit-student/:id', upload.single('bank_slip'), (req, res) => {
         return res.send(`<script>alert('❌ እንደ 1234 ወይም 0000 ያሉ ደካማ የይለፍ ቃሎች አይፈቀዱም!'); window.history.back();</script>`);
     }
 
-    const updatePassIfNeeded = (cb) => {
-        if (new_password && new_password.trim() !== '') {
-            const hashed = bcrypt.hashSync(new_password.trim(), 10);
-            db.run(`UPDATE students SET password = ? WHERE student_id = ?`, [hashed, studentId], () => cb());
-        } else {
-            cb();
-        }
-    };
+    db.get(`SELECT photo, bank_slip_val FROM students WHERE student_id = ?`, [studentId], (err, oldSt) => {
+        const finalPhoto = req.file ? req.file.filename : (oldSt ? oldSt.photo : '');
+        const finalSlip = req.file ? req.file.filename : (oldSt ? oldSt.bank_slip_val : '');
 
-    updatePassIfNeeded(() => {
-        if (req.file) {
+        const updatePassIfNeeded = (cb) => {
+            if (new_password && new_password.trim() !== '') {
+                const hashed = bcrypt.hashSync(new_password.trim(), 10);
+                db.run(`UPDATE students SET password = ? WHERE student_id = ?`, [hashed, studentId], () => cb());
+            } else {
+                cb();
+            }
+        };
+
+        updatePassIfNeeded(() => {
             db.run(
-                `UPDATE students SET name=?, mother_name=?, gender=?, age=?, phone=?, emergency_phone=?, region=?, zone=?, woreda=?, kebele=?, class_level=?, bank_slip_val=? WHERE student_id=?`,
-                [name, mother_name || '', gender, age || null, phone || '', emergency_phone || '', region || '', zone || '', woreda || '', kebele || '', class_level, req.file.filename, studentId],
+                `UPDATE students SET name=?, mother_name=?, gender=?, age=?, phone=?, emergency_phone=?, region=?, zone=?, woreda=?, kebele=?, class_level=?, photo=?, bank_slip_val=? WHERE student_id=?`,
+                [name, mother_name || '', gender, age || null, phone || '', emergency_phone || '', region || '', zone || '', woreda || '', kebele || '', class_level, finalPhoto, finalSlip, studentId],
                 () => res.redirect('/admin/registered-students')
             );
-        } else {
-            db.run(
-                `UPDATE students SET name=?, mother_name=?, gender=?, age=?, phone=?, emergency_phone=?, region=?, zone=?, woreda=?, kebele=?, class_level=? WHERE student_id=?`,
-                [name, mother_name || '', gender, age || null, phone || '', emergency_phone || '', region || '', zone || '', woreda || '', kebele || '', class_level, studentId],
-                () => res.redirect('/admin/registered-students')
-            );
-        }
+        });
     });
 });
 
@@ -953,9 +961,12 @@ app.get('/admin/edit-teacher/:id', (req, res) => {
                 <input type="text" name="plain_pin" value="${esc(t.plain_pin)}" placeholder="አዲስ PIN ያስገቡ..." style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
             </div>
 
-            <div style="margin-bottom:15px;">
-                <label style="font-weight:bold; font-size:13.5px; color:#8e44ad; display:block; margin-bottom:4px;">📷 አዲስ የመምህር ፎቶ (መቀየር ከፈለጉ ብቻ)</label>
-                <input type="file" name="teacher_photo" accept="image/*" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px;">
+            <div style="margin-bottom:15px; display:flex; align-items:center; gap:15px;">
+                <img src="/uploads/${t.photo || 'logo.jpg'}" style="width:60px; height:60px; border-radius:50%; object-fit:cover; border:2px solid #8e44ad;">
+                <div style="flex:1;">
+                    <label style="font-weight:bold; font-size:13.5px; color:#8e44ad; display:block; margin-bottom:4px;">📷 አዲስ ፎቶ (አማራጭ - ካልቀየሩት ነባሩ ይጠበቃል)</label>
+                    <input type="file" name="teacher_photo" accept="image/*" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px;">
+                </div>
             </div>
 
             <button type="submit" style="width:100%; padding:14px; background:#8e44ad; color:white; border:none; border-radius:8px; font-weight:bold; font-size:16px; cursor:pointer;">
@@ -1421,11 +1432,26 @@ app.get('/teacher-dashboard', (req, res) => {
                             let currentSection = allSections.find(sec => isClassMatch(sec.name, selectedClass));
                             let isProctor = currentSection && currentSection.proctor_name === teacher.name;
 
-                            db.all("SELECT * FROM notifications WHERE sender_name = ? ORDER BY id DESC", [teacher.name], (err, mySentNotifs = []) => {
+                            db.all("SELECT * FROM notifications ORDER BY id DESC", [], (err, allNotifs = []) => {
+                                // 🎯 መምህሩ የሚደርሱት እና የላኳቸው ማስታወቂያዎች (ልዩ የማሳያ ማጣሪያ)
+                                let mySentNotifs = allNotifs.filter(n => n.sender_name === teacher.name);
+
                                 let classOptions = assignedClasses.map(cls => `<option value="${cls}" ${cls === selectedClass ? 'selected' : ''}>${cls}</option>`).join('');
                                 let courseOptions = classCourses.length > 0
                                     ? classCourses.map(c => `<option value="${c.id}" ${c.id.toString() === selectedCourseId ? 'selected' : ''}>${c.title} (${c.code})</option>`).join('')
                                     : `<option value="default">${teacher.subject || 'General Course'} (${activeCourseCode})</option>`;
+
+                                // 🎯 መምህሩ ማስታወቂያ ሲልክ (ለአድሚን፣ ለሁሉም ክፍሎቹ፣ ለአንድ ክፍል ወይም ለተማሪ)
+                                let teacherTargetOptions = `
+                                    <option value="ADMIN">👑 ለትምህርት ቤቱ አድሚን / ዲሬክተር (To Admin)</option>
+                                    <option value="ALL_MY_CLASSES">🏫 ለሁሉም የምመራቸው ክፍሎች (All My Classes)</option>
+                                    <optgroup label="📂 በየክፍሉ / Individual Classes">
+                                        ${assignedClasses.map(c => `<option value="${c}" ${c === selectedClass ? 'selected' : ''}>🏫 ክፍል: ${c}</option>`).join('')}
+                                    </optgroup>
+                                    <optgroup label="👨‍🎓 ለተመረጠ ተማሪ ብቻ / Individual Students (${selectedClass})">
+                                        ${studentsInClass.map(st => `<option value="STUDENT:${st.student_id}">👤 ${st.name} (${st.student_id})</option>`).join('')}
+                                    </optgroup>
+                                `;
 
                                 let studentRows = studentsInClass.map((st, idx) => {
                                     let asm = assessments.find(a => a.student_id === st.student_id) || {};
@@ -1447,11 +1473,31 @@ app.get('/teacher-dashboard', (req, res) => {
                                 }).join('');
 
                                 let absRows = classAbsences.map(ab => `<tr><td>${ab.student_name}</td><td>${ab.date || ab.created_at || ''}</td><td>${ab.reason}</td><td>${ab.teacher_feedback || 'Pending'}</td></tr>`).join('');
-                                let teacherNotiRows = mySentNotifs.map(n => `<div style="background:#fdf2e9; padding:10px; margin-bottom:10px; border-radius:5px;">${n.message}</div>`).join('');
+                                
+                                // 🔔 መምህሩ የላካቸው ማስታወቂያዎች (ከ Edit እና Delete ቁልፎች ጋር)
+                                let teacherNotiRows = mySentNotifs.map(n => `
+                                    <div style="background:#fdf2e9; padding:15px; margin-bottom:12px; border-radius:8px; border:1px solid #e67e22;">
+                                        <strong>🔔 ለ: <span style="color:#2980b9;">${n.target_audience}</span> | ቀን: ${n.created_at || ''}</strong>
+                                        <div style="margin-top:8px; background:white; padding:10px; border-radius:6px; border:1px solid #ddd;">${n.message}</div>
+                                        ${n.attachment ? `<div style="margin-top:6px;"><a href="/uploads/${n.attachment}" target="_blank" style="color:#2980b9; font-weight:bold;">📎 የተያያዘ ፋይል ክፈት</a></div>` : ''}
+                                        <div style="margin-top:10px; display:flex; gap:8px;">
+                                            <button type="button" onclick="document.getElementById('tEditNotif_${n.id}').style.display='block'" style="background:#f39c12; color:white; border:none; padding:5px 12px; border-radius:4px; cursor:pointer; font-weight:bold; font-size:12px;">✏️ Edit</button>
+                                            <a href="/delete-notification/${n.id}" onclick="return confirm('ይህ ማስታወቂያ ይጠፋ?')" style="background:#e74c3c; color:white; padding:5px 12px; border-radius:4px; text-decoration:none; font-weight:bold; font-size:12px;">🗑️ Delete</a>
+                                        </div>
+                                        <form id="tEditNotif_${n.id}" action="/edit-notification/${n.id}" method="POST" enctype="multipart/form-data" style="display:none; margin-top:12px; background:white; padding:12px; border-radius:6px; border:1px solid #ccc;">
+                                            <textarea name="message" rows="3" style="width:100%; padding:8px; margin-bottom:8px;">${n.message}</textarea>
+                                            <input type="file" name="attachment" style="margin-bottom:8px;">
+                                            <button type="submit" style="background:#27ae60; color:white; padding:6px 14px; border:none; border-radius:4px; font-weight:bold;">💾 Save</button>
+                                            <button type="button" onclick="document.getElementById('tEditNotif_${n.id}').style.display='none'" style="background:#7f8c8d; color:white; padding:6px 12px; border:none; border-radius:4px; margin-left:5px;">Cancel</button>
+                                        </form>
+                                    </div>
+                                `).join('');
+
                                 let proctorPanel = isProctor ? `<div class="card" style="background:#f9fcf7; border:1px solid #27ae60;"><h3>🟢 የፕሮክተር ፓነል</h3><a href="/attendance-sheet/${encodeURIComponent(selectedClass)}" target="_blank" style="background:#16a085; color:white; padding:8px 15px; border-radius:5px; text-decoration:none; font-weight:bold; display:inline-block;">📋 Attendance Sheet</a></div>` : '';
 
                                 res.render('teacher', {
-                                    lang: 'am', teacher, selectedClass, selectedCourseId: selectedCourseId || 'default', classOptions, courseOptions, studentRows, absRows, teacherNotiRows, proctorPanel
+                                    lang: 'am', teacher, selectedClass, selectedCourseId: selectedCourseId || 'default',
+                                    classOptions, courseOptions, teacherTargetOptions, studentRows, absRows, teacherNotiRows, proctorPanel
                                 });
                             });
                         });
@@ -1464,11 +1510,26 @@ app.get('/teacher-dashboard', (req, res) => {
 
 app.post('/teacher/send-notification', upload.single('attachment'), (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
-    let targetClass = req.query.cls || '';
+    let returnClass = req.query.cls || '';
+    let chosenTarget = req.body.target_audience || returnClass || 'ALL';
+    let msg = req.body.message || '';
+    let file = req.file ? req.file.filename : null;
+    let nowStr = new Date().toLocaleString('en-GB');
+
     db.get(`SELECT * FROM teachers WHERE id = ?`, [req.session.teacherId], (err, teacher) => {
         if (!teacher) return res.redirect('/');
-        db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at, attachment) VALUES (?,?,?,?,?,?)`,
-            ['Teacher', teacher.name, targetClass, req.body.message || '', new Date().toLocaleString('en-GB'), req.file ? req.file.filename : null], () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(targetClass)}`));
+        if (chosenTarget === 'ALL_MY_CLASSES' && teacher.assigned_sections) {
+            const secs = teacher.assigned_sections.split(',').map(s => s.trim()).filter(Boolean);
+            secs.forEach(sec => {
+                db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at, attachment) VALUES (?,?,?,?,?,?)`,
+                    ['Teacher', teacher.name, sec, msg, nowStr, file]);
+            });
+            return res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(returnClass)}`);
+        } else {
+            db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at, attachment) VALUES (?,?,?,?,?,?)`,
+                ['Teacher', teacher.name, chosenTarget, msg, nowStr, file],
+                () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(returnClass)}`));
+        }
     });
 });
 
@@ -1659,7 +1720,7 @@ app.post('/save-attendance', (req, res) => {
     });
 });
 
-// ================= STUDENT DASHBOARD =================
+// ================= STUDENT DASHBOARD (WITH INDIVIDUAL & CLASS NOTIFICATIONS FILTER) =================
 app.get('/student-dashboard', (req, res) => {
     if (!req.session.studentId) return res.redirect('/');
     db.get('SELECT s.* FROM students s WHERE s.student_id = ?', [req.session.studentId], (err, student) => {
@@ -1668,7 +1729,13 @@ app.get('/student-dashboard', (req, res) => {
             let myCourses = allCourses.filter(c => isClassMatch(c.class_level, student.class_level));
             db.all('SELECT * FROM course_assessments WHERE student_id = ?', [student.student_id], (err, myGrades = []) => {
                 db.all('SELECT * FROM notifications ORDER BY id DESC', [], (err, allNotifs = []) => {
-                    let myNotifs = allNotifs.filter(n => n.target_audience === 'ALL' || isClassMatch(n.target_audience, student.class_level));
+                    // 🎯 ተማሪው ማየት የሚችላቸው ማስታወቂያዎች (ለአል፣ ለክፍሉ ወይም ለእሱ በግል STUDENT:ID የተላኩ)
+                    let myNotifs = allNotifs.filter(n => 
+                        n.target_audience === 'ALL' || 
+                        n.target_audience === 'STUDENT:' + student.student_id || 
+                        isClassMatch(n.target_audience, student.class_level)
+                    );
+
                     db.all('SELECT * FROM absence_requests WHERE student_id = ? ORDER BY id DESC', [student.student_id], (err, myAbsences = []) => {
                         
                         let notiRows = myNotifs.map(n => `<div style="background:#fff; padding:15px; margin-bottom:12px; border-radius:8px; border-left:4px solid #3498db; box-shadow:0 2px 4px rgba(0,0,0,0.05);"><strong style="color:#2c3e50; font-size:15px;">🔔 ${n.sender_name} (${n.created_at || ''})</strong><div style="margin-top:8px; color:#445; font-size:14px;">${n.message}</div>${n.attachment ? `<div style="margin-top:10px;"><a href="/uploads/${n.attachment}" target="_blank" style="background:#e8f4fd; color:#2980b9; padding:6px 12px; border-radius:4px; text-decoration:none; font-size:12px; font-weight:bold;">📎 ፋይል ክፈት</a></div>` : ''}</div>`).join('');
