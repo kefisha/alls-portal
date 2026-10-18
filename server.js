@@ -76,19 +76,10 @@ function generateStrong4DigitPIN() {
     return pin;
 }
 
-// 📅 ትክክለኛ የሰዓት፣ የቀን፣ የወር እና የዓመት ማህተም ማሰናጃ
 function getFormattedTimestamp() {
     const now = new Date();
-    const day = String(now.getDate()).padStart(2, '0');
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const month = monthNames[now.getMonth()];
-    const year = now.getFullYear();
-    let hours = now.getHours();
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12;
-    hours = hours ? hours : 12;
-    return `${day} ${month} ${year}, ${hours}:${minutes} ${ampm}`;
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+    return now.toLocaleDateString('en-GB', options) + ' (' + now.toLocaleTimeString() + ')';
 }
 
 async function initDB() {
@@ -262,7 +253,6 @@ function assignClassSection(requestedYearLevel, callback) {
 
 function esc(v) { return v === null || v === undefined ? '' : String(v).replace(/"/g, '&quot;'); }
 
-// ================= PUBLIC & LOGIN ROUTES =================
 app.get('/', (req, res) => {
     const lang = req.query.lang === 'en' ? 'en' : 'am';
     const error = req.query.error;
@@ -365,7 +355,6 @@ app.post('/api/recover-password', (req, res) => {
     });
 });
 
-// ================= STUDENT REGISTRATION =================
 app.get('/student-register', (req, res) => {
     const lang = req.query.lang === 'en' ? 'en' : 'am';
     let gradeOptions = '';
@@ -547,7 +536,7 @@ app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 },
             }
 
             db.run(`INSERT INTO pending_students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-            [autoID, hashedPIN, name, mother_name || '', gender || '', age || null, phone || '', emergency_phone || '', region || '', zone || '', woreda || '', kebele || '', assignedSection, payment_type || 'txn_id', slipPath, photoPath], function(err) {
+            [autoID, hashedPIN, name, mother_name || '', gender || '', age || null, phone || '', emergency_phone || '', region || '', zone || '', woreda || '', kebele || '', assignedSection, payment_type, slipPath, photoPath], function(err) {
                 if (err) return res.redirect(`/student-register?lang=${lang}&error=db`);
                 res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-100 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center border-t-8 border-green-600"><h2 class="text-3xl font-bold text-green-600 mb-4">✅ ምዝገባው ተሳክቷል!</h2><p class="text-gray-600 mb-4">እባክዎ የሚከተሉትን መግቢያ መረጃዎች ጽፈው ይያዙ፦</p><div class="bg-gray-50 p-4 rounded-xl border text-left space-y-2 mb-6"><p><strong>👤 ስም:</strong> ${name}</p><p><strong>🆔 የመታወቂያ ቁጥር (ID):</strong> <span class="text-blue-600 font-bold text-lg">${autoID}</span></p><p><strong>🔑 የይለፍ ቃል (PIN):</strong> <span class="text-red-600 font-bold text-lg">${autoPIN}</span></p><p><strong>🏫 ክፍል:</strong> ${assignedSection}</p></div><a href="/?lang=${lang}" class="block w-full bg-green-600 text-white font-bold py-3 rounded-lg">⬅️ ወደ መግቢያ ተመለስ</a></div></body></html>`);
             });
@@ -574,7 +563,7 @@ app.post('/register-student', upload.single('bank_slip'), (req, res) => {
             [autoID, hashedPIN, name, gender, phone, finalClass, finalPayType, paymentProof, mother_name || '', region || '', zone || '', woreda || '', kebele || '', emergency_name || '', emergency_phone || ''],
             function(err) {
                 if (err) return res.redirect('/?error=db');
-                res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Registration Successful</title></head><body style="font-family:sans-serif; background:#eef2f5; display:flex; justify-content:center; align-items:center; min-height:100vh; margin:0;"><div style="background:white; padding:30px; border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,0.15); max-width:420px; width:90%; text-align:center; border-top:6px solid #27ae60;"><h2 style="color:#27ae60; margin-top:0;">✅ ምዝገባው ተሳክቷል!</h2><div style="background:#f8f9fa; padding:15px; border-radius:8px; border:1px solid #ddd; margin:20px 0; text-align:left; font-size:16px; line-height:1.8;"><b>👤 ስም (Name):</b> ${name}<br><b>🆔 መታወቂያ (ID):</b> <span style="color:#2980b9; font-weight:bold;">${autoID}</span><br><b>🔑 የይለፍ ቃል (PIN):</b> <span style="color:#e74c3c; font-weight:bold;">${autoPIN}</span><br><b>🏫 ክፍል (Class):</b> ${finalClass}</div><a href="/" style="display:inline-block; background:#2980b9; color:white; padding:12px 25px; text-decoration:none; border-radius:6px; font-weight:bold;">⬅️ ወደ መግቢያ ተመለስ</a></div></body></html>`);
+                res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Registration Successful</title></head><body style="font-family:sans-serif; background:#eef2f5; display:flex; justify-content:center; align-items:center; min-height:100vh; margin:0;"><div style="background:white; padding:30px; border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,0.15); max-width:420px; width:90%; text-align:center; border-top:6px solid #27ae60;"><h2 style="color:#27ae60; margin-top:0;">✅ ምዝገባው ተሳክቷል!</h2><div style="background:#f8f9fa; padding:15px; border-radius:8px; border:1px solid #ddd; margin:20px 0; text-align:left; font-size:16px; line-height:1.8;"><b>👤 ስም (Name):</b> ${name}<br><b>🆔 መታወቂያ (ID):</b> <span style="color:#2980b9; font-weight:bold;">${autoID}</span><br><b>🔑 የይለፍ ቃል (PIN):</b> <span style="color:#e74c3c; font-weight:bold;">${autoPIN}</span><br><b>🏫 ክፍል (Class):</b> ${finalClass}</div><a href="/" style="display:inline-block; background:#2980b9; color:white; padding:12px 25px; text-decoration:none; border-radius:6px; font-weight:bold;">⬅️ ወደ መግቢያ ገጽ ተመለስ</a></div></body></html>`);
             }
         );
     });
@@ -719,12 +708,11 @@ app.get('/admin', (req, res) => {
                                     </tr>
                                 `).join('');
 
-                                // 🎯 አድሚኑ ማስታወቂያ ሲልክ የሚመርጣቸው አማራጮች (ALL, Sections, Teachers, Students)
+                                // 🎯 አድሚኑ ማስታወቂያ ሲልክ (ALL Students, ALL Teachers, Individual Search for Teachers & Students)
                                 let adminTargetOptions = `
-                                    <option value="ALL">🌍 ለሁሉም ተማሪዎች እና መምህራን (To All)</option>
-                                    <optgroup label="🏫 በየክፍሉ / Sections">
-                                        ${sections.map(sec => `<option value="${sec.name}">ክፍል: ${sec.name}</option>`).join('')}
-                                    </optgroup>
+                                    <option value="ALL_STUDENTS">👨‍🎓 ለሁሉም ተማሪዎች (All Students)</option>
+                                    <option value="ALL_TEACHERS">👩‍🏫 ለሁሉም መምህራን (All Teachers)</option>
+                                    <option value="ALL">🌍 ለሁሉም ተማሪዎች እና መምህራን (To Everyone)</option>
                                     <optgroup label="👩‍🏫 በየመምህሩ / Individual Teachers">
                                         ${teachers.map(tc => `<option value="TEACHER:${tc.id}">መምህር: ${tc.name} (${tc.id})</option>`).join('')}
                                     </optgroup>
@@ -733,14 +721,17 @@ app.get('/admin', (req, res) => {
                                     </optgroup>
                                 `;
 
-                                let adminNotiRows = allNotifs.filter(n => n.sender_role === 'Admin' || n.target_audience === 'ADMIN').map(n => `
+                                let adminNotiRows = allNotifs.filter(n => n.sender_role === 'Admin' || n.target_audience === 'ADMIN' || n.target_audience === 'ALL' || n.target_audience === 'ALL_TEACHERS' || n.target_audience.startsWith('TEACHER:')).map(n => `
                                     <div style="background:#fdf2e9; padding:15px; margin-bottom:15px; border-radius:8px; border:1px solid #e67e22;">
-                                        <strong>🔔 ${n.sender_name} (ለ: <span style="color:#2980b9;">${n.target_audience || 'ALL'}</span> | ቀን: ${n.created_at})</strong>
+                                        <strong>🔔 ${n.sender_name} (${n.sender_role}) -> (ለ: <span style="color:#2980b9;">${n.target_audience || 'ALL'}</span> | ቀን: ${n.created_at})</strong>
                                         <div style="margin-top:10px; background:white; padding:12px; border-radius:6px; border:1px solid #ddd;">${n.message}</div>
                                         ${n.attachment ? `<div style="margin-top:8px;"><a href="/uploads/${n.attachment}" target="_blank" style="color:#2980b9; font-weight:bold;">📎 የተያያዘ ፋይል ክፈት</a></div>` : ''}
-                                        <div style="margin-top:12px; border-top:1px solid #ccc; padding-top:10px; display:flex; gap:10px;">
+                                        <div style="margin-top:12px; border-top:1px solid #ccc; padding-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                                             <button type="button" onclick="document.getElementById('editNotif_${n.id}').style.display='block'" style="background:#f39c12; color:white; border:none; padding:6px 14px; border-radius:4px; cursor:pointer; font-weight:bold;">✏️ Edit</button> 
                                             <a href="/delete-notification/${n.id}" onclick="return confirm('እርግጠኛ ነዎት ይህ ማስታወቂያ ይጠፋ?')" style="background:#e74c3c; color:white; padding:6px 14px; border-radius:4px; text-decoration:none; font-size:13px; font-weight:bold; display:inline-block;">🗑️ Delete</a>
+                                            
+                                            <!-- 💬 Reply Form for Admin -->
+                                            <button type="button" onclick="document.getElementById('replyNotif_${n.id}').style.display='block'" style="background:#2980b9; color:white; border:none; padding:6px 14px; border-radius:4px; cursor:pointer; font-weight:bold;">💬 Reply</button>
                                         </div>
                                         <form id="editNotif_${n.id}" action="/edit-notification/${n.id}" method="POST" enctype="multipart/form-data" style="display:none; margin-top:15px; background:#fff; padding:15px; border-radius:6px; border:1px solid #ccc;">
                                             <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:5px;">ማስታወቂያውን ማስተካከል:</label>
@@ -748,6 +739,16 @@ app.get('/admin', (req, res) => {
                                             <input type="file" name="attachment" style="display:block; margin-bottom:10px;">
                                             <button type="submit" style="background:#27ae60; color:white; border:none; padding:8px 18px; border-radius:4px; font-weight:bold; cursor:pointer;">💾 Save Changes</button>
                                             <button type="button" onclick="document.getElementById('editNotif_${n.id}').style.display='none'" style="background:#7f8c8d; color:white; border:none; padding:8px 14px; border-radius:4px; cursor:pointer; margin-left:5px;">Cancel</button>
+                                        </form>
+
+                                        <!-- Reply Form -->
+                                        <form id="replyNotif_${n.id}" action="/admin/send-notification" method="POST" enctype="multipart/form-data" style="display:none; margin-top:15px; background:#eef6fc; padding:15px; border-radius:6px; border:1px solid #bce8f1;">
+                                            <input type="hidden" name="target_audience" value="${n.sender_role === 'Teacher' ? 'TEACHER:' + (n.sender_id || '') : (n.sender_role === 'Student' ? 'STUDENT:' + (n.sender_id || '') : 'ALL')}">
+                                            <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:5px; color:#1f4e79;">ምላሽ ይጻፉ (Reply):</label>
+                                            <textarea name="message" rows="3" placeholder="ምላሽዎን እዚህ ይጻፉ..." style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc; border-radius:4px;" required></textarea>
+                                            <input type="file" name="attachment" style="display:block; margin-bottom:10px;">
+                                            <button type="submit" style="background:#2980b9; color:white; border:none; padding:8px 18px; border-radius:4px; font-weight:bold; cursor:pointer;">📤 ምላሽ ላክ</button>
+                                            <button type="button" onclick="document.getElementById('replyNotif_${n.id}').style.display='none'" style="background:#7f8c8d; color:white; border:none; padding:8px 14px; border-radius:4px; cursor:pointer; margin-left:5px;">Cancel</button>
                                         </form>
                                     </div>
                                 `).join('');
@@ -1272,7 +1273,6 @@ app.get('/class-hub/:className', (req, res) => {
     });
 });
 
-// ================= 👨‍🎓 REGISTERED STUDENTS LIST =================
 app.get('/admin/registered-students', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
 
@@ -1343,7 +1343,6 @@ app.get('/admin/registered-students', (req, res) => {
     });
 });
 
-// ================= 📊 DIRECTOR REPORT ROUTE =================
 app.get('/admin/director-report', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
 
@@ -1416,7 +1415,6 @@ app.get('/admin/director-report', (req, res) => {
     });
 });
 
-// ================= TEACHER DASHBOARD & GRADES =================
 app.get('/teacher-dashboard', (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
     db.get('SELECT * FROM teachers WHERE id = ?', [req.session.teacherId], (err, teacher) => {
@@ -1428,12 +1426,8 @@ app.get('/teacher-dashboard', (req, res) => {
             let studentsInClass = allStudents.filter(s => isClassMatch(s.class_level, selectedClass));
             db.all('SELECT * FROM courses', [], (err, allCourses = []) => {
                 let classCourses = allCourses.filter(c => (c.teacher_id === req.session.teacherId || !c.teacher_id) && isClassMatch(c.class_level, selectedClass));
-                if (classCourses.length === 0) {
-                    classCourses = allCourses.filter(c => isClassMatch(c.class_level, selectedClass));
-                }
-                if (classCourses.length === 0) {
-                    classCourses = allCourses.filter(c => c.teacher_id === req.session.teacherId);
-                }
+                if (classCourses.length === 0) classCourses = allCourses.filter(c => isClassMatch(c.class_level, selectedClass));
+                if (classCourses.length === 0) classCourses = allCourses.filter(c => c.teacher_id === req.session.teacherId);
 
                 let selectedCourseId = req.query.course_id || (classCourses[0] ? classCourses[0].id.toString() : '');
                 let selectedCourse = classCourses.find(c => c.id.toString() === selectedCourseId) || classCourses[0] || null;
@@ -1617,7 +1611,7 @@ app.post('/teacher/submit-final-grades', (req, res) => {
             const cId = course ? String(course.id) : '0';
             const cCode = course ? course.code : ((teacher.subject || 'GEN').substring(0, 3).toUpperCase() + '-01');
             const cTitle = course ? course.title : (teacher.subject || 'General Course');
-            const nowStr = getFormattedTimestamp();
+            const nowStr = new Date().toLocaleDateString('en-GB');
 
             pool.query(
                 `INSERT INTO grade_submissions (academic_year, class_level, course_id, course_code, course_title, teacher_id, teacher_name, submitted_at)
@@ -1634,7 +1628,6 @@ app.post('/teacher/submit-final-grades', (req, res) => {
     });
 });
 
-// ================= 📋 ATTENDANCE SHEET & SAVE ROUTE =================
 app.get('/attendance-sheet/:secName', (req, res) => {
     if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
     let sec = decodeURIComponent(req.params.secName);
@@ -1732,7 +1725,6 @@ app.post('/save-attendance', (req, res) => {
     });
 });
 
-// ================= STUDENT DASHBOARD =================
 app.get('/student-dashboard', (req, res) => {
     if (!req.session.studentId) return res.redirect('/');
     db.get('SELECT s.* FROM students s WHERE s.student_id = ?', [req.session.studentId], (err, student) => {
@@ -1743,13 +1735,30 @@ app.get('/student-dashboard', (req, res) => {
                 db.all('SELECT * FROM notifications ORDER BY id DESC', [], (err, allNotifs = []) => {
                     let myNotifs = allNotifs.filter(n => 
                         n.target_audience === 'ALL' || 
+                        n.target_audience === 'ALL_STUDENTS' ||
                         n.target_audience === 'STUDENT:' + student.student_id || 
                         isClassMatch(n.target_audience, student.class_level)
                     );
 
                     db.all('SELECT * FROM absence_requests WHERE student_id = ? ORDER BY id DESC', [student.student_id], (err, myAbsences = []) => {
                         
-                        let notiRows = myNotifs.map(n => `<div style="background:#fff; padding:15px; margin-bottom:12px; border-radius:8px; border-left:4px solid #3498db; box-shadow:0 2px 4px rgba(0,0,0,0.05);"><strong style="color:#2c3e50; font-size:15px;">🔔 ${n.sender_name} (${n.created_at || ''})</strong><div style="margin-top:8px; color:#445; font-size:14px;">${n.message}</div>${n.attachment ? `<div style="margin-top:10px;"><a href="/uploads/${n.attachment}" target="_blank" style="background:#e8f4fd; color:#2980b9; padding:6px 12px; border-radius:4px; text-decoration:none; font-size:12px; font-weight:bold;">📎 ፋይል ክፈት</a></div>` : ''}</div>`).join('');
+                        let notiRows = myNotifs.map(n => `
+                            <div style="background:#fff; padding:15px; margin-bottom:12px; border-radius:8px; border-left:4px solid #3498db; box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+                                <strong style="color:#2c3e50; font-size:15px;">🔔 ${n.sender_name} (${n.created_at || ''})</strong>
+                                <div style="margin-top:8px; color:#445; font-size:14px;">${n.message}</div>
+                                ${n.attachment ? `<div style="margin-top:10px;"><a href="/uploads/${n.attachment}" target="_blank" style="background:#e8f4fd; color:#2980b9; padding:6px 12px; border-radius:4px; text-decoration:none; font-size:12px; font-weight:bold;">📎 ፋይል ክፈት</a></div>` : ''}
+                                <div style="margin-top:10px;">
+                                    <button type="button" onclick="document.getElementById('sReply_${n.id}').style.display='block'" style="background:#2980b9; color:white; border:none; padding:5px 12px; border-radius:4px; font-weight:bold; font-size:12px; cursor:pointer;">💬 Reply / መልስ ስጥ</button>
+                                </div>
+                                <form id="sReply_${n.id}" action="/admin/send-notification" method="POST" enctype="multipart/form-data" style="display:none; margin-top:10px; background:#f0f9ff; padding:12px; border-radius:6px; border:1px solid #bae6fd;">
+                                    <input type="hidden" name="target_audience" value="ADMIN">
+                                    <textarea name="message" rows="2" placeholder="ለአድሚን መልስ ይጻፉ..." style="width:100%; padding:6px; margin-bottom:8px; border:1px solid #ccc; border-radius:4px;" required></textarea>
+                                    <button type="submit" style="background:#27ae60; color:white; border:none; padding:5px 14px; border-radius:4px; font-weight:bold;">📤 ላክ</button>
+                                    <button type="button" onclick="document.getElementById('sReply_${n.id}').style.display='none'" style="background:#7f8c8d; color:white; border:none; padding:5px 10px; border-radius:4px; margin-left:5px;">Cancel</button>
+                                </form>
+                            </div>
+                        `).join('');
+
                         let myAbsRows = myAbsences.map(ab => `<div style="background:#fdfdfd; padding:12px; margin-bottom:10px; border-radius:6px; border:1px solid #eee; border-left:4px solid ${ab.teacher_feedback ? '#27ae60' : '#f39c12'};"><strong>ቀን:</strong> ${ab.date || ab.created_at || 'N/A'}<br><strong>ምክንያት:</strong> ${ab.reason}<br><strong style="color: ${ab.teacher_feedback ? '#27ae60' : '#d35400'};">መልስ:</strong> ${ab.teacher_feedback || 'በመጠበቅ ላይ'}</div>`).join('');
                         let gradesHtml = myCourses.map(c => {
                             let asm = myGrades.find(a => a.course_code === c.code) || {};
@@ -1780,12 +1789,11 @@ app.post('/student/absence', upload.single('attachment'), (req, res) => {
     db.get('SELECT name, class_level FROM students WHERE student_id=?', [req.session.studentId], (err, st) => {
         if(st) {
             db.run(`INSERT INTO absence_requests (student_id, student_name, class_level, reason, teacher_feedback, status, created_at, attachment) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, 
-            [req.session.studentId, st.name, st.class_level, xss(req.body.reason), '', 'Pending', getFormattedTimestamp(), req.file ? req.file.filename : null], () => res.redirect('/student-dashboard'));
+            [req.session.studentId, st.name, st.class_level, xss(req.body.reason), '', 'Pending', new Date().toLocaleString(), req.file ? req.file.filename : null], () => res.redirect('/student-dashboard'));
         }
     });
 });
 
-// ================= 🏆 FULL-COLOR ROSTER & 1-PAGE REPORT CARD =================
 app.get('/api/admin/roster-summary', (req, res) => {
     if (!req.session.isAdmin) return res.json({ submissions: [], years: [], sections: [] });
     db.all(`SELECT * FROM grade_submissions ORDER BY academic_year DESC, class_level ASC`, [], (err, submissions = []) => {
@@ -2057,7 +2065,7 @@ app.get('/admin/master-roster/:year/:className', (req, res) => {
                                     <p style="margin:4px 0;font-weight:bold;color:#d35400 !important;">አማኑኤል ብርሃንና ሕይወት ትምህርት ቤት</p>
                                     <span style="background:#1f4e79 !important;color:white !important;padding:4px 14px;border-radius:12px;font-size:12px;font-weight:bold;">OFFICIAL STUDENT REPORT CARD (${academicYear})</span>
                                 </div>
-                                <img src="/uploads/${r.student.photo || 'logo.jpg'}" onerror="this.src='/uploads/logo.jpg'" style="width:70px;height:70px;border-radius:50%;border:2px solid #1f4e79;object-fit:cover;" crossorigin="anonymous">
+                                <img src="/uploads/${r.student.photo || 'logo.jpg'}" onerror="this.src='/uploads/logo.jpg'" style="width:70px;height:70px;border-radius:50%;border:2px solid #f39c12;object-fit:cover;" crossorigin="anonymous">
                             </div>
                             <div style="display:flex;justify-content:space-between;background:#f8fafc !important;padding:12px;border:1px solid #cbd5e1;border-radius:6px;margin-bottom:14px;font-size:13.5px;">
                                 <div><b>👤 Name:</b> ${r.student.name}</div>
