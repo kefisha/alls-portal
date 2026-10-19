@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1f4e79">
+    <link rel="manifest" href="/manifest.json">
     <title>Login - Amanuel Light and Life School</title>
     <style>
         * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -11,7 +13,6 @@
             background: linear-gradient(135deg, #1f4e79 0%, #0d2b45 100%);
             display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
-        /* 🌐 Language Toggle CSS */
         body.lang-am .en { display: none !important; }
         body.lang-am .am { display: inline !important; }
         body.lang-en .am { display: none !important; }
@@ -70,8 +71,11 @@
             background: #fdecea; color: #c0392b; padding: 10px; border-radius: 6px;
             border-left: 4px solid #e74c3c; margin-bottom: 15px; font-size: 13.5px; font-weight: bold; text-align: center;
         }
+        .parent-hint {
+            display: none; background: #eaf6ff; border: 1px solid #3498db; color: #1a5276;
+            padding: 10px 12px; border-radius: 8px; font-size: 12.5px; margin-bottom: 14px; line-height: 1.5;
+        }
 
-        /* Modal for Reset Password */
         .modal-overlay {
             display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.65);
             align-items: center; justify-content: center; padding: 20px; z-index: 999;
@@ -84,7 +88,6 @@
 </head>
 <body class="lang-am">
 
-    <!-- 🌐 Language Switcher -->
     <div class="lang-bar">
         <button type="button" id="btn-am" class="lang-btn" onclick="switchPortalLang('am')" style="background:#27ae60; color:white;">🇪🇹 አማርኛ</button>
         <button type="button" id="btn-en" class="lang-btn" onclick="switchPortalLang('en')" style="background:transparent; color:white;">🇬🇧 English</button>
@@ -107,15 +110,21 @@
             <form action="/login" method="POST" id="loginForm">
                 <label>👤 <span class="am">የተጠቃሚ ሚና ይምረጡ (Role):</span><span class="en">Select User Role:</span></label>
                 <select name="role" id="roleSelect" required>
-                    <option value="student"> ተማሪ /Student</option>
-                    <option value="teacher"> መምህር (Teacher)</option>
-                    <option value="admin"> ዲሬክተር / አድሚን (Director / Admin)</option>
+                    <option value="student">👨‍🎓 ተማሪ / Student</option>
+                    <option value="teacher">👩‍🏫 መምህር / Teacher</option>
+                    <option value="parent">👨‍👩‍👧 ወላጅ / Parent</option>
+                    <option value="admin">👑 ዲሬክተር / አድሚን (Director / Admin)</option>
                 </select>
 
-                <label>🆔 <span class="am">መታወቂያ ቁጥር / Username:</span><span class="en">ID Number / Username:</span></label>
+                <div class="parent-hint" id="parentHint">
+                    <span class="am">💡 <b>ወላጅ:</b> የተማሪውን <b>መታወቂያ (ID)</b> እና የወላጅ <b>ስልክ ቁጥር</b> (emergency phone) ያስገቡ።</span>
+                    <span class="en">💡 <b>Parent:</b> Enter the <b>Student ID</b> and the <b>parent phone</b> (emergency phone).</span>
+                </div>
+
+                <label id="userLabel">🆔 <span class="am">መታወቂያ ቁጥር / Username:</span><span class="en">ID Number / Username:</span></label>
                 <input type="text" name="username" id="usernameInput" placeholder="" required>
 
-                <label>🔑 <span class="am">የይለፍ ቃል (PIN / Password):</span><span class="en">Password / PIN:</span></label>
+                <label id="passLabel">🔑 <span class="am">የይለፍ ቃል (PIN / Password):</span><span class="en">Password / PIN:</span></label>
                 <input type="password" name="password" id="passwordInput" placeholder="" required>
 
                 <button type="submit" class="btn-login">
@@ -135,7 +144,6 @@
         </div>
     </div>
 
-    <!-- 🔑 Reset Password Modal (Works for Both Students & Teachers) -->
     <div class="modal-overlay" id="resetModal">
         <div class="modal-box">
             <h3 style="margin-top:0; color:#8e44ad; text-align:center;">
@@ -189,6 +197,37 @@
             const urlParams = new URLSearchParams(window.location.search);
             const initialLang = urlParams.get('lang') || localStorage.getItem('prefLang') || 'am';
             switchPortalLang(initialLang);
+
+            const roleSelect = document.getElementById('roleSelect');
+            const parentHint = document.getElementById('parentHint');
+            const userLabel = document.getElementById('userLabel');
+            const passLabel = document.getElementById('passLabel');
+            const usernameInput = document.getElementById('usernameInput');
+            const passwordInput = document.getElementById('passwordInput');
+
+            function updateRoleUI() {
+                if (roleSelect.value === 'parent') {
+                    parentHint.style.display = 'block';
+                    userLabel.innerHTML = '🆔 <span class="am">የተማሪ መታወቂያ (Student ID):</span><span class="en">Student ID:</span>';
+                    passLabel.innerHTML = '📞 <span class="am">የወላጅ ስልክ ቁጥር:</span><span class="en">Parent Phone Number:</span>';
+                    usernameInput.placeholder = 'e.g. ALLS-5430';
+                    passwordInput.placeholder = '09... / 07...';
+                    passwordInput.type = 'text';
+                } else {
+                    parentHint.style.display = 'none';
+                    userLabel.innerHTML = '🆔 <span class="am">መታወቂያ ቁጥር / Username:</span><span class="en">ID Number / Username:</span>';
+                    passLabel.innerHTML = '🔑 <span class="am">የይለፍ ቃል (PIN / Password):</span><span class="en">Password / PIN:</span>';
+                    usernameInput.placeholder = '';
+                    passwordInput.placeholder = '';
+                    passwordInput.type = 'password';
+                }
+            }
+            roleSelect.addEventListener('change', updateRoleUI);
+            updateRoleUI();
+
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js').catch(() => {});
+            }
         });
 
         function openResetModal() {
@@ -224,12 +263,12 @@
                     resBox.style.background = '#d4edda';
                     resBox.style.color = '#155724';
                     resBox.style.border = '2px solid #27ae60';
-                    resBox.innerHTML = `✅ ተሳክቷል!<br>አዲሱ የይለፍ ቃልዎ (New PIN):<br><span style="font-size:28px; color:#e74c3c; letter-spacing:3px;">${data.newPassword}</span>`;
+                    resBox.innerHTML = '✅ ተሳክቷል!<br>አዲሱ የይለፍ ቃልዎ (New PIN):<br><span style="font-size:28px; color:#e74c3c; letter-spacing:3px;">' + data.newPassword + '</span>';
                 } else {
                     resBox.style.background = '#f8d7da';
                     resBox.style.color = '#721c24';
                     resBox.style.border = '1px solid #e74c3c';
-                    resBox.innerHTML = `❌ መታወቂያ ቁጥሩ ወይም ስልክ ቁጥሩ አልተገኘም! እባክዎ ትክክለኛ መረጃ ያስገቡ።`;
+                    resBox.innerHTML = '❌ መታወቂያ ቁጥሩ ወይም ስልክ ቁጥሩ አልተገኘም! እባክዎ ትክክለኛ መረጃ ያስገቡ።';
                 }
             })
             .catch(() => {
