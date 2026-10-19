@@ -78,18 +78,27 @@ function generateStrong4DigitPIN() {
 
 function getFormattedTimestamp() {
     const now = new Date();
-    // Exact timestamp: Weekday, DD Month YYYY, HH:MM:SS (local time)
-    const options = { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric', 
-        hour: '2-digit', 
-        minute: '2-digit', 
-        second: '2-digit',
-        hour12: false 
-    };
-    return now.toLocaleDateString('en-GB', options).replace(',', '') + ' | ' + now.toLocaleTimeString('en-GB', { hour12: false });
+    // Exact: Weekday, Day Month Year | HH:MM:SS
+    const datePart = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const timePart = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    return `${datePart} | ${timePart}`;
+}
+
+// Safe rich-text sanitizer for notifications (allows fonts, colors, sizes, bold, italic, underline, etc.)
+function sanitizeRichText(html) {
+    return xss(html || '', {
+        whiteList: {
+            b: [], strong: [], i: [], em: [], u: [], s: [], strike: [],
+            p: [], br: [], div: ['style'], span: ['style'],
+            ul: [], ol: [], li: [],
+            h1: [], h2: [], h3: [], h4: [], h5: [], h6: [],
+            a: ['href', 'target', 'rel'],
+            font: ['color', 'size', 'face'],
+            blockquote: [], pre: [], code: []
+        },
+        stripIgnoreTag: true,
+        stripIgnoreTagBody: ['script', 'style', 'iframe', 'object', 'embed']
+    });
 }
 
 async function initDB() {
@@ -781,18 +790,7 @@ app.get('/admin', (req, res) => {
 app.post('/admin/save-notice', upload.single('attachment'), (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const target_audience = req.body.target_audience || 'ALL';
-    // Allow basic rich text
-    const message = xss(req.body.message || '', {
-        whiteList: {
-            b: [], strong: [], i: [], em: [], u: [], s: [],
-            p: [], br: [], ul: [], ol: [], li: [],
-            span: ['style'], div: ['style'],
-            a: ['href', 'target'], h1: [], h2: [], h3: [], h4: [],
-            font: ['color', 'size']
-        },
-        stripIgnoreTag: true,
-        stripIgnoreTagBody: ['script', 'style']
-    });
+    const message = sanitizeRichText(req.body.message);
     const attachment = req.file ? req.file.filename : null;
     const createdAt = getFormattedTimestamp();
 
@@ -803,35 +801,21 @@ app.post('/admin/save-notice', upload.single('attachment'), (req, res) => {
     );
 });
 
-// General two-way notification / reply endpoint (works for Admin, Teacher, Student)
+// Two-way messaging: Admin / Teacher / Student can all send & reply
 app.post('/admin/send-notification', upload.single('attachment'), (req, res) => {
     const target_audience = req.body.target_audience || 'ALL';
-    // Allow basic rich text tags for notifications (bold, italic, color, size, lists, links)
-    const message = xss(req.body.message || '', {
-        whiteList: {
-            b: [], strong: [], i: [], em: [], u: [], s: [],
-            p: [], br: [], ul: [], ol: [], li: [],
-            span: ['style'], div: ['style'],
-            a: ['href', 'target'], h1: [], h2: [], h3: [], h4: [],
-            font: ['color', 'size']
-        },
-        stripIgnoreTag: true,
-        stripIgnoreTagBody: ['script', 'style']
-    });
+    const message = sanitizeRichText(req.body.message);
     const attachment = req.file ? req.file.filename : null;
     const createdAt = getFormattedTimestamp();
 
-    let senderRole = 'Unknown';
-    let senderName = 'User';
-    let redirectUrl = '/';
-
     if (req.session.isAdmin) {
-        senderRole = 'Admin';
-        senderName = 'School Admin';
-        redirectUrl = '/admin';
+        db.run(
+            `INSERT INTO notifications (sender_role, sender_name, target_audience, message, attachment, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+            ['Admin', 'School Admin', target_audience, message, attachment, createdAt],
+            () => res.redirect('/admin')
+        );
     } else if (req.session.teacherId) {
-        // Teacher reply
-        return db.get(`SELECT name FROM teachers WHERE id = ?`, [req.session.teacherId], (err, t) => {
+        db.get(`SELECT name FROM teachers WHERE id = ?`, [req.session.teacherId], (err, t) => {
             if (!t) return res.redirect('/');
             db.run(
                 `INSERT INTO notifications (sender_role, sender_name, target_audience, message, attachment, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
@@ -840,8 +824,7 @@ app.post('/admin/send-notification', upload.single('attachment'), (req, res) => 
             );
         });
     } else if (req.session.studentId) {
-        // Student reply
-        return db.get(`SELECT name FROM students WHERE student_id = ?`, [req.session.studentId], (err, s) => {
+        db.get(`SELECT name FROM students WHERE student_id = ?`, [req.session.studentId], (err, s) => {
             if (!s) return res.redirect('/');
             db.run(
                 `INSERT INTO notifications (sender_role, sender_name, target_audience, message, attachment, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
@@ -849,47 +832,101 @@ app.post('/admin/send-notification', upload.single('attachment'), (req, res) => 
                 () => res.redirect('/student-dashboard')
             );
         });
+    } else {
+        return res.redirect('/');
     }
-
-    // Admin case
-    db.run(
-        `INSERT INTO notifications (sender_role, sender_name, target_audience, message, attachment, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-        [senderRole, senderName, target_audience, message, attachment, createdAt],
-        () => res.redirect(redirectUrl)
-    );
 });
 
+// Only the original sender (or Admin) can delete
 app.get('/delete-notification/:id', (req, res) => {
     if (!req.session.isAdmin && !req.session.teacherId && !req.session.studentId) return res.redirect('/');
-    let backUrl = '/';
-    if (req.session.isAdmin) backUrl = '/admin';
-    else if (req.session.teacherId) backUrl = '/teacher-dashboard';
-    else if (req.session.studentId) backUrl = '/student-dashboard';
-    db.run(`DELETE FROM notifications WHERE id = ?`, [req.params.id], () => res.redirect(backUrl));
+
+    db.get(`SELECT * FROM notifications WHERE id = ?`, [req.params.id], (err, n) => {
+        if (!n) return res.redirect('/');
+
+        let allowed = false;
+        let backUrl = '/';
+
+        if (req.session.isAdmin) {
+            allowed = true;
+            backUrl = '/admin';
+        } else if (req.session.teacherId) {
+            // Teacher can delete only their own messages
+            db.get(`SELECT name FROM teachers WHERE id = ?`, [req.session.teacherId], (e, t) => {
+                if (t && n.sender_name === t.name && n.sender_role === 'Teacher') {
+                    db.run(`DELETE FROM notifications WHERE id = ?`, [req.params.id], () => res.redirect('/teacher-dashboard'));
+                } else {
+                    res.redirect('/teacher-dashboard');
+                }
+            });
+            return;
+        } else if (req.session.studentId) {
+            // Student can delete only their own messages
+            db.get(`SELECT name FROM students WHERE student_id = ?`, [req.session.studentId], (e, s) => {
+                if (s && n.sender_name === s.name && n.sender_role === 'Student') {
+                    db.run(`DELETE FROM notifications WHERE id = ?`, [req.params.id], () => res.redirect('/student-dashboard'));
+                } else {
+                    res.redirect('/student-dashboard');
+                }
+            });
+            return;
+        }
+
+        if (allowed) {
+            db.run(`DELETE FROM notifications WHERE id = ?`, [req.params.id], () => res.redirect(backUrl));
+        } else {
+            res.redirect(backUrl);
+        }
+    });
 });
 
+// Only the original sender (or Admin) can edit their own message
 app.post('/edit-notification/:id', upload.single('attachment'), (req, res) => {
     if (!req.session.isAdmin && !req.session.teacherId && !req.session.studentId) return res.redirect('/');
-    let backUrl = '/';
-    if (req.session.isAdmin) backUrl = '/admin';
-    else if (req.session.teacherId) backUrl = '/teacher-dashboard';
-    else if (req.session.studentId) backUrl = '/student-dashboard';
 
-    // Allow rich text on edit
-    const msg = xss(req.body.message || '', {
-        whiteList: {
-            b: [], strong: [], i: [], em: [], u: [], s: [],
-            p: [], br: [], ul: [], ol: [], li: [],
-            span: ['style'], div: ['style'],
-            a: ['href', 'target'], h1: [], h2: [], h3: [], h4: [],
-            font: ['color', 'size']
-        },
-        stripIgnoreTag: true,
-        stripIgnoreTagBody: ['script', 'style']
+    db.get(`SELECT * FROM notifications WHERE id = ?`, [req.params.id], (err, n) => {
+        if (!n) return res.redirect('/');
+
+        const msg = sanitizeRichText(req.body.message);
+        const doUpdate = () => {
+            let q = req.file ? `UPDATE notifications SET message = ?, attachment = ? WHERE id = ?` : `UPDATE notifications SET message = ? WHERE id = ?`;
+            let p = req.file ? [msg, req.file.filename, req.params.id] : [msg, req.params.id];
+            db.run(q, p, () => {
+                if (req.session.isAdmin) return res.redirect('/admin');
+                if (req.session.teacherId) return res.redirect('/teacher-dashboard');
+                return res.redirect('/student-dashboard');
+            });
+        };
+
+        if (req.session.isAdmin) {
+            // Admin can edit any message
+            return doUpdate();
+        }
+
+        if (req.session.teacherId) {
+            db.get(`SELECT name FROM teachers WHERE id = ?`, [req.session.teacherId], (e, t) => {
+                if (t && n.sender_name === t.name && n.sender_role === 'Teacher') {
+                    doUpdate();
+                } else {
+                    res.redirect('/teacher-dashboard');
+                }
+            });
+            return;
+        }
+
+        if (req.session.studentId) {
+            db.get(`SELECT name FROM students WHERE student_id = ?`, [req.session.studentId], (e, s) => {
+                if (s && n.sender_name === s.name && n.sender_role === 'Student') {
+                    doUpdate();
+                } else {
+                    res.redirect('/student-dashboard');
+                }
+            });
+            return;
+        }
+
+        res.redirect('/');
     });
-    let q = req.file ? `UPDATE notifications SET message = ?, attachment = ? WHERE id = ?` : `UPDATE notifications SET message = ? WHERE id = ?`;
-    let p = req.file ? [msg, req.file.filename, req.params.id] : [msg, req.params.id];
-    db.run(q, p, () => res.redirect(backUrl));
 });
 
 // ================= ✏️ EDIT STUDENT & TEACHER INFORMATION =================
@@ -950,7 +987,7 @@ app.get('/admin/edit-student/:id', (req, res) => {
             <div style="margin-bottom:15px; display:flex; align-items:center; gap:15px;">
                 <img src="/uploads/${s.photo || 'logo.jpg'}" style="width:60px; height:60px; border-radius:50%; object-fit:cover; border:2px solid #2980b9;">
                 <div style="flex:1;">
-                    <label style="font-weight:bold; font-size:13.5px; color:#1f4e79; display:block; margin-bottom:4px;">📷 አዲስ የተማሪ ፎቶ (አማራጭ - ካልቀየሩት ነባሩ ፎቶ በጭራሽ አይጥፋም)</label>
+                    <label style="font-weight:bold; font-size:13.5px; color:#1f4e79; display:block; margin-bottom:4px;">📷 አዲስ የተማሪ ፎቶ (አማራጭ - ካልቀየሩት ነባሩ ፎቶ እና ሁሉም መረጃ በጭራሽ አይጥፉም)</label>
                     <input type="file" name="student_photo" accept="image/*" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px;">
                 </div>
             </div>
@@ -978,10 +1015,11 @@ app.post('/admin/edit-student/:id', upload.single('student_photo'), (req, res) =
         return res.send(`<script>alert('❌ እንደ 1234 ወይም 0000 ያሉ ደካማ የይለፍ ቃሎች አይፈቀዱም!'); window.history.back();</script>`);
     }
 
-    db.get(`SELECT photo, bank_slip_val FROM students WHERE student_id = ?`, [studentId], (err, oldSt) => {
-        // Photo protection: only update photo if a new file is uploaded; otherwise keep the existing one forever
-        const finalPhoto = (req.file) ? req.file.filename : (oldSt ? oldSt.photo : '');
-        const finalSlip = (oldSt ? oldSt.bank_slip_val : ''); // Never overwrite bank slip with photo
+    // Photo & data protection: only update fields that are provided; keep old photo if no new file
+    db.get(`SELECT * FROM students WHERE student_id = ?`, [studentId], (err, oldSt) => {
+        if (!oldSt) return res.redirect('/admin/registered-students');
+
+        const finalPhoto = req.file ? req.file.filename : (oldSt.photo || '');
 
         const updatePassIfNeeded = (cb) => {
             if (new_password && new_password.trim() !== '') {
@@ -995,7 +1033,21 @@ app.post('/admin/edit-student/:id', upload.single('student_photo'), (req, res) =
         updatePassIfNeeded(() => {
             db.run(
                 `UPDATE students SET name=?, mother_name=?, gender=?, age=?, phone=?, emergency_phone=?, region=?, zone=?, woreda=?, kebele=?, class_level=?, photo=? WHERE student_id=?`,
-                [name, mother_name || '', gender, age || null, phone || '', emergency_phone || '', region || '', zone || '', woreda || '', kebele || '', class_level, finalPhoto, studentId],
+                [
+                    name || oldSt.name,
+                    mother_name !== undefined ? mother_name : oldSt.mother_name,
+                    gender || oldSt.gender,
+                    age || oldSt.age,
+                    phone || oldSt.phone,
+                    emergency_phone || oldSt.emergency_phone,
+                    region || oldSt.region,
+                    zone || oldSt.zone,
+                    woreda || oldSt.woreda,
+                    kebele || oldSt.kebele,
+                    class_level || oldSt.class_level,
+                    finalPhoto,
+                    studentId
+                ],
                 () => res.redirect('/admin/registered-students')
             );
         });
@@ -1062,7 +1114,7 @@ app.get('/admin/edit-teacher/:id', (req, res) => {
             <div style="margin-bottom:15px; display:flex; align-items:center; gap:15px;">
                 <img src="/uploads/${t.photo || 'logo.jpg'}" style="width:60px; height:60px; border-radius:50%; object-fit:cover; border:2px solid #8e44ad;">
                 <div style="flex:1;">
-                    <label style="font-weight:bold; font-size:13.5px; color:#8e44ad; display:block; margin-bottom:4px;">📷 አዲስ ፎቶ (አማራጭ - ካልቀየሩት ነባሩ ይጠበቃል)</label>
+                    <label style="font-weight:bold; font-size:13.5px; color:#8e44ad; display:block; margin-bottom:4px;">📷 አዲስ ፎቶ (አማራጭ - ካልቀየሩት ነባሩ ፎቶ እና ሁሉም መረጃ በጭራሽ አይጥፉም)</label>
                     <input type="file" name="teacher_photo" accept="image/*" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px;">
                 </div>
             </div>
@@ -1600,18 +1652,7 @@ app.post('/teacher/send-notification', upload.single('attachment'), (req, res) =
     if (!req.session.teacherId) return res.redirect('/');
     let returnClass = req.query.cls || '';
     let chosenTarget = req.body.target_audience || returnClass || 'ALL';
-    // Allow basic rich text for teacher notifications
-    let msg = xss(req.body.message || '', {
-        whiteList: {
-            b: [], strong: [], i: [], em: [], u: [], s: [],
-            p: [], br: [], ul: [], ol: [], li: [],
-            span: ['style'], div: ['style'],
-            a: ['href', 'target'], h1: [], h2: [], h3: [], h4: [],
-            font: ['color', 'size']
-        },
-        stripIgnoreTag: true,
-        stripIgnoreTagBody: ['script', 'style']
-    });
+    let msg = sanitizeRichText(req.body.message);
     let file = req.file ? req.file.filename : null;
     let nowStr = getFormattedTimestamp();
 
