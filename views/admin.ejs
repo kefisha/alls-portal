@@ -463,16 +463,23 @@
 
                 const notifForm = document.getElementById('notifForm');
                 if (notifForm) {
-                    notifForm.addEventListener('submit', function() {
+                    notifForm.addEventListener('submit', function(e) {
+                        // Always set rich text content
                         document.getElementById('hiddenMessage').value = quill.root.innerHTML;
-                        // Priority: individual search selection > quick select
-                        const indiv = document.getElementById('individualTargetValue').value;
+
+                        // CRITICAL: decide final target BEFORE form posts
+                        const indiv = (document.getElementById('individualTargetValue').value || '').trim();
                         const finalField = document.getElementById('finalTargetAudience');
-                        if (indiv) {
-                            finalField.value = indiv;
+                        const quickVal = document.getElementById('quickTargetSelect').value;
+
+                        if (indiv && (indiv.startsWith('TEACHER:') || indiv.startsWith('STUDENT:'))) {
+                            finalField.value = indiv;   // send to ONE person only
                         } else {
-                            finalField.value = document.getElementById('quickTargetSelect').value;
+                            finalField.value = quickVal || 'ALL_STUDENTS';
                         }
+
+                        // Safety: never leave empty
+                        if (!finalField.value) finalField.value = 'ALL_STUDENTS';
                     });
                 }
             }
