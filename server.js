@@ -740,7 +740,18 @@ app.get('/admin', (req, res) => {
                                     </optgroup>
                                 `;
 
-                                let adminNotiRows = allNotifs.filter(n => n.sender_role === 'Admin' || n.target_audience === 'ADMIN' || n.target_audience === 'ALL' || n.target_audience === 'ALL_TEACHERS' || n.target_audience.startsWith('TEACHER:')).map(n => `
+                                // Show all notifications relevant to admin (including replies from teachers/students)
+                                let adminNotiRows = allNotifs.filter(n => 
+                                    n.sender_role === 'Admin' || 
+                                    n.target_audience === 'ADMIN' || 
+                                    n.target_audience === 'ALL' || 
+                                    n.target_audience === 'ALL_TEACHERS' || 
+                                    n.target_audience === 'ALL_STUDENTS' ||
+                                    n.target_audience.startsWith('TEACHER:') ||
+                                    n.target_audience.startsWith('STUDENT:') ||
+                                    n.sender_role === 'Teacher' ||
+                                    n.sender_role === 'Student'
+                                ).map(n => `
                                     <div style="background:#fdf2e9; padding:15px; margin-bottom:15px; border-radius:8px; border:1px solid #e67e22;">
                                         <strong>🔔 ${n.sender_name} (${n.sender_role}) -> (ለ: <span style="color:#2980b9;">${n.target_audience || 'ALL'}</span> | ቀን: ${n.created_at})</strong>
                                         <div style="margin-top:10px; background:white; padding:12px; border-radius:6px; border:1px solid #ddd;">${n.message}</div>
