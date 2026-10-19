@@ -179,6 +179,16 @@ async function initDB() {
         try { await pool.query(`ALTER TABLE notifications ADD COLUMN attachment TEXT`); } catch(e) {}
         try { await pool.query(`ALTER TABLE absence_requests ADD COLUMN attachment TEXT`); } catch(e) {}
 
+        // Read/Unread tracking
+        await pool.query(`CREATE TABLE IF NOT EXISTS notification_reads (
+            id SERIAL PRIMARY KEY,
+            notification_id INTEGER NOT NULL,
+            reader_role TEXT NOT NULL,
+            reader_id TEXT NOT NULL,
+            read_at TEXT,
+            UNIQUE(notification_id, reader_role, reader_id)
+        )`);
+
         let tRes = await pool.query("SELECT COUNT(*) as count FROM teachers");
         if (tRes.rows[0].count == 0) {
             let hashedPass = bcrypt.hashSync('5829', 10);
@@ -942,6 +952,56 @@ app.post('/edit-notification/:id', upload.single('attachment'), (req, res) => {
         }
 
         res.redirect('/');
+    });
+});
+
+// ================= 📖 MARK NOTIFICATION AS READ =================
+app.post('/api/mark-read/:id', (req, res) => {
+    const notifId = parseInt(req.params.id, 10);
+    if (!notifId) return res.json({ success: false });
+
+    let readerRole = null, readerId = null;
+    if (req.session.isAdmin) { readerRole = 'Admin'; readerId = 'admin'; }
+    else if (req.session.teacherId) { readerRole = 'Teacher'; readerId = req.session.teacherId; }
+    else if (req.session.studentId) { readerRole = 'Student'; readerId = req.session.studentId; }
+    else return res.json({ success: false });
+
+    const readAt = getFormattedTimestamp();
+    pool.query(
+        `INSERT INTO notification_reads (notification_id, reader_role, reader_id, read_at)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (notification_id, reader_role, reader_id) DO NOTHING`,
+        [notifId, readerRole, readerId, readAt]
+    ).then(() => res.json({ success: true })).catch(() => res.json({ success: false }));
+});
+
+app.get('/api/unread-count', (req, res) => {
+    let readerRole = null, readerId = null;
+    if (req.session.isAdmin) { readerRole = 'Admin'; readerId = 'admin'; }
+    else if (req.session.teacherId) { readerRole = 'Teacher'; readerId = req.session.teacherId; }
+    else if (req.session.studentId) { readerRole = 'Student'; readerId = req.session.studentId; }
+    else return res.json({ count: 0 });
+
+    // Count notifications relevant to this user that they haven't read
+    db.all(`SELECT id, target_audience, sender_role FROM notifications ORDER BY id DESC LIMIT 200`, [], (err, notifs = []) => {
+        db.all(`SELECT notification_id FROM notification_reads WHERE reader_role = ? AND reader_id = ?`, [readerRole, readerId], (err2, reads = []) => {
+            const readSet = new Set(reads.map(r => r.notification_id));
+            let count = 0;
+            notifs.forEach(n => {
+                if (readSet.has(n.id)) return;
+                // basic relevance
+                if (readerRole === 'Admin') {
+                    if (n.sender_role !== 'Admin' || n.target_audience === 'ADMIN') count++;
+                } else if (readerRole === 'Teacher') {
+                    if (n.target_audience === 'ALL' || n.target_audience === 'ALL_TEACHERS' ||
+                        n.target_audience === 'TEACHER:' + readerId || n.target_audience === 'ADMIN') count++;
+                } else if (readerRole === 'Student') {
+                    if (n.target_audience === 'ALL' || n.target_audience === 'ALL_STUDENTS' ||
+                        n.target_audience === 'STUDENT:' + readerId) count++;
+                }
+            });
+            res.json({ count });
+        });
     });
 });
 
