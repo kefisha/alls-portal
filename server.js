@@ -189,6 +189,32 @@ async function initDB() {
             UNIQUE(notification_id, reader_role, reader_id)
         )`);
 
+        // Extra grade columns (assignment, project)
+        try { await pool.query(`ALTER TABLE course_assessments ADD COLUMN assignment REAL DEFAULT 0`); } catch(e) {}
+        try { await pool.query(`ALTER TABLE course_assessments ADD COLUMN project REAL DEFAULT 0`); } catch(e) {}
+
+        // Live chat messages
+        await pool.query(`CREATE TABLE IF NOT EXISTS chat_messages (
+            id SERIAL PRIMARY KEY,
+            room TEXT NOT NULL,
+            sender_role TEXT,
+            sender_id TEXT,
+            sender_name TEXT,
+            message TEXT,
+            created_at TEXT
+        )`);
+
+        // SMS / WhatsApp log (stub – real send needs API key)
+        await pool.query(`CREATE TABLE IF NOT EXISTS sms_logs (
+            id SERIAL PRIMARY KEY,
+            recipient_phone TEXT,
+            recipient_name TEXT,
+            message TEXT,
+            channel TEXT DEFAULT 'sms',
+            status TEXT DEFAULT 'queued',
+            created_at TEXT
+        )`);
+
         let tRes = await pool.query("SELECT COUNT(*) as count FROM teachers");
         if (tRes.rows[0].count == 0) {
             let hashedPass = bcrypt.hashSync('5829', 10);
@@ -317,12 +343,146 @@ app.post('/login', loginLimiter, (req, res) => {
             }
             return res.redirect(`/?lang=${lang}&error=invalid`);
         });
+    } else if (role === 'parent') {
+        // Parent login: Student ID + Parent phone (emergency_phone or student phone)
+        db.get(`SELECT * FROM students WHERE UPPER(student_id) = ?`, [uKey.toUpperCase()], (err, s) => {
+            if (!s) return res.redirect(`/?lang=${lang}&error=invalid`);
+            const phoneMatch = (s.emergency_phone && String(s.emergency_phone).replace(/\s/g,'') === pass.replace(/\s/g,'')) ||
+                               (s.phone && String(s.phone).replace(/\s/g,'') === pass.replace(/\s/g,''));
+            if (phoneMatch) {
+                req.session.parentStudentId = s.student_id;
+                req.session.parentName = s.emergency_name || s.mother_name || 'Parent';
+                return res.redirect(`/parent-dashboard?lang=${lang}`);
+            }
+            return res.redirect(`/?lang=${lang}&error=invalid`);
+        });
     } else {
         return res.redirect(`/?lang=${lang}&error=invalid`);
     }
 });
 
 app.get('/logout', (req, res) => { req.session.destroy(() => res.redirect('/')); });
+
+// ================= PARENT PORTAL =================
+app.get('/parent-dashboard', (req, res) => {
+    if (!req.session.parentStudentId) return res.redirect('/');
+    const sid = req.session.parentStudentId;
+    db.get(`SELECT * FROM students WHERE student_id = ?`, [sid], (err, student) => {
+        if (!student) return res.redirect('/');
+        db.all(`SELECT * FROM course_assessments WHERE student_id = ?`, [sid], (err2, grades = []) => {
+            db.all(`SELECT * FROM daily_attendance WHERE student_id = ? ORDER BY date DESC LIMIT 30`, [sid], (err3, attendance = []) => {
+                db.all(`SELECT * FROM courses ORDER BY id`, [], (err4, allCourses = []) => {
+                    const myCourses = allCourses.filter(c => isClassMatch(c.class_level, student.class_level));
+                    let gradesHtml = myCourses.map(c => {
+                        const asm = grades.find(a => a.course_code === c.code) || {};
+                        const total = (asm.quiz||0) + (asm.assignment||0) + (asm.project||0) + (asm.mid||0) + (asm.final||0);
+                        const letter = total >= 90 ? 'A+' : total >= 80 ? 'A' : total >= 75 ? 'B+' : total >= 60 ? 'B' : total >= 50 ? 'C' : 'F';
+                        return `<tr>
+                            <td>${c.code}</td><td style="text-align:left;">${c.title}</td>
+                            <td>${c.teacher_name||'-'}</td>
+                            <td>${asm.quiz||0}</td><td>${asm.assignment||0}</td><td>${asm.project||0}</td>
+                            <td>${asm.mid||0}</td><td>${asm.final||0}</td>
+                            <td><b>${total}</b></td><td><b>${letter}</b></td>
+                        </tr>`;
+                    }).join('') || '<tr><td colspan="10">No grades yet</td></tr>';
+                    let attHtml = attendance.map(a => `<tr><td>${a.date}</td><td>${a.status||'-'}</td></tr>`).join('') || '<tr><td colspan="2">No records</td></tr>';
+                    res.render('parent', {
+                        parentName: req.session.parentName,
+                        student, gradesHtml, attHtml
+                    });
+                });
+            });
+        });
+    });
+});
+
+// ================= LIVE CHAT API =================
+app.get('/api/chat/:room', (req, res) => {
+    const room = req.params.room || 'general';
+    db.all(`SELECT * FROM chat_messages WHERE room = ? ORDER BY id DESC LIMIT 50`, [room], (err, rows = []) => {
+        res.json({ messages: (rows || []).reverse() });
+    });
+});
+
+app.post('/api/chat/:room', (req, res) => {
+    const room = req.params.room || 'general';
+    const msg = (req.body.message || '').trim();
+    if (!msg || msg.length > 2000) return res.json({ success: false });
+
+    let role = 'Guest', id = '', name = 'Guest';
+    if (req.session.isAdmin) { role = 'Admin'; id = 'admin'; name = 'Admin'; }
+    else if (req.session.teacherId) { role = 'Teacher'; id = req.session.teacherId; }
+    else if (req.session.studentId) { role = 'Student'; id = req.session.studentId; }
+    else if (req.session.parentStudentId) { role = 'Parent'; id = req.session.parentStudentId; name = req.session.parentName || 'Parent'; }
+    else return res.json({ success: false, error: 'login required' });
+
+    const finish = (senderName) => {
+        const createdAt = getFormattedTimestamp();
+        db.run(`INSERT INTO chat_messages (room, sender_role, sender_id, sender_name, message, created_at) VALUES (?,?,?,?,?,?)`,
+            [room, role, id, senderName, msg, createdAt],
+            () => res.json({ success: true }));
+    };
+
+    if (role === 'Teacher') {
+        db.get(`SELECT name FROM teachers WHERE id = ?`, [id], (e, t) => finish(t ? t.name : id));
+    } else if (role === 'Student') {
+        db.get(`SELECT name FROM students WHERE student_id = ?`, [id], (e, s) => finish(s ? s.name : id));
+    } else {
+        finish(name);
+    }
+});
+
+// ================= SMS / WhatsApp STUB =================
+// Logs message; real delivery needs Twilio / Africa's Talking API keys in env
+app.post('/api/send-sms', (req, res) => {
+    if (!req.session.isAdmin && !req.session.teacherId) return res.json({ success: false, error: 'Unauthorized' });
+    const { phone, name, message, channel } = req.body;
+    if (!phone || !message) return res.json({ success: false, error: 'phone and message required' });
+    const createdAt = getFormattedTimestamp();
+    const ch = (channel === 'whatsapp') ? 'whatsapp' : 'sms';
+    db.run(`INSERT INTO sms_logs (recipient_phone, recipient_name, message, channel, status, created_at) VALUES (?,?,?,?,?,?)`,
+        [phone, name || '', message, ch, 'queued', createdAt],
+        function() {
+            // Optional: if process.env.TWILIO_SID set, call Twilio here
+            res.json({
+                success: true,
+                status: 'queued',
+                note: process.env.TWILIO_SID ? 'Will send via Twilio' : 'Logged only — set TWILIO_SID / TWILIO_TOKEN / TWILIO_FROM to enable real SMS'
+            });
+        });
+});
+
+app.get('/api/sms-logs', (req, res) => {
+    if (!req.session.isAdmin) return res.json({ logs: [] });
+    db.all(`SELECT * FROM sms_logs ORDER BY id DESC LIMIT 100`, [], (err, logs = []) => res.json({ logs }));
+});
+
+// PWA manifest
+app.get('/manifest.json', (req, res) => {
+    res.json({
+        name: 'Amanuel Light & Life School',
+        short_name: 'ALLS Portal',
+        start_url: '/',
+        display: 'standalone',
+        background_color: '#0f172a',
+        theme_color: '#1f4e79',
+        icons: [
+            { src: '/uploads/logo.jpg', sizes: '192x192', type: 'image/jpeg' },
+            { src: '/uploads/logo.jpg', sizes: '512x512', type: 'image/jpeg' }
+        ]
+    });
+});
+
+app.get('/sw.js', (req, res) => {
+    res.type('application/javascript').send(`
+self.addEventListener('install', e => { self.skipWaiting(); });
+self.addEventListener('activate', e => { e.waitUntil(clients.claim()); });
+self.addEventListener('fetch', e => {
+  // Network-first for HTML; cache optional assets
+  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+});
+`);
+});
 
 app.get('/forgot-password', (req, res) => {
     const lang = req.query.lang === 'en' ? 'en' : 'am';
@@ -1676,9 +1836,11 @@ app.get('/teacher-dashboard', (req, res) => {
                                         <td>${idx + 1}</td>
                                         <td><b>${st.student_id}</b></td>
                                         <td style="text-align:left;">${st.name}</td>
-                                        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="20" name="quiz" value="${asm.quiz !== undefined ? asm.quiz : 0}" style="width:65px; text-align:center;"></td>
-                                        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="30" name="mid" value="${asm.mid !== undefined ? asm.mid : 0}" style="width:65px; text-align:center;"></td>
-                                        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="50" name="final" value="${asm.final !== undefined ? asm.final : 0}" style="width:65px; text-align:center;"></td>
+                                        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="20" name="quiz" value="${asm.quiz !== undefined && asm.quiz !== null ? asm.quiz : 0}" style="width:60px; text-align:center;"></td>
+                                        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="10" name="assignment" value="${asm.assignment !== undefined && asm.assignment !== null ? asm.assignment : 0}" style="width:60px; text-align:center;"></td>
+                                        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="10" name="project" value="${asm.project !== undefined && asm.project !== null ? asm.project : 0}" style="width:60px; text-align:center;"></td>
+                                        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="30" name="mid" value="${asm.mid !== undefined && asm.mid !== null ? asm.mid : 0}" style="width:60px; text-align:center;"></td>
+                                        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="30" name="final" value="${asm.final !== undefined && asm.final !== null ? asm.final : 0}" style="width:60px; text-align:center;"></td>
                                         <td>
                                             <form id="form_${st.student_id}" class="ajax-grade-form" action="/teacher/save-grade?course_id=${encodeURIComponent(selectedCourseId || 'default')}&cls=${encodeURIComponent(selectedClass)}" method="POST">
                                                 <input type="hidden" name="student_id" value="${st.student_id}">
@@ -1759,21 +1921,23 @@ app.post('/teacher/save-grade', (req, res) => {
     if (!req.session.teacherId) return res.json({ error: 'Unauthorized' });
     let courseId = req.body.course_id || req.query.course_id || '';
     let selectedCls = req.query.cls || '';
-    let { student_id, quiz, mid, final } = req.body;
+    let { student_id, quiz, mid, final, assignment, project } = req.body;
     
     let q = Math.min(20, Math.max(0, parseFloat(quiz) || 0));
+    let a = Math.min(10, Math.max(0, parseFloat(assignment) || 0));
+    let p = Math.min(10, Math.max(0, parseFloat(project) || 0));
     let m = Math.min(30, Math.max(0, parseFloat(mid) || 0));
-    let f = Math.min(50, Math.max(0, parseFloat(final) || 0));
-    let total = Number((q + m + f).toFixed(2));
+    let f = Math.min(30, Math.max(0, parseFloat(final) || 0));
+    let total = Number((q + a + p + m + f).toFixed(2));
 
     const saveAssessmentRecord = (code, title) => {
         db.get(`SELECT id FROM course_assessments WHERE student_id = ? AND course_code = ?`, [student_id, code], (err, row) => {
             if (row) {
-                db.run(`UPDATE course_assessments SET teacher_id=?, quiz=?, mid=?, final=?, total=?, remark=? WHERE id=?`, 
-                [req.session.teacherId, q, m, f, total, total >= 50 ? 'Pass' : 'Fail', row.id], () => res.json({ success: true, total: total }));
+                db.run(`UPDATE course_assessments SET teacher_id=?, quiz=?, assignment=?, project=?, mid=?, final=?, total=?, remark=? WHERE id=?`, 
+                [req.session.teacherId, q, a, p, m, f, total, total >= 50 ? 'Pass' : 'Fail', row.id], () => res.json({ success: true, total: total }));
             } else {
-                db.run(`INSERT INTO course_assessments (student_id, teacher_id, course_code, course_title, quiz, mid, final, total, remark) VALUES (?,?,?,?,?,?,?,?,?)`,
-                [student_id, req.session.teacherId, code, title, q, m, f, total, total >= 50 ? 'Pass' : 'Fail'], () => res.json({ success: true, total: total }));
+                db.run(`INSERT INTO course_assessments (student_id, teacher_id, course_code, course_title, quiz, assignment, project, mid, final, total, remark) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+                [student_id, req.session.teacherId, code, title, q, a, p, m, f, total, total >= 50 ? 'Pass' : 'Fail'], () => res.json({ success: true, total: total }));
             }
         });
     };
@@ -2011,13 +2175,15 @@ app.get('/student-dashboard', (req, res) => {
                                 let myAbsRows = myAbsences.map(ab => `<div style="background:#fdfdfd; padding:12px; margin-bottom:10px; border-radius:6px; border:1px solid #eee; border-left:4px solid ${ab.teacher_feedback ? '#27ae60' : '#f39c12'};"><strong>ቀን:</strong> ${ab.date || ab.created_at || 'N/A'}<br><strong>ምክንያት:</strong> ${ab.reason}<br><strong style="color: ${ab.teacher_feedback ? '#27ae60' : '#d35400'};">መልስ:</strong> ${ab.teacher_feedback || 'በመጠበቅ ላይ'}</div>`).join('');
                                 let gradesHtml = myCourses.map(c => {
                                     let asm = myGrades.find(a => a.course_code === c.code) || {};
-                                    let total = (asm.quiz || 0) + (asm.mid || 0) + (asm.final || 0);
+                                    let total = (asm.quiz || 0) + (asm.assignment || 0) + (asm.project || 0) + (asm.mid || 0) + (asm.final || 0);
                                     let gradeLetter = total >= 90 ? 'A+' : total >= 80 ? 'A' : total >= 75 ? 'B+' : total >= 60 ? 'B' : total >= 50 ? 'C' : 'F';
                                     return `<tr>
                                         <td>${c.code}</td>
                                         <td style="text-align:left;"><b>${c.title}</b></td>
                                         <td style="font-size:13px;">${c.teacher_name || '-'}</td>
                                         <td>${asm.quiz || 0}</td>
+                                        <td>${asm.assignment || 0}</td>
+                                        <td>${asm.project || 0}</td>
                                         <td>${asm.mid || 0}</td>
                                         <td>${asm.final || 0}</td>
                                         <td><b>${total}</b></td>
