@@ -76,10 +76,12 @@
                             <th>#</th>
                             <th>ID</th>
                             <th><span class="am">የተማሪ ስም</span><span class="en">Student Name</span></th>
-                            <th>Quiz (20%)</th>
-                            <th>Mid (30%)</th>
-                            <th>Final (50%)</th>
-                            <th><span class="am">አስቀምጥ / አስተካክል</span><span class="en">Save / Edit</span></th>
+                            <th>Quiz (20)</th>
+                            <th>Assign (10)</th>
+                            <th>Project (10)</th>
+                            <th>Mid (30)</th>
+                            <th>Final (30)</th>
+                            <th><span class="am">አስቀምጥ</span><span class="en">Save</span></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -298,6 +300,8 @@
                     const btn = this.querySelector('button[type="submit"]');
                     const row = this.closest('tr');
                     const quizInput = row.querySelector('input[name="quiz"]');
+                    const assignInput = row.querySelector('input[name="assignment"]');
+                    const projectInput = row.querySelector('input[name="project"]');
                     const midInput = row.querySelector('input[name="mid"]');
                     const finalInput = row.querySelector('input[name="final"]');
                     const studentId = this.querySelector('input[name="student_id"]').value;
@@ -310,6 +314,8 @@
                         body: JSON.stringify({
                             student_id: studentId, course_id: courseId,
                             quiz: quizInput ? quizInput.value : 0,
+                            assignment: assignInput ? assignInput.value : 0,
+                            project: projectInput ? projectInput.value : 0,
                             mid: midInput ? midInput.value : 0,
                             final: finalInput ? finalInput.value : 0
                         })
