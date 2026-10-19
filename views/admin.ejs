@@ -7,9 +7,22 @@
     
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
     <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eef2f5; margin: 0; padding: 20px; color: #333; }
+        :root {
+            --bg: #eef2f5; --card: #ffffff; --text: #333; --text2: #555;
+            --border: #e0e0e0; --primary: #1f4e79; --accent: #2980b9;
+            --hover-row: #e8f4fd; --even-row: #f8f9fa; --input-bg: #fff;
+            --input-border: #ccd1d9; --shadow: rgba(0,0,0,0.05);
+        }
+        body.dark {
+            --bg: #0f172a; --card: #1e293b; --text: #e2e8f0; --text2: #94a3b8;
+            --border: #334155; --primary: #3b82f6; --accent: #60a5fa;
+            --hover-row: #1e3a5f; --even-row: #162032; --input-bg: #0f172a;
+            --input-border: #475569; --shadow: rgba(0,0,0,0.3);
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); margin: 0; padding: 20px; color: var(--text); transition: background 0.3s, color 0.3s; }
         .container { max-width: 1200px; margin: auto; }
         
         body.lang-am .en { display: none !important; }
@@ -17,15 +30,15 @@
         body.lang-en .am { display: none !important; }
         body.lang-en .en { display: inline !important; }
 
-        h2 { color: #2c3e50; text-align: center; margin-bottom: 30px; font-size: 28px; }
-        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 25px; border-top: 4px solid #2980b9; }
-        .card h3 { color: #1f4e79; margin-top: 0; margin-bottom: 20px; font-size: 20px; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
-        th, td { border: 1px solid #e0e0e0; padding: 12px; text-align: center; font-size: 14px; }
-        th { background: #1f4e79; color: white; font-weight: 600; position: sticky; top: 0; }
-        tr:nth-child(even) { background: #f8f9fa; }
-        tr:hover { background: #e8f4fd; }
-        input[type="text"], input[type="number"], select, input[type="file"] { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccd1d9; border-radius: 6px; box-sizing: border-box; font-family: inherit; }
+        h2 { color: var(--primary); text-align: center; margin-bottom: 30px; font-size: 28px; }
+        .card { background: var(--card); padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px var(--shadow); margin-bottom: 25px; border-top: 4px solid var(--accent); color: var(--text); }
+        .card h3 { color: var(--primary); margin-top: 0; margin-bottom: 20px; font-size: 20px; border-bottom: 2px solid var(--border); padding-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: var(--card); }
+        th, td { border: 1px solid var(--border); padding: 12px; text-align: center; font-size: 14px; color: var(--text); }
+        th { background: var(--primary); color: white; font-weight: 600; position: sticky; top: 0; }
+        tr:nth-child(even) { background: var(--even-row); }
+        tr:hover { background: var(--hover-row); }
+        input[type="text"], input[type="number"], select, input[type="file"], textarea { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid var(--input-border); border-radius: 6px; box-sizing: border-box; font-family: inherit; background: var(--input-bg); color: var(--text); }
         button { background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: background 0.3s; }
         button:hover { background: #2980b9; }
         .btn-green { background: #27ae60; } .btn-green:hover { background: #219653; }
@@ -34,11 +47,18 @@
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
         .logout-btn { background: #e74c3c; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; }
-        #editor { height: 180px; background: white; border-radius: 0 0 6px 6px; font-size: 15px; }
+        #editor { height: 180px; background: var(--card); border-radius: 0 0 6px 6px; font-size: 15px; }
+        .badge-unread { background: #e74c3c; color: white; border-radius: 50px; padding: 2px 9px; font-size: 12px; font-weight: bold; margin-left: 6px; display: none; }
+        .badge-unread.show { display: inline-block; }
+        .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+        .chart-box { background: var(--card); padding: 16px; border-radius: 10px; border: 1px solid var(--border); }
+        .chart-box h4 { margin: 0 0 12px; color: var(--primary); font-size: 15px; text-align: center; }
+        .dark-toggle { background: #64748b; color: white; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; }
+        body.dark .dark-toggle { background: #fbbf24; color: #0f172a; }
 
-        .multi-sec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 8px; background: white; padding: 12px; border: 1px solid #ccd1d9; border-radius: 8px; max-height: 165px; overflow-y: auto; margin-bottom: 10px; }
-        .sec-chk-label { display: flex; align-items: center; gap: 6px; background: #f8fafc; padding: 7px 10px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 13px; font-weight: 600; color: #2c3e50; cursor: pointer; }
-        .sec-chk-label:hover { border-color: #3498db; background: #ebf5fb; }
+        .multi-sec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 8px; background: var(--card); padding: 12px; border: 1px solid var(--input-border); border-radius: 8px; max-height: 165px; overflow-y: auto; margin-bottom: 10px; }
+        .sec-chk-label { display: flex; align-items: center; gap: 6px; background: var(--even-row); padding: 7px 10px; border-radius: 6px; border: 1px solid var(--border); font-size: 13px; font-weight: 600; color: var(--text); cursor: pointer; }
+        .sec-chk-label:hover { border-color: #3498db; }
         .sec-chk-label input { width: 16px; height: 16px; margin: 0; cursor: pointer; }
         .compact-applicants-card { padding: 15px !important; max-height: 320px !important; overflow-y: auto !important; }
         .expanded-subjects-card { grid-column: 1 / -1 !important; padding: 28px !important; border-width: 4px !important; }
@@ -48,18 +68,57 @@
     <div class="container">
         
         <!-- Top Navigation -->
-        <div style="display: flex; justify-content: flex-end; gap: 15px; align-items: center; margin-bottom: 20px;">
-            <div style="background: white; padding: 6px 12px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); display: flex; gap: 8px;">
+        <div style="display: flex; justify-content: flex-end; gap: 12px; align-items: center; margin-bottom: 20px; flex-wrap: wrap;">
+            <button type="button" class="dark-toggle" id="darkToggle" onclick="toggleDark()">🌙 Dark</button>
+            <div style="background: var(--card); padding: 6px 12px; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow); display: flex; gap: 8px; align-items: center;">
+                <span style="font-size:14px; font-weight:bold; color:var(--text);">🔔 <span id="unreadBadge" class="badge-unread">0</span></span>
                 <button type="button" onclick="setLang('am')" id="btn-am" style="background:#27ae60; color:white; padding:8px 18px; border-radius:6px; border:none; cursor:pointer; font-weight:bold; font-size:14px;">🇪🇹 አማርኛ</button>
-                <button type="button" onclick="setLang('en')" id="btn-en" style="background:transparent; color:#333; padding:8px 18px; border-radius:6px; border:none; cursor:pointer; font-weight:bold; font-size:14px;">🇬🇧 English</button>
+                <button type="button" onclick="setLang('en')" id="btn-en" style="background:transparent; color:var(--text); padding:8px 18px; border-radius:6px; border:none; cursor:pointer; font-weight:bold; font-size:14px;">🇬🇧 English</button>
             </div>
             <a href="/logout" class="logout-btn">🚪 <span class="am">ውጣ</span><span class="en">Logout</span></a>
         </div>
 
         <h2>👑 <span class="am">የዲሬክተር / አድሚን መቆጣጠሪያ</span><span class="en">Director / Admin Dashboard</span></h2>
 
+        <!-- 📊 Dashboard Charts -->
+        <div class="card">
+            <h3>📊 <span class="am">የትምህርት ቤት ስታቲስቲክስ</span><span class="en">School Statistics</span></h3>
+            <div class="charts-grid">
+                <div class="chart-box">
+                    <h4>👨‍🎓👩‍🎓 <span class="am">ጾታ</span><span class="en">Gender</span></h4>
+                    <canvas id="genderChart" height="200"></canvas>
+                </div>
+                <div class="chart-box">
+                    <h4>📈 <span class="am">ውጤት ደረጃ</span><span class="en">Grade Levels</span></h4>
+                    <canvas id="gradeChart" height="200"></canvas>
+                </div>
+                <div class="chart-box">
+                    <h4>🏫 <span class="am">ተማሪ በክፍል</span><span class="en">Students by Class</span></h4>
+                    <canvas id="classChart" height="200"></canvas>
+                </div>
+            </div>
+            <div style="display:flex; gap:20px; flex-wrap:wrap; margin-top:18px; justify-content:center;">
+                <div style="background:var(--even-row); padding:12px 22px; border-radius:10px; text-align:center; min-width:120px;">
+                    <div style="font-size:28px; font-weight:800; color:#2980b9;"><%= typeof maleCount !== 'undefined' ? maleCount : 0 %></div>
+                    <div style="font-size:13px; color:var(--text2);">👨 Male</div>
+                </div>
+                <div style="background:var(--even-row); padding:12px 22px; border-radius:10px; text-align:center; min-width:120px;">
+                    <div style="font-size:28px; font-weight:800; color:#e84393;"><%= typeof femaleCount !== 'undefined' ? femaleCount : 0 %></div>
+                    <div style="font-size:13px; color:var(--text2);">👩 Female</div>
+                </div>
+                <div style="background:var(--even-row); padding:12px 22px; border-radius:10px; text-align:center; min-width:120px;">
+                    <div style="font-size:28px; font-weight:800; color:#27ae60;"><%= (typeof maleCount !== 'undefined' ? maleCount : 0) + (typeof femaleCount !== 'undefined' ? femaleCount : 0) %></div>
+                    <div style="font-size:13px; color:var(--text2);">👥 Total</div>
+                </div>
+                <div style="background:var(--even-row); padding:12px 22px; border-radius:10px; text-align:center; min-width:120px;">
+                    <div style="font-size:28px; font-weight:800; color:#f39c12;"><%= typeof excellent !== 'undefined' ? excellent : 0 %></div>
+                    <div style="font-size:13px; color:var(--text2);">⭐ Excellent (90+)</div>
+                </div>
+            </div>
+        </div>
+
         <!-- Academic Year -->
-        <div class="card" style="background: #fffcf5; border-color: #f39c12;">
+        <div class="card" style="border-color: #f39c12;">
             <h3 style="color: #d35400; border-bottom-color: #fce8cd;">🎓 <span class="am">የአካዳሚክ ዓመት ማጠቃለያ</span><span class="en">Academic Year-End Actions</span></h3>
             <p style="font-size: 13px; color: #555;">
                 <span class="am">ማሳሰቢያ፦ እነዚህን ተግባራት ከማድረግዎ በፊት እባክዎ የክፍል ውጤቶችን ዳውንሎድ ማድረጎን ያረጋግጡ።</span>
@@ -650,7 +709,79 @@
                         subBox.innerHTML = `<span style="color:#7f8c8d; font-size:13.5px;">እስካሁን መምህራን Submit ያደረጉት ክፍል የለም።</span>`;
                     }
                 });
+
+            // ===== Unread Badge =====
+            function refreshUnreadBadge() {
+                fetch('/api/unread-count').then(r => r.json()).then(d => {
+                    const badge = document.getElementById('unreadBadge');
+                    if (badge) {
+                        if (d.count > 0) {
+                            badge.textContent = d.count;
+                            badge.classList.add('show');
+                        } else {
+                            badge.classList.remove('show');
+                        }
+                    }
+                }).catch(() => {});
+            }
+            refreshUnreadBadge();
+            setInterval(refreshUnreadBadge, 30000);
+
+            // Mark notifications as read when viewing the list
+            document.querySelectorAll('[id^="editNotif_"], [id^="replyNotif_"]').forEach(el => {
+                const id = el.id.replace(/^(editNotif_|replyNotif_)/, '');
+                if (id) fetch('/api/mark-read/' + id, { method: 'POST' }).catch(() => {});
+            });
+
+            // ===== Charts =====
+            const maleC = <%= typeof maleCount !== 'undefined' ? maleCount : 0 %>;
+            const femaleC = <%= typeof femaleCount !== 'undefined' ? femaleCount : 0 %>;
+            const exc = <%= typeof excellent !== 'undefined' ? excellent : 0 %>;
+            const good = <%= typeof good !== 'undefined' ? good : 0 %>;
+            const avg = <%= typeof average !== 'undefined' ? average : 0 %>;
+            const poor = <%= typeof poor !== 'undefined' ? poor : 0 %>;
+
+            if (typeof Chart !== 'undefined') {
+                new Chart(document.getElementById('genderChart'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Male', 'Female'],
+                        datasets: [{ data: [maleC, femaleC], backgroundColor: ['#3498db', '#e84393'] }]
+                    },
+                    options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+                });
+                new Chart(document.getElementById('gradeChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: ['Excellent 90+', 'Good 75+', 'Average 50+', 'Poor <50'],
+                        datasets: [{ label: 'Count', data: [exc, good, avg, poor], backgroundColor: ['#27ae60', '#2980b9', '#f39c12', '#e74c3c'] }]
+                    },
+                    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+                });
+                // Class chart - simple placeholder from stats
+                new Chart(document.getElementById('classChart'), {
+                    type: 'pie',
+                    data: {
+                        labels: ['Total Students'],
+                        datasets: [{ data: [maleC + femaleC || 1], backgroundColor: ['#8e44ad'] }]
+                    },
+                    options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+                });
+            }
         });
+
+        // ===== Dark Mode =====
+        function toggleDark() {
+            document.body.classList.toggle('dark');
+            const isDark = document.body.classList.contains('dark');
+            localStorage.setItem('darkMode', isDark ? '1' : '0');
+            document.getElementById('darkToggle').textContent = isDark ? '☀️ Light' : '🌙 Dark';
+        }
+        if (localStorage.getItem('darkMode') === '1') {
+            document.body.classList.add('dark');
+            const btn = document.getElementById('darkToggle');
+            if (btn) btn.textContent = '☀️ Light';
+        }
     </script>
 </body>
 </html>
