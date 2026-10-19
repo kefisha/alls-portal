@@ -147,9 +147,11 @@
                     <span class="am">1. ለማን ይላክ? (ቀላል ምርጫ)</span>
                     <span class="en">1. Target Audience (Quick Select)</span>
                 </label>
-                <select id="quickTargetSelect" name="target_audience" style="width: 100%; max-width: 480px; display: block; margin-bottom: 18px; font-size: 14px; padding: 10px;">
+                <select id="quickTargetSelect" style="width: 100%; max-width: 480px; display: block; margin-bottom: 18px; font-size: 14px; padding: 10px;">
                     <%- adminTargetOptions %>
                 </select>
+                <!-- This hidden field is what actually gets submitted (supports both quick select + search) -->
+                <input type="hidden" name="target_audience" id="finalTargetAudience" value="ALL_STUDENTS">
 
                 <!-- 2. Search for Individual Teacher / Student -->
                 <div style="background:#f0f7ff; border:2px solid #3498db; border-radius:10px; padding:16px; margin-bottom:20px;">
@@ -463,13 +465,28 @@
                 if (notifForm) {
                     notifForm.addEventListener('submit', function() {
                         document.getElementById('hiddenMessage').value = quill.root.innerHTML;
-                        // If individual person is selected via search, override target_audience
+                        // Priority: individual search selection > quick select
                         const indiv = document.getElementById('individualTargetValue').value;
+                        const finalField = document.getElementById('finalTargetAudience');
                         if (indiv) {
-                            document.getElementById('quickTargetSelect').value = indiv;
+                            finalField.value = indiv;
+                        } else {
+                            finalField.value = document.getElementById('quickTargetSelect').value;
                         }
                     });
                 }
+            }
+
+            // Keep finalTargetAudience synced when user changes the quick select
+            const quickSel = document.getElementById('quickTargetSelect');
+            if (quickSel) {
+                quickSel.addEventListener('change', function() {
+                    document.getElementById('individualTargetValue').value = '';
+                    document.getElementById('selectedPersonBox').style.display = 'none';
+                    document.getElementById('finalTargetAudience').value = this.value;
+                });
+                // Set initial value
+                document.getElementById('finalTargetAudience').value = quickSel.value;
             }
 
             // ========== LIVE SEARCH FOR TEACHER / STUDENT ==========
@@ -486,6 +503,9 @@
                 selectedText.textContent = '';
                 searchInput.value = '';
                 resultsBox.style.display = 'none';
+                // Revert to quick select value
+                const qs = document.getElementById('quickTargetSelect');
+                if (qs) document.getElementById('finalTargetAudience').value = qs.value;
             };
 
             if (searchInput) {
@@ -524,7 +544,9 @@
 
                     resultsBox.querySelectorAll('.search-result-item').forEach(item => {
                         item.addEventListener('click', function() {
-                            individualValue.value = this.getAttribute('data-value');
+                            const val = this.getAttribute('data-value');
+                            individualValue.value = val;
+                            document.getElementById('finalTargetAudience').value = val;
                             selectedText.textContent = this.getAttribute('data-label');
                             selectedBox.style.display = 'block';
                             searchInput.value = '';
