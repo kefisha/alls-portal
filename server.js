@@ -1651,9 +1651,15 @@ app.get('/teacher-dashboard', (req, res) => {
 
                                 let proctorPanel = isProctor ? `<div class="card" style="background:#f9fcf7; border:1px solid #27ae60;"><h3>🟢 የፕሮክተር ፓነል</h3><a href="/attendance-sheet/${encodeURIComponent(selectedClass)}" target="_blank" style="background:#16a085; color:white; padding:8px 15px; border-radius:5px; text-decoration:none; font-weight:bold; display:inline-block;">📋 Attendance Sheet</a></div>` : '';
 
+                                // Students for teacher search (only from assigned classes)
+                                const teacherStudentsJson = JSON.stringify(
+                                    studentsInClass.map(s => ({ id: s.student_id, name: s.name }))
+                                );
+
                                 res.render('teacher', {
                                     lang: 'am', teacher, selectedClass, selectedCourseId: selectedCourseId || 'default',
-                                    classOptions, courseOptions, teacherTargetOptions, studentRows, absRows, teacherNotiRows, proctorPanel
+                                    classOptions, courseOptions, teacherTargetOptions, studentRows, absRows, teacherNotiRows, proctorPanel,
+                                    teacherStudentsJson
                                 });
                             });
                         });
@@ -1920,7 +1926,16 @@ app.get('/student-dashboard', (req, res) => {
                             let asm = myGrades.find(a => a.course_code === c.code) || {};
                             let total = (asm.quiz || 0) + (asm.mid || 0) + (asm.final || 0);
                             let gradeLetter = total >= 90 ? 'A+' : total >= 80 ? 'A' : total >= 75 ? 'B+' : total >= 60 ? 'B' : total >= 50 ? 'C' : 'F';
-                            return `<tr><td>${c.code}</td><td style="text-align:left;"><b>${c.title}</b></td><td>${c.credit_hours || '-'}</td><td>${asm.quiz || 0}</td><td>${asm.mid || 0}</td><td>${asm.final || 0}</td><td><b>${total}</b></td><td><b>${gradeLetter}</b></td></tr>`;
+                            return `<tr>
+                                <td>${c.code}</td>
+                                <td style="text-align:left;"><b>${c.title}</b></td>
+                                <td style="font-size:13px;">${c.teacher_name || '-'}</td>
+                                <td>${asm.quiz || 0}</td>
+                                <td>${asm.mid || 0}</td>
+                                <td>${asm.final || 0}</td>
+                                <td><b>${total}</b></td>
+                                <td><b>${gradeLetter}</b></td>
+                            </tr>`;
                         }).join('');
 
                         res.render('student', { lang: 'am', student, gradesHtml, notiRows, myAbsRows });
