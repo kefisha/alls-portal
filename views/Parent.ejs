@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="am">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1f4e79">
+    <link rel="manifest" href="/manifest.json">
+    <title>Parent Portal - ALLS</title>
+    <style>
+        :root { --bg:#eef2f5; --card:#fff; --text:#333; --primary:#1f4e79; --border:#e0e0e0; }
+        body.dark { --bg:#0f172a; --card:#1e293b; --text:#e2e8f0; --primary:#3b82f6; --border:#334155; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 20px; color: var(--text); }
+        .container { max-width: 900px; margin: auto; }
+        .card { background: var(--card); padding: 20px; border-radius: 12px; margin-bottom: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.06); border-top: 4px solid #2980b9; }
+        h2, h3 { color: var(--primary); }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid var(--border); padding: 10px; text-align: center; font-size: 13px; }
+        th { background: var(--primary); color: white; }
+        .logout { color: #e74c3c; font-weight: bold; text-decoration: none; }
+        #chatBox { height: 220px; overflow-y: auto; background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+        body.dark #chatBox { background: #0f172a; }
+        .chat-msg { margin-bottom: 8px; font-size: 13px; }
+        .chat-msg b { color: #2980b9; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
+        <h2 style="margin:0;">👨‍👩‍👧 Parent Portal</h2>
+        <div style="display:flex; gap:10px; align-items:center;">
+            <button type="button" onclick="toggleDark()" id="darkBtn" style="background:#64748b;color:#fff;border:none;padding:7px 12px;border-radius:6px;cursor:pointer;">🌙</button>
+            <a href="/logout" class="logout">🔒 Logout</a>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3 style="margin-top:0;">Student: <%= student.name %></h3>
+        <p><b>ID:</b> <%= student.student_id %> | <b>Class:</b> <%= student.class_level %> | <b>Parent:</b> <%= parentName %></p>
+    </div>
+
+    <div class="card">
+        <h3>📊 Grades</h3>
+        <div style="overflow-x:auto;">
+            <table>
+                <tr>
+                    <th>Code</th><th>Course</th><th>Teacher</th>
+                    <th>Quiz</th><th>Assign</th><th>Project</th><th>Mid</th><th>Final</th>
+                    <th>Total</th><th>Grade</th>
+                </tr>
+                <%- gradesHtml %>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>📅 Recent Attendance</h3>
+        <table>
+            <tr><th>Date</th><th>Status</th></tr>
+            <%- attHtml %>
+        </table>
+    </div>
+
+    <div class="card">
+        <h3>💬 Chat with School</h3>
+        <div id="chatBox"></div>
+        <form id="chatForm" style="display:flex; gap:8px;">
+            <input type="text" id="chatInput" placeholder="Type a message..." style="flex:1; padding:10px; border-radius:6px; border:1px solid #ccc;" required>
+            <button type="submit" style="background:#2980b9; color:white; border:none; padding:10px 16px; border-radius:6px; font-weight:bold; cursor:pointer;">Send</button>
+        </form>
+    </div>
+</div>
+<script>
+    function toggleDark() {
+        document.body.classList.toggle('dark');
+        localStorage.setItem('darkMode', document.body.classList.contains('dark') ? '1' : '0');
+        document.getElementById('darkBtn').textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
+    }
+    if (localStorage.getItem('darkMode') === '1') {
+        document.body.classList.add('dark');
+        document.getElementById('darkBtn').textContent = '☀️';
+    }
+
+    const room = 'parent-<%= student.student_id %>';
+    function loadChat() {
+        fetch('/api/chat/' + encodeURIComponent(room)).then(r => r.json()).then(d => {
+            const box = document.getElementById('chatBox');
+            box.innerHTML = (d.messages || []).map(m =>
+                `<div class="chat-msg"><b>${m.sender_name}</b> <small style="color:#888;">${m.created_at||''}</small><br>${m.message}</div>`
+            ).join('') || '<div style="color:#888;">No messages yet</div>';
+            box.scrollTop = box.scrollHeight;
+        }).catch(() => {});
+    }
+    loadChat();
+    setInterval(loadChat, 8000);
+
+    document.getElementById('chatForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const input = document.getElementById('chatInput');
+        const msg = input.value.trim();
+        if (!msg) return;
+        fetch('/api/chat/' + encodeURIComponent(room), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: msg })
+        }).then(r => r.json()).then(d => {
+            if (d.success) { input.value = ''; loadChat(); }
+        });
+    });
+
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+</script>
+</body>
+</html>
