@@ -141,15 +141,14 @@
         <div class="card">
             <h3>📢 <span class="am">አዲስ ማስታወቂያ መላኪያ</span><span class="en">Send New Notification</span></h3>
             <form id="notifForm" action="/admin/save-notice" method="POST" enctype="multipart/form-data">
-                <label style="font-weight:bold; display:block; margin-bottom:6px;"><span class="am">ለማን ይላክ?</span><span class="en">Target Audience:</span></label>
-                <select name="target_audience" style="width: 100%; max-width: 320px; display: block; margin-bottom: 15px;">
-                    <option value="ALL">ለማንኛውም ሰው (To All / Everyone)</option>
-                    <%- sectionOptions %>
+                <label style="font-weight:bold; display:block; margin-bottom:6px;"><span class="am">ለማን ይላክ? (ለሁሉም ተማሪዎች / መምህራን / ወይም በስም ይምረጡ)</span><span class="en">Target Audience:</span></label>
+                <select name="target_audience" style="width: 100%; max-width: 480px; display: block; margin-bottom: 15px; font-size: 14px;">
+                    <%- adminTargetOptions %>
                 </select>
 
                 <label style="font-weight:bold; display:block; margin-bottom:6px;">
-                    🎨 <span class="am">መልዕክትዎን ይጻፉ (ከለር፣ ፎንት እና ሳይዝ መምረጥ ይችላሉ)፦</span>
-                    <span class="en">Write your message (Choose Color, Font, and Size):</span>
+                    🎨 <span class="am">መልዕክትዎን ይጻፉ (ከለር፣ ፎንት፣ ሳይዝ፣ Bold ይምረጡ)፦</span>
+                    <span class="en">Write your message (Choose Color, Font, Size, Bold):</span>
                 </label>
                 <div id="editor"></div>
                 <input type="hidden" name="message" id="hiddenMessage">
