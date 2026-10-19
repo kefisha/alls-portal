@@ -728,17 +728,21 @@ app.get('/admin', (req, res) => {
                                 `).join('');
 
                                 // 🎯 አድሚኑ ማስታወቂያ ሲልክ (ALL Students, ALL Teachers, Individual Search for Teachers & Students)
+                                // Simple top-level options + Grades
                                 let adminTargetOptions = `
                                     <option value="ALL_STUDENTS">👨‍🎓 ለሁሉም ተማሪዎች (All Students)</option>
                                     <option value="ALL_TEACHERS">👩‍🏫 ለሁሉም መምህራን (All Teachers)</option>
                                     <option value="ALL">🌍 ለሁሉም ተማሪዎች እና መምህራን (To Everyone)</option>
-                                    <optgroup label="👩‍🏫 በየመምህሩ / Individual Teachers">
-                                        ${teachers.map(tc => `<option value="TEACHER:${tc.id}">መምህር: ${tc.name} (${tc.id})</option>`).join('')}
-                                    </optgroup>
-                                    <optgroup label="👨‍🎓 በየተማሪው / Individual Students">
-                                        ${students.map(st => `<option value="STUDENT:${st.student_id}">ተማሪ: ${st.name} (${st.student_id})</option>`).join('')}
+                                    <optgroup label="🏫 በክፍል / By Grade">
+                                        ${[1,2,3,4,5,6,7,8,9,10,11,12].map(g => `<option value="GRADE:${g}">Grade ${g} (ሁሉም የGrade ${g} ተማሪዎች)</option>`).join('')}
                                     </optgroup>
                                 `;
+
+                                // Data for live search (name or ID)
+                                const searchPeopleData = JSON.stringify({
+                                    teachers: teachers.map(t => ({ id: t.id, name: t.name, type: 'teacher' })),
+                                    students: students.map(s => ({ id: s.student_id, name: s.name, type: 'student', class: s.class_level || '' }))
+                                });
 
                                 // Show all notifications relevant to admin (including replies from teachers/students)
                                 let adminNotiRows = allNotifs.filter(n => 
@@ -786,7 +790,8 @@ app.get('/admin', (req, res) => {
                                 res.render('admin', {
                                     lang, excellent, good, average, poor, maleCount, femaleCount,
                                     pRows, secRows, cRows, tRows, adminNotiRows, groupedStudentsHtml: '',
-                                    sectionOptions, rosterSectionButtons, teacherOptions, gradeCheckboxes, adminTargetOptions
+                                    sectionOptions, rosterSectionButtons, teacherOptions, gradeCheckboxes, adminTargetOptions,
+                                    searchPeopleData
                                 });
                             });
                         });
@@ -1878,12 +1883,18 @@ app.get('/student-dashboard', (req, res) => {
             let myCourses = allCourses.filter(c => isClassMatch(c.class_level, student.class_level));
             db.all('SELECT * FROM course_assessments WHERE student_id = ?', [student.student_id], (err, myGrades = []) => {
                 db.all('SELECT * FROM notifications ORDER BY id DESC', [], (err, allNotifs = []) => {
-                    let myNotifs = allNotifs.filter(n => 
-                        n.target_audience === 'ALL' || 
-                        n.target_audience === 'ALL_STUDENTS' ||
-                        n.target_audience === 'STUDENT:' + student.student_id || 
-                        isClassMatch(n.target_audience, student.class_level)
-                    );
+                    let myNotifs = allNotifs.filter(n => {
+                        if (n.target_audience === 'ALL' || n.target_audience === 'ALL_STUDENTS') return true;
+                        if (n.target_audience === 'STUDENT:' + student.student_id) return true;
+                        if (isClassMatch(n.target_audience, student.class_level)) return true;
+                        // Support GRADE:5 style targeting
+                        if (n.target_audience && n.target_audience.startsWith('GRADE:')) {
+                            const gradeNum = n.target_audience.replace('GRADE:', '').trim();
+                            const stClass = (student.class_level || '').toString();
+                            return stClass.includes(`Grade ${gradeNum}`) || stClass.match(new RegExp(`\\b${gradeNum}\\b`));
+                        }
+                        return false;
+                    });
 
                     db.all('SELECT * FROM absence_requests WHERE student_id = ? ORDER BY id DESC', [student.student_id], (err, myAbsences = []) => {
                         
