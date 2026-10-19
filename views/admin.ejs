@@ -141,10 +141,34 @@
         <div class="card">
             <h3>📢 <span class="am">አዲስ ማስታወቂያ መላኪያ</span><span class="en">Send New Notification</span></h3>
             <form id="notifForm" action="/admin/save-notice" method="POST" enctype="multipart/form-data">
-                <label style="font-weight:bold; display:block; margin-bottom:6px;"><span class="am">ለማን ይላክ? (ለሁሉም ተማሪዎች / መምህራን / ወይም በስም ይምረጡ)</span><span class="en">Target Audience:</span></label>
-                <select name="target_audience" style="width: 100%; max-width: 480px; display: block; margin-bottom: 15px; font-size: 14px;">
+                
+                <!-- 1. Quick Target Selection -->
+                <label style="font-weight:bold; display:block; margin-bottom:6px;">
+                    <span class="am">1. ለማን ይላክ? (ቀላል ምርጫ)</span>
+                    <span class="en">1. Target Audience (Quick Select)</span>
+                </label>
+                <select id="quickTargetSelect" name="target_audience" style="width: 100%; max-width: 480px; display: block; margin-bottom: 18px; font-size: 14px; padding: 10px;">
                     <%- adminTargetOptions %>
                 </select>
+
+                <!-- 2. Search for Individual Teacher / Student -->
+                <div style="background:#f0f7ff; border:2px solid #3498db; border-radius:10px; padding:16px; margin-bottom:20px;">
+                    <label style="font-weight:bold; display:block; margin-bottom:8px; color:#1f4e79;">
+                        🔍 <span class="am">2. ወይም በስም / መታወቂያ ፈልገው ለአንድ ሰው ይላኩ</span>
+                        <span class="en">2. Or Search by Name / ID and send to one person</span>
+                    </label>
+                    <input type="text" id="peopleSearchInput" placeholder="ስም ወይም ID ይጻፉ... (e.g. Teshale or ALLS-5430)" 
+                           style="width:100%; max-width:480px; padding:11px 14px; border:1px solid #3498db; border-radius:8px; font-size:15px; box-sizing:border-box;"
+                           autocomplete="off">
+                    <div id="searchResultsBox" style="display:none; max-width:480px; max-height:220px; overflow-y:auto; background:white; border:1px solid #cbd5e1; border-radius:0 0 8px 8px; margin-top:-1px; box-shadow:0 4px 12px rgba(0,0,0,0.1);"></div>
+                    
+                    <div id="selectedPersonBox" style="display:none; margin-top:12px; padding:10px 14px; background:#e8f5e9; border:1px solid #27ae60; border-radius:8px; max-width:480px;">
+                        <span style="font-weight:bold; color:#1b5e20;">✅ ተመርጧል:</span>
+                        <span id="selectedPersonText" style="font-weight:bold; color:#2e7d32;"></span>
+                        <button type="button" onclick="clearSelectedPerson()" style="float:right; background:#e74c3c; color:white; border:none; padding:4px 10px; border-radius:4px; font-size:12px; cursor:pointer;">✕ ሰርዝ</button>
+                    </div>
+                    <input type="hidden" id="individualTargetValue" value="">
+                </div>
 
                 <label style="font-weight:bold; display:block; margin-bottom:6px;">
                     🎨 <span class="am">መልዕክትዎን ይጻፉ (ከለር፣ ፎንት፣ ሳይዝ፣ Bold ይምረጡ)፦</span>
@@ -439,8 +463,82 @@
                 if (notifForm) {
                     notifForm.addEventListener('submit', function() {
                         document.getElementById('hiddenMessage').value = quill.root.innerHTML;
+                        // If individual person is selected via search, override target_audience
+                        const indiv = document.getElementById('individualTargetValue').value;
+                        if (indiv) {
+                            document.getElementById('quickTargetSelect').value = indiv;
+                        }
                     });
                 }
+            }
+
+            // ========== LIVE SEARCH FOR TEACHER / STUDENT ==========
+            const peopleData = <%- searchPeopleData || '{"teachers":[],"students":[]}' %>;
+            const searchInput = document.getElementById('peopleSearchInput');
+            const resultsBox = document.getElementById('searchResultsBox');
+            const selectedBox = document.getElementById('selectedPersonBox');
+            const selectedText = document.getElementById('selectedPersonText');
+            const individualValue = document.getElementById('individualTargetValue');
+
+            window.clearSelectedPerson = function() {
+                individualValue.value = '';
+                selectedBox.style.display = 'none';
+                selectedText.textContent = '';
+                searchInput.value = '';
+                resultsBox.style.display = 'none';
+            };
+
+            if (searchInput) {
+                searchInput.addEventListener('input', function() {
+                    const q = this.value.trim().toLowerCase();
+                    if (q.length < 1) {
+                        resultsBox.style.display = 'none';
+                        resultsBox.innerHTML = '';
+                        return;
+                    }
+
+                    const matches = [];
+                    (peopleData.teachers || []).forEach(t => {
+                        if (t.name.toLowerCase().includes(q) || t.id.toLowerCase().includes(q)) {
+                            matches.push({ ...t, label: `👩‍🏫 መምህር: ${t.name} (${t.id})`, value: `TEACHER:${t.id}` });
+                        }
+                    });
+                    (peopleData.students || []).forEach(s => {
+                        if (s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q)) {
+                            matches.push({ ...s, label: `👨‍🎓 ተማሪ: ${s.name} (${s.id})`, value: `STUDENT:${s.id}` });
+                        }
+                    });
+
+                    if (matches.length === 0) {
+                        resultsBox.innerHTML = `<div style="padding:12px; color:#777;">ምንም አልተገኘም / No results</div>`;
+                    } else {
+                        resultsBox.innerHTML = matches.slice(0, 15).map(m => `
+                            <div class="search-result-item" data-value="${m.value}" data-label="${m.label}"
+                                 style="padding:11px 14px; cursor:pointer; border-bottom:1px solid #eee; font-size:14px;"
+                                 onmouseover="this.style.background='#e3f2fd'" onmouseout="this.style.background='white'">
+                                ${m.label}
+                            </div>
+                        `).join('');
+                    }
+                    resultsBox.style.display = 'block';
+
+                    resultsBox.querySelectorAll('.search-result-item').forEach(item => {
+                        item.addEventListener('click', function() {
+                            individualValue.value = this.getAttribute('data-value');
+                            selectedText.textContent = this.getAttribute('data-label');
+                            selectedBox.style.display = 'block';
+                            searchInput.value = '';
+                            resultsBox.style.display = 'none';
+                        });
+                    });
+                });
+
+                // Hide results when clicking outside
+                document.addEventListener('click', function(e) {
+                    if (!searchInput.contains(e.target) && !resultsBox.contains(e.target)) {
+                        resultsBox.style.display = 'none';
+                    }
+                });
             }
 
             const rawSelect = document.getElementById("rawSectionOptionsSource");
