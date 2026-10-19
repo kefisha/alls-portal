@@ -1893,7 +1893,6 @@ app.get('/student-dashboard', (req, res) => {
                         if (n.target_audience === 'ALL' || n.target_audience === 'ALL_STUDENTS') return true;
                         if (n.target_audience === 'STUDENT:' + student.student_id) return true;
                         if (isClassMatch(n.target_audience, student.class_level)) return true;
-                        // Support GRADE:5 style targeting
                         if (n.target_audience && n.target_audience.startsWith('GRADE:')) {
                             const gradeNum = n.target_audience.replace('GRADE:', '').trim();
                             const stClass = (student.class_level || '').toString();
@@ -1903,42 +1902,75 @@ app.get('/student-dashboard', (req, res) => {
                     });
 
                     db.all('SELECT * FROM absence_requests WHERE student_id = ? ORDER BY id DESC', [student.student_id], (err, myAbsences = []) => {
-                        
-                        let notiRows = myNotifs.map(n => `
-                            <div style="background:#fff; padding:15px; margin-bottom:12px; border-radius:8px; border-left:4px solid #3498db; box-shadow:0 2px 4px rgba(0,0,0,0.05);">
-                                <strong style="color:#2c3e50; font-size:15px;">🔔 ${n.sender_name} (${n.created_at || ''})</strong>
-                                <div style="margin-top:8px; color:#445; font-size:14px;">${n.message}</div>
-                                ${n.attachment ? `<div style="margin-top:10px;"><a href="/uploads/${n.attachment}" target="_blank" style="background:#e8f4fd; color:#2980b9; padding:6px 12px; border-radius:4px; text-decoration:none; font-size:12px; font-weight:bold;">📎 ፋይል ክፈት</a></div>` : ''}
-                                <div style="margin-top:10px;">
-                                    <button type="button" onclick="document.getElementById('sReply_${n.id}').style.display='block'" style="background:#2980b9; color:white; border:none; padding:5px 12px; border-radius:4px; font-weight:bold; font-size:12px; cursor:pointer;">💬 Reply / መልስ ስጥ</button>
-                                </div>
-                                <form id="sReply_${n.id}" action="/admin/send-notification" method="POST" enctype="multipart/form-data" style="display:none; margin-top:10px; background:#f0f9ff; padding:12px; border-radius:6px; border:1px solid #bae6fd;">
-                                    <input type="hidden" name="target_audience" value="ADMIN">
-                                    <textarea name="message" rows="2" placeholder="ለአድሚን መልስ ይጻፉ..." style="width:100%; padding:6px; margin-bottom:8px; border:1px solid #ccc; border-radius:4px;" required></textarea>
-                                    <button type="submit" style="background:#27ae60; color:white; border:none; padding:5px 14px; border-radius:4px; font-weight:bold;">📤 ላክ</button>
-                                    <button type="button" onclick="document.getElementById('sReply_${n.id}').style.display='none'" style="background:#7f8c8d; color:white; border:none; padding:5px 10px; border-radius:4px; margin-left:5px;">Cancel</button>
-                                </form>
-                            </div>
-                        `).join('');
+                        db.all('SELECT * FROM sections', [], (errSec, allSections = []) => {
+                            db.all('SELECT * FROM teachers', [], (errT, allTeachers = []) => {
 
-                        let myAbsRows = myAbsences.map(ab => `<div style="background:#fdfdfd; padding:12px; margin-bottom:10px; border-radius:6px; border:1px solid #eee; border-left:4px solid ${ab.teacher_feedback ? '#27ae60' : '#f39c12'};"><strong>ቀን:</strong> ${ab.date || ab.created_at || 'N/A'}<br><strong>ምክንያት:</strong> ${ab.reason}<br><strong style="color: ${ab.teacher_feedback ? '#27ae60' : '#d35400'};">መልስ:</strong> ${ab.teacher_feedback || 'በመጠበቅ ላይ'}</div>`).join('');
-                        let gradesHtml = myCourses.map(c => {
-                            let asm = myGrades.find(a => a.course_code === c.code) || {};
-                            let total = (asm.quiz || 0) + (asm.mid || 0) + (asm.final || 0);
-                            let gradeLetter = total >= 90 ? 'A+' : total >= 80 ? 'A' : total >= 75 ? 'B+' : total >= 60 ? 'B' : total >= 50 ? 'C' : 'F';
-                            return `<tr>
-                                <td>${c.code}</td>
-                                <td style="text-align:left;"><b>${c.title}</b></td>
-                                <td style="font-size:13px;">${c.teacher_name || '-'}</td>
-                                <td>${asm.quiz || 0}</td>
-                                <td>${asm.mid || 0}</td>
-                                <td>${asm.final || 0}</td>
-                                <td><b>${total}</b></td>
-                                <td><b>${gradeLetter}</b></td>
-                            </tr>`;
-                        }).join('');
+                                // Proctor for this student's class
+                                const mySection = allSections.find(sec => isClassMatch(sec.name, student.class_level));
+                                const proctorName = mySection ? (mySection.proctor_name || 'N/A') : 'N/A';
+                                const proctorPhone = mySection ? (mySection.proctor_phone || '') : '';
 
-                        res.render('student', { lang: 'am', student, gradesHtml, notiRows, myAbsRows });
+                                // Teachers who teach this student's class
+                                const myTeachers = allTeachers.filter(t => {
+                                    const secs = (t.assigned_sections || '').split(',').map(s => s.trim());
+                                    return secs.some(s => isClassMatch(s, student.class_level));
+                                });
+
+                                // Message target options for student
+                                let studentMsgOptions = `<option value="ADMIN">👑 ለአድሚን / ዲሬክተር (To Admin)</option>`;
+                                if (mySection && mySection.proctor_name) {
+                                    // Find proctor teacher id if possible
+                                    const proctorTeacher = allTeachers.find(t => t.name === mySection.proctor_name);
+                                    if (proctorTeacher) {
+                                        studentMsgOptions += `<option value="TEACHER:${proctorTeacher.id}">🛡️ ተቆጣጣሪ (Proctor): ${mySection.proctor_name}</option>`;
+                                    } else {
+                                        studentMsgOptions += `<option value="PROCTOR:${student.class_level}">🛡️ ተቆጣጣሪ (Proctor): ${mySection.proctor_name}</option>`;
+                                    }
+                                }
+                                myTeachers.forEach(t => {
+                                    studentMsgOptions += `<option value="TEACHER:${t.id}">👩‍🏫 መምህር: ${t.name}${t.subject ? ' (' + t.subject + ')' : ''}</option>`;
+                                });
+
+                                let notiRows = myNotifs.map(n => `
+                                    <div style="background:#fff; padding:15px; margin-bottom:12px; border-radius:8px; border-left:4px solid #3498db; box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+                                        <strong style="color:#2c3e50; font-size:15px;">🔔 ${n.sender_name} (${n.created_at || ''})</strong>
+                                        <div style="margin-top:8px; color:#445; font-size:14px;">${n.message}</div>
+                                        ${n.attachment ? `<div style="margin-top:10px;"><a href="/uploads/${n.attachment}" target="_blank" style="background:#e8f4fd; color:#2980b9; padding:6px 12px; border-radius:4px; text-decoration:none; font-size:12px; font-weight:bold;">📎 ፋይል ክፈት</a></div>` : ''}
+                                        <div style="margin-top:10px;">
+                                            <button type="button" onclick="document.getElementById('sReply_${n.id}').style.display='block'" style="background:#2980b9; color:white; border:none; padding:5px 12px; border-radius:4px; font-weight:bold; font-size:12px; cursor:pointer;">💬 Reply / መልስ ስጥ</button>
+                                        </div>
+                                        <form id="sReply_${n.id}" action="/admin/send-notification" method="POST" enctype="multipart/form-data" style="display:none; margin-top:10px; background:#f0f9ff; padding:12px; border-radius:6px; border:1px solid #bae6fd;">
+                                            <input type="hidden" name="target_audience" value="ADMIN">
+                                            <textarea name="message" rows="2" placeholder="መልስ ይጻፉ..." style="width:100%; padding:6px; margin-bottom:8px; border:1px solid #ccc; border-radius:4px;" required></textarea>
+                                            <button type="submit" style="background:#27ae60; color:white; border:none; padding:5px 14px; border-radius:4px; font-weight:bold;">📤 ላክ</button>
+                                            <button type="button" onclick="document.getElementById('sReply_${n.id}').style.display='none'" style="background:#7f8c8d; color:white; border:none; padding:5px 10px; border-radius:4px; margin-left:5px;">Cancel</button>
+                                        </form>
+                                    </div>
+                                `).join('');
+
+                                let myAbsRows = myAbsences.map(ab => `<div style="background:#fdfdfd; padding:12px; margin-bottom:10px; border-radius:6px; border:1px solid #eee; border-left:4px solid ${ab.teacher_feedback ? '#27ae60' : '#f39c12'};"><strong>ቀን:</strong> ${ab.date || ab.created_at || 'N/A'}<br><strong>ምክንያት:</strong> ${ab.reason}<br><strong style="color: ${ab.teacher_feedback ? '#27ae60' : '#d35400'};">መልስ:</strong> ${ab.teacher_feedback || 'በመጠበቅ ላይ'}</div>`).join('');
+                                let gradesHtml = myCourses.map(c => {
+                                    let asm = myGrades.find(a => a.course_code === c.code) || {};
+                                    let total = (asm.quiz || 0) + (asm.mid || 0) + (asm.final || 0);
+                                    let gradeLetter = total >= 90 ? 'A+' : total >= 80 ? 'A' : total >= 75 ? 'B+' : total >= 60 ? 'B' : total >= 50 ? 'C' : 'F';
+                                    return `<tr>
+                                        <td>${c.code}</td>
+                                        <td style="text-align:left;"><b>${c.title}</b></td>
+                                        <td style="font-size:13px;">${c.teacher_name || '-'}</td>
+                                        <td>${asm.quiz || 0}</td>
+                                        <td>${asm.mid || 0}</td>
+                                        <td>${asm.final || 0}</td>
+                                        <td><b>${total}</b></td>
+                                        <td><b>${gradeLetter}</b></td>
+                                    </tr>`;
+                                }).join('');
+
+                                res.render('student', {
+                                    lang: 'am', student, gradesHtml, notiRows, myAbsRows,
+                                    proctorName, proctorPhone, studentMsgOptions
+                                });
+                            });
+                        });
                     });
                 });
             });
