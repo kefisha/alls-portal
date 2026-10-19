@@ -205,10 +205,15 @@
 
                 document.getElementById('teacherNotifForm').addEventListener('submit', function() {
                     document.getElementById('teacherHiddenMsg').value = quill.root.innerHTML;
-                    const indiv = document.getElementById('teacherIndividualTarget').value;
+                    const indiv = (document.getElementById('teacherIndividualTarget').value || '').trim();
                     const finalF = document.getElementById('teacherFinalTarget');
-                    if (indiv) finalF.value = indiv;
-                    else finalF.value = document.getElementById('teacherQuickTarget').value;
+                    const quickVal = document.getElementById('teacherQuickTarget').value;
+                    if (indiv && indiv.startsWith('STUDENT:')) {
+                        finalF.value = indiv;  // one student only
+                    } else {
+                        finalF.value = quickVal || 'ADMIN';
+                    }
+                    if (!finalF.value) finalF.value = 'ADMIN';
                 });
             }
 
