@@ -78,8 +78,18 @@ function generateStrong4DigitPIN() {
 
 function getFormattedTimestamp() {
     const now = new Date();
-    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
-    return now.toLocaleDateString('en-GB', options) + ' (' + now.toLocaleTimeString() + ')';
+    // Exact timestamp: Weekday, DD Month YYYY, HH:MM:SS (local time)
+    const options = { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        second: '2-digit',
+        hour12: false 
+    };
+    return now.toLocaleDateString('en-GB', options).replace(',', '') + ' | ' + now.toLocaleTimeString('en-GB', { hour12: false });
 }
 
 async function initDB() {
@@ -771,7 +781,18 @@ app.get('/admin', (req, res) => {
 app.post('/admin/save-notice', upload.single('attachment'), (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const target_audience = req.body.target_audience || 'ALL';
-    const message = req.body.message || '';
+    // Allow basic rich text
+    const message = xss(req.body.message || '', {
+        whiteList: {
+            b: [], strong: [], i: [], em: [], u: [], s: [],
+            p: [], br: [], ul: [], ol: [], li: [],
+            span: ['style'], div: ['style'],
+            a: ['href', 'target'], h1: [], h2: [], h3: [], h4: [],
+            font: ['color', 'size']
+        },
+        stripIgnoreTag: true,
+        stripIgnoreTagBody: ['script', 'style']
+    });
     const attachment = req.file ? req.file.filename : null;
     const createdAt = getFormattedTimestamp();
 
@@ -782,30 +803,90 @@ app.post('/admin/save-notice', upload.single('attachment'), (req, res) => {
     );
 });
 
+// General two-way notification / reply endpoint (works for Admin, Teacher, Student)
 app.post('/admin/send-notification', upload.single('attachment'), (req, res) => {
-    if (!req.session.isAdmin) return res.redirect('/');
     const target_audience = req.body.target_audience || 'ALL';
-    const message = req.body.message || '';
+    // Allow basic rich text tags for notifications (bold, italic, color, size, lists, links)
+    const message = xss(req.body.message || '', {
+        whiteList: {
+            b: [], strong: [], i: [], em: [], u: [], s: [],
+            p: [], br: [], ul: [], ol: [], li: [],
+            span: ['style'], div: ['style'],
+            a: ['href', 'target'], h1: [], h2: [], h3: [], h4: [],
+            font: ['color', 'size']
+        },
+        stripIgnoreTag: true,
+        stripIgnoreTagBody: ['script', 'style']
+    });
     const attachment = req.file ? req.file.filename : null;
     const createdAt = getFormattedTimestamp();
 
+    let senderRole = 'Unknown';
+    let senderName = 'User';
+    let redirectUrl = '/';
+
+    if (req.session.isAdmin) {
+        senderRole = 'Admin';
+        senderName = 'School Admin';
+        redirectUrl = '/admin';
+    } else if (req.session.teacherId) {
+        // Teacher reply
+        return db.get(`SELECT name FROM teachers WHERE id = ?`, [req.session.teacherId], (err, t) => {
+            if (!t) return res.redirect('/');
+            db.run(
+                `INSERT INTO notifications (sender_role, sender_name, target_audience, message, attachment, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+                ['Teacher', t.name, target_audience, message, attachment, createdAt],
+                () => res.redirect(req.query.cls ? `/teacher-dashboard?cls=${encodeURIComponent(req.query.cls)}` : '/teacher-dashboard')
+            );
+        });
+    } else if (req.session.studentId) {
+        // Student reply
+        return db.get(`SELECT name FROM students WHERE student_id = ?`, [req.session.studentId], (err, s) => {
+            if (!s) return res.redirect('/');
+            db.run(
+                `INSERT INTO notifications (sender_role, sender_name, target_audience, message, attachment, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+                ['Student', s.name, target_audience, message, attachment, createdAt],
+                () => res.redirect('/student-dashboard')
+            );
+        });
+    }
+
+    // Admin case
     db.run(
         `INSERT INTO notifications (sender_role, sender_name, target_audience, message, attachment, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-        ['Admin', 'School Admin', target_audience, message, attachment, createdAt],
-        () => res.redirect('/admin')
+        [senderRole, senderName, target_audience, message, attachment, createdAt],
+        () => res.redirect(redirectUrl)
     );
 });
 
 app.get('/delete-notification/:id', (req, res) => {
-    if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
-    const backUrl = req.session.isAdmin ? '/admin' : '/teacher-dashboard';
+    if (!req.session.isAdmin && !req.session.teacherId && !req.session.studentId) return res.redirect('/');
+    let backUrl = '/';
+    if (req.session.isAdmin) backUrl = '/admin';
+    else if (req.session.teacherId) backUrl = '/teacher-dashboard';
+    else if (req.session.studentId) backUrl = '/student-dashboard';
     db.run(`DELETE FROM notifications WHERE id = ?`, [req.params.id], () => res.redirect(backUrl));
 });
 
 app.post('/edit-notification/:id', upload.single('attachment'), (req, res) => {
-    if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
-    const backUrl = req.session.isAdmin ? '/admin' : '/teacher-dashboard';
-    const msg = req.body.message || '';
+    if (!req.session.isAdmin && !req.session.teacherId && !req.session.studentId) return res.redirect('/');
+    let backUrl = '/';
+    if (req.session.isAdmin) backUrl = '/admin';
+    else if (req.session.teacherId) backUrl = '/teacher-dashboard';
+    else if (req.session.studentId) backUrl = '/student-dashboard';
+
+    // Allow rich text on edit
+    const msg = xss(req.body.message || '', {
+        whiteList: {
+            b: [], strong: [], i: [], em: [], u: [], s: [],
+            p: [], br: [], ul: [], ol: [], li: [],
+            span: ['style'], div: ['style'],
+            a: ['href', 'target'], h1: [], h2: [], h3: [], h4: [],
+            font: ['color', 'size']
+        },
+        stripIgnoreTag: true,
+        stripIgnoreTagBody: ['script', 'style']
+    });
     let q = req.file ? `UPDATE notifications SET message = ?, attachment = ? WHERE id = ?` : `UPDATE notifications SET message = ? WHERE id = ?`;
     let p = req.file ? [msg, req.file.filename, req.params.id] : [msg, req.params.id];
     db.run(q, p, () => res.redirect(backUrl));
@@ -869,8 +950,8 @@ app.get('/admin/edit-student/:id', (req, res) => {
             <div style="margin-bottom:15px; display:flex; align-items:center; gap:15px;">
                 <img src="/uploads/${s.photo || 'logo.jpg'}" style="width:60px; height:60px; border-radius:50%; object-fit:cover; border:2px solid #2980b9;">
                 <div style="flex:1;">
-                    <label style="font-weight:bold; font-size:13.5px; color:#1f4e79; display:block; margin-bottom:4px;">📄 አዲስ ፎቶ ወይም የክፍያ ደረሰኝ (አማራጭ - ካልቀየሩት ነባሩ ይጠበቃል)</label>
-                    <input type="file" name="bank_slip" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px;">
+                    <label style="font-weight:bold; font-size:13.5px; color:#1f4e79; display:block; margin-bottom:4px;">📷 አዲስ የተማሪ ፎቶ (አማራጭ - ካልቀየሩት ነባሩ ፎቶ በጭራሽ አይጥፋም)</label>
+                    <input type="file" name="student_photo" accept="image/*" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px;">
                 </div>
             </div>
 
@@ -888,7 +969,7 @@ app.get('/admin/edit-student/:id', (req, res) => {
     });
 });
 
-app.post('/admin/edit-student/:id', upload.single('bank_slip'), (req, res) => {
+app.post('/admin/edit-student/:id', upload.single('student_photo'), (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const studentId = req.params.id;
     const { name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, new_password } = req.body;
@@ -898,8 +979,9 @@ app.post('/admin/edit-student/:id', upload.single('bank_slip'), (req, res) => {
     }
 
     db.get(`SELECT photo, bank_slip_val FROM students WHERE student_id = ?`, [studentId], (err, oldSt) => {
-        const finalPhoto = req.file ? req.file.filename : (oldSt ? oldSt.photo : '');
-        const finalSlip = req.file ? req.file.filename : (oldSt ? oldSt.bank_slip_val : '');
+        // Photo protection: only update photo if a new file is uploaded; otherwise keep the existing one forever
+        const finalPhoto = (req.file) ? req.file.filename : (oldSt ? oldSt.photo : '');
+        const finalSlip = (oldSt ? oldSt.bank_slip_val : ''); // Never overwrite bank slip with photo
 
         const updatePassIfNeeded = (cb) => {
             if (new_password && new_password.trim() !== '') {
@@ -912,8 +994,8 @@ app.post('/admin/edit-student/:id', upload.single('bank_slip'), (req, res) => {
 
         updatePassIfNeeded(() => {
             db.run(
-                `UPDATE students SET name=?, mother_name=?, gender=?, age=?, phone=?, emergency_phone=?, region=?, zone=?, woreda=?, kebele=?, class_level=?, photo=?, bank_slip_val=? WHERE student_id=?`,
-                [name, mother_name || '', gender, age || null, phone || '', emergency_phone || '', region || '', zone || '', woreda || '', kebele || '', class_level, finalPhoto, finalSlip, studentId],
+                `UPDATE students SET name=?, mother_name=?, gender=?, age=?, phone=?, emergency_phone=?, region=?, zone=?, woreda=?, kebele=?, class_level=?, photo=? WHERE student_id=?`,
+                [name, mother_name || '', gender, age || null, phone || '', emergency_phone || '', region || '', zone || '', woreda || '', kebele || '', class_level, finalPhoto, studentId],
                 () => res.redirect('/admin/registered-students')
             );
         });
@@ -1518,7 +1600,18 @@ app.post('/teacher/send-notification', upload.single('attachment'), (req, res) =
     if (!req.session.teacherId) return res.redirect('/');
     let returnClass = req.query.cls || '';
     let chosenTarget = req.body.target_audience || returnClass || 'ALL';
-    let msg = req.body.message || '';
+    // Allow basic rich text for teacher notifications
+    let msg = xss(req.body.message || '', {
+        whiteList: {
+            b: [], strong: [], i: [], em: [], u: [], s: [],
+            p: [], br: [], ul: [], ol: [], li: [],
+            span: ['style'], div: ['style'],
+            a: ['href', 'target'], h1: [], h2: [], h3: [], h4: [],
+            font: ['color', 'size']
+        },
+        stripIgnoreTag: true,
+        stripIgnoreTagBody: ['script', 'style']
+    });
     let file = req.file ? req.file.filename : null;
     let nowStr = getFormattedTimestamp();
 
