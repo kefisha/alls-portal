@@ -58,6 +58,11 @@
                 <b><span class="am">መታወቂያ (ID):</span><span class="en">ID:</span></b> <%= student.student_id %> | 
                 <b><span class="am">ስልክ:</span><span class="en">Phone:</span></b> <%= student.phone || '-' %>
             </p>
+            <p style="margin: 4px 0; color: #1f4e79; font-size: 14px; font-weight:bold;">
+                🛡️ <span class="am">ተቆጣጣሪ (Proctor):</span><span class="en">Proctor:</span>
+                <%= typeof proctorName !== 'undefined' ? proctorName : 'N/A' %>
+                <% if (typeof proctorPhone !== 'undefined' && proctorPhone) { %> (📞 <%= proctorPhone %>)<% } %>
+            </p>
             <a href="/student/digital-id" target="_blank" class="btn-id">🆔 <span class="am">ዲጂታል መታወቂያ አውርድ</span><span class="en">Download Digital ID</span></a>
             <form action="/student/update-photo" method="POST" enctype="multipart/form-data" style="margin-top: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                 <input type="file" name="new_photo" accept="image/*" required style="width: auto; padding: 4px; font-size: 12px;">
@@ -101,8 +106,12 @@
             <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:6px;">
                 <span class="am">ለማን ይላክ?</span><span class="en">Send to:</span>
             </label>
-            <select name="target_audience" style="max-width:400px; margin-bottom:12px;">
-                <option value="ADMIN">👑 <span class="am">ለአድሚን / ዲሬክተር</span><span class="en">To Admin / Director</span></option>
+            <select name="target_audience" style="max-width:450px; margin-bottom:12px;">
+                <% if (typeof studentMsgOptions !== 'undefined' && studentMsgOptions) { %>
+                    <%- studentMsgOptions %>
+                <% } else { %>
+                    <option value="ADMIN">👑 ለአድሚን / ዲሬክተር (To Admin)</option>
+                <% } %>
             </select>
 
             <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:6px;">
