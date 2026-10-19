@@ -1,14 +1,16 @@
 <!DOCTYPE html>
-<html lang="<%= lang %>">
+<html lang="<%= typeof lang !== 'undefined' ? lang : 'am' %>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Portal - Amanuel Light and Life School</title>
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f7f6; margin: 0; padding: 20px; color: #333; }
         .container { max-width: 950px; margin: auto; }
         .card { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow-x: auto; }
-        h2 { color: #2c3e50; display: flex; align-items: center; justify-content: space-between; }
+        h2 { color: #2c3e50; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
         h3 { color: #34495e; border-bottom: 2px solid #ecf0f1; padding-bottom: 8px; margin-top: 0; display: flex; align-items: center; gap: 8px; }
         table { width: 100%; border-collapse: collapse; min-width: 600px; margin-top: 10px; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: center; font-size: 14px; }
@@ -20,124 +22,164 @@
         .profile-header { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
         .profile-img { width: 95px; height: 95px; border-radius: 8px; object-fit: cover; border: 2px solid #1f4e79; flex-shrink: 0; }
         .btn-id { background: #8e44ad; color: white; padding: 8px 15px; border-radius: 6px; text-decoration: none; font-weight: bold; display: inline-block; margin-top: 10px; font-size: 13px; }
-        .btn-id:hover { background: #732d91; }
-        .badge { background: #e74c3c; color: white; border-radius: 50px; padding: 2px 8px; font-size: 12px; }
         .logout-btn { display: inline-block; text-align: center; margin-top: 20px; color: #c0392b; font-weight: bold; font-size: 16px; text-decoration: none; }
+        body.lang-am .en { display: none !important; }
+        body.lang-am .am { display: inline !important; }
+        body.lang-en .am { display: none !important; }
+        body.lang-en .en { display: inline !important; }
+        #studentEditor { height: 150px; background: white; }
+        .notif-item { background:#fff; padding:15px; margin-bottom:12px; border-radius:8px; border-left:4px solid #3498db; box-shadow:0 2px 4px rgba(0,0,0,0.05); }
     </style>
 </head>
-<body>
+<body class="lang-<%= typeof lang !== 'undefined' ? lang : 'am' %>">
 <div class="container">
+    <div style="display:flex; justify-content:flex-end; gap:10px; margin-bottom:15px;">
+        <button type="button" onclick="setLang('am')" id="btn-am" style="background:#27ae60; color:white; padding:7px 14px; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">🇪🇹 አማርኛ</button>
+        <button type="button" onclick="setLang('en')" id="btn-en" style="background:#7f8c8d; color:white; padding:7px 14px; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">🇬🇧 English</button>
+    </div>
+
     <h2>
-        <span><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 8px;"> 🎓 የተማሪ መቆጣጠሪያ ፖርታል</span>
-        <span style="font-size: 14px; background: #eef2f5; padding: 6px 12px; border-radius: 20px; color: #2c3e50;">ክፍል: <%= student.class_level %></span>
+        <span><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 8px;">
+            <span class="am">🎓 የተማሪ መቆጣጠሪያ ፖርታል</span><span class="en">🎓 Student Portal</span>
+        </span>
+        <span style="font-size: 14px; background: #eef2f5; padding: 6px 12px; border-radius: 20px; color: #2c3e50;">
+            <span class="am">ክፍል:</span><span class="en">Class:</span> <%= student.class_level %>
+        </span>
     </h2>
     
     <!-- Profile & Digital ID -->
     <div class="card profile-header">
         <img src="/uploads/<%= student.photo && student.photo.trim() !== '' ? student.photo : 'default.png' %>" onerror="this.src='/uploads/logo.jpg'" class="profile-img">
         <div style="flex-grow: 1;">
-            <h3 style="margin: 0; border: none; padding: 0; color: #2c3e50;">ሰላም, <%= student.name %></h3>
-            <p style="margin: 6px 0; color: #555; font-size: 14px;"><b>መታወቂያ (ID):</b> <%= student.student_id %> | <b>ስልክ:</b> <%= student.phone || '-' %></p>
-            
-            <a href="/student/digital-id" target="_blank" class="btn-id">🆔 ዲጂታል መታወቂያ አውርድ (Download PDF)</a>
-
+            <h3 style="margin: 0; border: none; padding: 0; color: #2c3e50;">
+                <span class="am">ሰላም,</span><span class="en">Hello,</span> <%= student.name %>
+            </h3>
+            <p style="margin: 6px 0; color: #555; font-size: 14px;">
+                <b><span class="am">መታወቂያ (ID):</span><span class="en">ID:</span></b> <%= student.student_id %> | 
+                <b><span class="am">ስልክ:</span><span class="en">Phone:</span></b> <%= student.phone || '-' %>
+            </p>
+            <a href="/student/digital-id" target="_blank" class="btn-id">🆔 <span class="am">ዲጂታል መታወቂያ አውርድ</span><span class="en">Download Digital ID</span></a>
             <form action="/student/update-photo" method="POST" enctype="multipart/form-data" style="margin-top: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                 <input type="file" name="new_photo" accept="image/*" required style="width: auto; padding: 4px; font-size: 12px;">
-                <button type="submit" style="padding: 6px 14px; margin: 0; background: #3498db; font-size: 13px;">ፎቶ ቀይር</button>
+                <button type="submit" style="padding: 6px 14px; margin: 0; background: #3498db; font-size: 13px;">
+                    <span class="am">ፎቶ ቀይር</span><span class="en">Change Photo</span>
+                </button>
             </form>
         </div>
     </div>
 
-    <!-- Assessment Grades -->
+    <!-- Assessment Grades + Teacher -->
     <div class="card">
-        <h3>📊 የትምህርት ውጤቶች (Assessment Grades)</h3>
+        <h3>📊 <span class="am">የትምህርት ውጤቶች (ከመምህር ጋር)</span><span class="en">Assessment Grades (with Teacher)</span></h3>
         <table>
             <tr>
-                <th>ኮድ</th>
-                <th style="text-align: left;">የትምህርት ስም</th>
-                <th>ክሬዲት</th>
-                <th>Quiz (20%)</th>
-                <th>Mid (30%)</th>
-                <th>Final (50%)</th>
-                <th>ጠቅላላ (Total)</th>
-                <th>ደረጃ (Grade)</th>
+                <th><span class="am">ኮድ</span><span class="en">Code</span></th>
+                <th style="text-align: left;"><span class="am">የትምህርት ስም</span><span class="en">Course</span></th>
+                <th><span class="am">መምህር</span><span class="en">Teacher</span></th>
+                <th>Quiz</th>
+                <th>Mid</th>
+                <th>Final</th>
+                <th><span class="am">ጠቅላላ</span><span class="en">Total</span></th>
+                <th><span class="am">ደረጃ</span><span class="en">Grade</span></th>
             </tr>
-            <%- gradesHtml || '<tr><td colspan="8" style="color:#777;">ምንም ውጤት አልተመዘገበም</td></tr>' %>
+            <%- gradesHtml || '<tr><td colspan="8" style="color:#777;">ምንም ውጤት አልተመዘገበም / No grades yet</td></tr>' %>
         </table>
     </div>
 
-    <!-- Real-time Notifications Bell Section -->
+    <!-- Notifications -->
     <div class="card" style="background: #f8fafc; border: 1px solid #e2e8f0;">
-        <h3 style="color: #2980b9;">🔔 የትምህርት ቤት ማስታወቂያዎች (Live Notifications)</h3>
+        <h3 style="color: #2980b9;">🔔 <span class="am">የትምህርት ቤት ማስታወቂያዎች</span><span class="en">School Notifications</span></h3>
         <div style="margin-top: 10px;">
-            <%- notiRows || '<p style="color: #777; font-style: italic;">ምንም ማስታወቂያ የለም</p>' %>
+            <%- notiRows || '<p style="color: #777; font-style: italic;">ምንም ማስታወቂያ የለም / No notifications</p>' %>
         </div>
     </div>
 
-    <!-- Academic Calendar & Exam Schedule Section -->
-    <div class="card">
-        <h3>📅 የፈተና መርሃ-ጊዜ እና የቀን መቁጠሪያ (Exam Schedule & Calendar)</h3>
-        <p style="font-size: 13px; color: #666; margin-bottom: 10px;">ለዚህ ክፍል የተዘጋጁ ወቅታዊ የፈተና ጊዜያት እና የትምህርት መርሃ-ግብሮች ከዚህ በታች ይገኛሉ፡</p>
-        <table>
-            <tr>
-                <th>ተግባር / ፈተና</th>
-                <th>የሚሰጥበት ቀን (Date)</th>
-                <th>ሰዓት</th>
-                <th>ሁኔታ (Status)</th>
-            </tr>
-            <tr>
-                <td style="text-align: left;"><b>1ኛ ዙር የውድድር / ኪዊዝ ፈተና</b></td>
-                <td>በቅርቡ ይፋ ይሆናል</td>
-                <td>-</td>
-                <td><span style="color: #e67e22; font-weight: bold;">በመጠበቅ ላይ</span></td>
-            </tr>
-            <tr>
-                <td style="text-align: left;"><b>የመካከለኛ ጊዜ ፈተና (Mid-Term Exam)</b></td>
-                <td>በመምህራን ማስታወቂያ መሰረት</td>
-                <td>-</td>
-                <td><span style="color: #e67e22; font-weight: bold;">በመጠበቅ ላይ</span></td>
-            </tr>
-        </table>
+    <!-- Student Send Message (with rich text) -->
+    <div class="card" style="border-top: 4px solid #e67e22;">
+        <h3>✉️ <span class="am">መልዕክት ላክ (ለአድሚን / ለመምህር)</span><span class="en">Send Message (to Admin / Teacher)</span></h3>
+        <form id="studentMsgForm" action="/admin/send-notification" method="POST" enctype="multipart/form-data">
+            <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:6px;">
+                <span class="am">ለማን ይላክ?</span><span class="en">Send to:</span>
+            </label>
+            <select name="target_audience" style="max-width:400px; margin-bottom:12px;">
+                <option value="ADMIN">👑 <span class="am">ለአድሚን / ዲሬክተር</span><span class="en">To Admin / Director</span></option>
+            </select>
+
+            <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:6px;">
+                🎨 <span class="am">መልዕክትዎን ይጻፉ (ከለር፣ ፎንት፣ ሳይዝ)፦</span>
+                <span class="en">Write your message (Color, Font, Size):</span>
+            </label>
+            <div id="studentEditor"></div>
+            <input type="hidden" name="message" id="studentHiddenMsg">
+
+            <label style="font-weight:bold; font-size:13px; display:block; margin-top:12px;">
+                📎 <span class="am">ፋይል አያይዝ (አማራጭ)</span><span class="en">Attach File (Optional)</span>
+            </label>
+            <input type="file" name="attachment" style="max-width:300px;">
+
+            <button type="submit" style="background:#e67e22; margin-top:12px;">
+                📩 <span class="am">መልዕክት ላክ</span><span class="en">Send Message</span>
+            </button>
+        </form>
     </div>
 
-    <!-- Absence / Leave Request -->
+    <!-- Absence Request -->
     <div class="card">
-        <h3>✉️ የመቅረት / እረፍት ጥያቄ ማቅረቢያ (Absence Request)</h3>
+        <h3>✉️ <span class="am">የመቅረት / እረፍት ጥያቄ</span><span class="en">Absence / Leave Request</span></h3>
         <form action="/student/absence" method="POST" enctype="multipart/form-data">
-            <input type="hidden" name="target_teacher" value="">
-            <label style="font-weight: bold; font-size: 13px;">ቀን (Date):</label>
+            <label style="font-weight: bold; font-size: 13px;"><span class="am">ቀን:</span><span class="en">Date:</span></label>
             <input type="date" name="date" required>
-
-            <label style="font-weight: bold; font-size: 13px; display: block; margin-top: 10px;">ምክንያትዎን ይጻፉ:</label>
-            <textarea name="reason" rows="3" placeholder="ለምን እንደቀሩ ወይም ፈቃድ እንደሚፈልጉ በዝርዝር ይጻፉ..." required></textarea>
-            
-            <label style="font-weight: bold; font-size: 13px; display: block; margin-top: 10px;">የሕክምና ማረጋገጫ ወይም ደብዳቤ (ካለ ፋይል ያያይዙ):</label>
+            <label style="font-weight: bold; font-size: 13px; display: block; margin-top: 10px;"><span class="am">ምክንያትዎን ይጻፉ:</span><span class="en">Write your reason:</span></label>
+            <textarea name="reason" rows="3" required></textarea>
+            <label style="font-weight: bold; font-size: 13px; display: block; margin-top: 10px;"><span class="am">ፋይል (ካለ):</span><span class="en">File (if any):</span></label>
             <input type="file" name="attachment" accept="image/*,.pdf">
-            
-            <button type="submit">ፈቃድ ጥያቄ ላክ</button>
+            <button type="submit"><span class="am">ፈቃድ ጥያቄ ላክ</span><span class="en">Submit Request</span></button>
         </form>
-        
-        <h4 style="margin-top: 25px; color: #2c3e50; font-size: 15px;">የቀረቧቸው ጥያቄዎች ታሪክ (History)</h4>
-        <%- myAbsRows || '<p style="color: #777; font-size: 13px;">ምንም የቀረበ ጥያቄ የለም</p>' %>
+        <h4 style="margin-top: 25px; color: #2c3e50; font-size: 15px;"><span class="am">የቀረቧቸው ጥያቄዎች</span><span class="en">Request History</span></h4>
+        <%- myAbsRows || '<p style="color: #777; font-size: 13px;">ምንም የቀረበ ጥያቄ የለም / No requests</p>' %>
     </div>
 
     <div style="text-align: center;">
-        <a href="/logout" class="logout-btn">🔒 ውጣ (Logout)</a>
+        <a href="/logout" class="logout-btn">🔒 <span class="am">ውጣ</span><span class="en">Logout</span></a>
     </div>
 </div>
 <script>
-    // 1. Right-Click ማሰናከል
+    function setLang(l) {
+        const clean = (l === 'en') ? 'en' : 'am';
+        document.body.className = 'lang-' + clean;
+        localStorage.setItem('prefLang', clean);
+        const btnAm = document.getElementById('btn-am');
+        const btnEn = document.getElementById('btn-en');
+        if (btnAm && btnEn) {
+            btnAm.style.background = clean === 'am' ? '#27ae60' : '#7f8c8d';
+            btnEn.style.background = clean === 'en' ? '#2980b9' : '#7f8c8d';
+        }
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+        setLang(localStorage.getItem('prefLang') || 'am');
+        if (document.getElementById('studentEditor')) {
+            var quill = new Quill('#studentEditor', {
+                theme: 'snow',
+                placeholder: 'መልዕክትዎን እዚህ ይጻፉ... / Write here...',
+                modules: {
+                    toolbar: [
+                        [{ 'font': [] }, { 'size': ['small', false, 'large', 'huge'] }],
+                        ['bold', 'italic', 'underline'],
+                        [{ 'color': [] }, { 'background': [] }],
+                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                        ['clean']
+                    ]
+                }
+            });
+            document.getElementById('studentMsgForm').addEventListener('submit', function() {
+                document.getElementById('studentHiddenMsg').value = quill.root.innerHTML;
+            });
+        }
+    });
     document.addEventListener('contextmenu', e => e.preventDefault());
-
-    // 2. F12, Ctrl+Shift+I, Ctrl+U (Inspect & View Source) ማሰናከል
     document.addEventListener('keydown', e => {
-        if (
-            e.key === 'F12' ||
-            (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) ||
-            (e.ctrlKey && (e.key === 'U' || e.key === 'u' || e.key === 'S' || e.key === 's'))
-        ) {
+        if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && ['I','i','J','j','C','c'].includes(e.key)) || (e.ctrlKey && ['U','u','S','s'].includes(e.key))) {
             e.preventDefault();
-            return false;
         }
     });
 </script>
