@@ -368,33 +368,114 @@ app.post('/login', loginLimiter, (req, res) => {
 
 app.get('/logout', (req, res) => { req.session.destroy(() => res.redirect('/')); });
 
-// ================= PARENT PORTAL =================
+// ================= PARENT PORTAL (inline HTML — no ejs dependency) =================
 app.get('/parent-dashboard', (req, res) => {
     if (!req.session.parentStudentId) return res.redirect('/');
     const sid = req.session.parentStudentId;
+    const parentName = req.session.parentName || 'Parent';
+
     db.get(`SELECT * FROM students WHERE student_id = ?`, [sid], (err, student) => {
-        if (!student) return res.redirect('/');
-        db.all(`SELECT * FROM course_assessments WHERE student_id = ?`, [sid], (err2, grades = []) => {
-            db.all(`SELECT * FROM daily_attendance WHERE student_id = ? ORDER BY date DESC LIMIT 30`, [sid], (err3, attendance = []) => {
-                db.all(`SELECT * FROM courses ORDER BY id`, [], (err4, allCourses = []) => {
-                    const myCourses = allCourses.filter(c => isClassMatch(c.class_level, student.class_level));
+        if (err || !student) return res.redirect('/?error=invalid');
+
+        db.all(`SELECT * FROM course_assessments WHERE student_id = ?`, [sid], (err2, grades) => {
+            grades = grades || [];
+            db.all(`SELECT * FROM daily_attendance WHERE student_id = ? ORDER BY id DESC LIMIT 30`, [sid], (err3, attendance) => {
+                attendance = attendance || [];
+                db.all(`SELECT * FROM courses ORDER BY id`, [], (err4, allCourses) => {
+                    allCourses = allCourses || [];
+                    let myCourses = [];
+                    try {
+                        myCourses = allCourses.filter(c => isClassMatch(c.class_level, student.class_level));
+                    } catch (e) { myCourses = allCourses; }
+
                     let gradesHtml = myCourses.map(c => {
                         const asm = grades.find(a => a.course_code === c.code) || {};
-                        const total = (asm.quiz||0) + (asm.assignment||0) + (asm.project||0) + (asm.mid||0) + (asm.final||0);
+                        const total = Number(asm.quiz||0) + Number(asm.assignment||0) + Number(asm.project||0) + Number(asm.mid||0) + Number(asm.final||0);
                         const letter = total >= 90 ? 'A+' : total >= 80 ? 'A' : total >= 75 ? 'B+' : total >= 60 ? 'B' : total >= 50 ? 'C' : 'F';
-                        return `<tr>
-                            <td>${c.code}</td><td style="text-align:left;">${c.title}</td>
-                            <td>${c.teacher_name||'-'}</td>
+                        return `<tr><td>${c.code||''}</td><td style="text-align:left;">${c.title||''}</td><td>${c.teacher_name||'-'}</td>
                             <td>${asm.quiz||0}</td><td>${asm.assignment||0}</td><td>${asm.project||0}</td>
-                            <td>${asm.mid||0}</td><td>${asm.final||0}</td>
-                            <td><b>${total}</b></td><td><b>${letter}</b></td>
-                        </tr>`;
-                    }).join('') || '<tr><td colspan="10">No grades yet</td></tr>';
-                    let attHtml = attendance.map(a => `<tr><td>${a.date}</td><td>${a.status||'-'}</td></tr>`).join('') || '<tr><td colspan="2">No records</td></tr>';
-                    res.render('parent', {
-                        parentName: req.session.parentName,
-                        student, gradesHtml, attHtml
-                    });
+                            <td>${asm.mid||0}</td><td>${asm.final||0}</td><td><b>${total}</b></td><td><b>${letter}</b></td></tr>`;
+                    }).join('');
+                    if (!gradesHtml) gradesHtml = '<tr><td colspan="10">No grades yet / ውጤት የለም</td></tr>';
+
+                    let attHtml = attendance.map(a => `<tr><td>${a.date||a.created_at||'-'}</td><td>${a.status||'-'}</td></tr>`).join('');
+                    if (!attHtml) attHtml = '<tr><td colspan="2">No records / መረጃ የለም</td></tr>';
+
+                    const room = 'parent-' + sid;
+                    res.send(`<!DOCTYPE html>
+<html lang="am"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1f4e79"><link rel="manifest" href="/manifest.json">
+<title>Parent Portal - ALLS</title>
+<style>
+body{font-family:Segoe UI,sans-serif;background:#eef2f5;margin:0;padding:20px;color:#333}
+.container{max-width:900px;margin:auto}
+.card{background:#fff;padding:20px;border-radius:12px;margin-bottom:16px;box-shadow:0 4px 12px rgba(0,0,0,.06);border-top:4px solid #2980b9}
+h2,h3{color:#1f4e79;margin-top:0}
+table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
+th,td{border:1px solid #e0e0e0;padding:8px;text-align:center}
+th{background:#1f4e79;color:#fff}
+#chatBox{height:220px;overflow-y:auto;background:#f8fafc;border:1px solid #e0e0e0;border-radius:8px;padding:10px;margin-bottom:8px}
+.chat-msg{margin-bottom:8px;font-size:13px;border-bottom:1px solid #eee;padding-bottom:6px}
+a.logout{color:#e74c3c;font-weight:bold;text-decoration:none}
+</style></head>
+<body>
+<div class="container">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+    <h2 style="margin:0">👨‍👩‍👧 Parent Portal</h2>
+    <a href="/logout" class="logout">🔒 Logout</a>
+  </div>
+  <div class="card">
+    <h3>Student: ${student.name||''}</h3>
+    <p><b>ID:</b> ${student.student_id} | <b>Class:</b> ${student.class_level||'-'} | <b>Parent:</b> ${parentName}</p>
+  </div>
+  <div class="card">
+    <h3>📊 Grades</h3>
+    <div style="overflow-x:auto"><table>
+      <tr><th>Code</th><th>Course</th><th>Teacher</th><th>Quiz</th><th>Assign</th><th>Project</th><th>Mid</th><th>Final</th><th>Total</th><th>Grade</th></tr>
+      ${gradesHtml}
+    </table></div>
+  </div>
+  <div class="card">
+    <h3>📅 Attendance</h3>
+    <table><tr><th>Date</th><th>Status</th></tr>${attHtml}</table>
+  </div>
+  <div class="card">
+    <h3>💬 Chat with School</h3>
+    <div id="chatStatus" style="font-size:12px;color:#888">Loading...</div>
+    <div id="chatBox"></div>
+    <form id="chatForm" style="display:flex;gap:8px;flex-wrap:wrap">
+      <input id="chatInput" type="text" placeholder="Type message..." required style="flex:1;min-width:160px;padding:10px;border:1px solid #ccc;border-radius:6px">
+      <button type="submit" style="background:#2980b9;color:#fff;border:none;padding:10px 16px;border-radius:6px;font-weight:bold;cursor:pointer">Send</button>
+    </form>
+  </div>
+</div>
+<script>
+const room=${JSON.stringify(room)};
+function loadChat(){
+  fetch('/api/chat/'+encodeURIComponent(room),{credentials:'same-origin'})
+    .then(r=>r.json()).then(d=>{
+      document.getElementById('chatStatus').textContent='Online';
+      const box=document.getElementById('chatBox');
+      const msgs=d.messages||[];
+      box.innerHTML=msgs.length?msgs.map(m=>'<div class="chat-msg"><b>'+(m.sender_name||'?')+'</b> <small style="color:#888">'+(m.created_at||'')+'</small><br>'+(m.message||'')+'</div>').join(''):'<div style="color:#888">No messages yet</div>';
+      box.scrollTop=box.scrollHeight;
+    }).catch(()=>{document.getElementById('chatStatus').textContent='Retrying...';});
+}
+loadChat(); setInterval(loadChat,5000);
+document.getElementById('chatForm').addEventListener('submit',function(e){
+  e.preventDefault();
+  const input=document.getElementById('chatInput');
+  const msg=input.value.trim(); if(!msg) return;
+  fetch('/api/chat/'+encodeURIComponent(room),{
+    method:'POST', credentials:'same-origin',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({message:msg})
+  }).then(r=>r.json()).then(d=>{ if(d.success){ input.value=''; loadChat(); } });
+});
+if('serviceWorker' in navigator){ navigator.serviceWorker.register('/sw.js').catch(()=>{}); }
+</script>
+</body></html>`);
                 });
             });
         });
@@ -586,23 +667,24 @@ app.get('/student-register', (req, res) => {
         body.lang-en .en { display: inline !important; }
     </style>
 </head>
-<body class="lang-${lang} bg-gray-100 py-8 px-4">
+<body class="lang-${lang}" style="background:linear-gradient(135deg,#1f4e79 0%,#0d2b45 100%);min-height:100vh;padding:32px 16px;">
     <div class="max-w-3xl mx-auto">
-        <div class="flex justify-between items-center mb-4">
-            <a href="/?lang=${lang}" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg shadow">
+        <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
+            <a href="/?lang=${lang}" class="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-lg backdrop-blur">
                 ⬅️ <span class="am">ወደ መግቢያ ተመለስ</span><span class="en">Back to Login</span>
             </a>
             <div class="bg-white p-1.5 rounded-lg shadow flex gap-2">
-                <button type="button" onclick="setRegLang('am')" id="btn-am" class="px-4 py-1.5 rounded font-bold text-sm bg-green-600 text-white">🇪🇹 አማርኛ</button>
+                <button type="button" onclick="setRegLang('am')" id="btn-am" class="px-4 py-1.5 rounded font-bold text-sm bg-blue-700 text-white">🇪🇹 አማርኛ</button>
                 <button type="button" onclick="setRegLang('en')" id="btn-en" class="px-4 py-1.5 rounded font-bold text-sm text-gray-700">🇬🇧 English</button>
             </div>
         </div>
 
-        <div class="bg-white rounded-2xl shadow-xl overflow-hidden border-t-4 border-green-600">
-            <div class="bg-green-600 py-5 px-8 text-center text-white">
+        <div class="bg-white rounded-2xl shadow-2xl overflow-hidden border-t-8 border-amber-500">
+            <div class="py-6 px-8 text-center text-white" style="background:linear-gradient(90deg,#1f4e79,#2980b9);">
                 <h2 class="text-2xl font-bold">
                     🎓 <span class="am">የአዲስ ተማሪ ምዝገባ ቅጽ</span><span class="en">New Student Registration Form</span>
                 </h2>
+                <p class="text-sm opacity-90 mt-1">Amanuel Light &amp; Life School</p>
             </div>
             <div class="p-8">
                 <form action="/api/register" method="POST" enctype="multipart/form-data">
@@ -688,7 +770,7 @@ app.get('/student-register', (req, res) => {
                         </div>
                     </div>
 
-                    <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg text-lg cursor-pointer">
+                    <button type="submit" class="w-full text-white font-bold py-4 rounded-xl shadow-lg text-lg cursor-pointer" style="background:linear-gradient(90deg,#1f4e79,#2980b9);">
                         ✅ <span class="am">ምዝገባውን አጠናቅቅና ላክ</span><span class="en">Submit Registration</span>
                     </button>
                 </form>
@@ -751,7 +833,7 @@ app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 },
             db.run(`INSERT INTO pending_students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
             [autoID, hashedPIN, name, mother_name || '', gender || '', age || null, phone || '', emergency_phone || '', region || '', zone || '', woreda || '', kebele || '', assignedSection, payment_type, slipPath, photoPath], function(err) {
                 if (err) return res.redirect(`/student-register?lang=${lang}&error=db`);
-                res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-100 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center border-t-8 border-green-600"><h2 class="text-3xl font-bold text-green-600 mb-4">✅ ምዝገባው ተሳክቷል!</h2><p class="text-gray-600 mb-4">እባክዎ የሚከተሉትን መግቢያ መረጃዎች ጽፈው ይያዙ፦</p><div class="bg-gray-50 p-4 rounded-xl border text-left space-y-2 mb-6"><p><strong>👤 ስም:</strong> ${name}</p><p><strong>🆔 የመታወቂያ ቁጥር (ID):</strong> <span class="text-blue-600 font-bold text-lg">${autoID}</span></p><p><strong>🔑 የይለፍ ቃል (PIN):</strong> <span class="text-red-600 font-bold text-lg">${autoPIN}</span></p><p><strong>🏫 ክፍል:</strong> ${assignedSection}</p></div><a href="/?lang=${lang}" class="block w-full bg-green-600 text-white font-bold py-3 rounded-lg">⬅️ ወደ መግቢያ ተመለስ</a></div></body></html>`);
+                res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gradient-to-br from-blue-900 to-slate-900 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md text-center border-t-8 border-amber-500"><h2 class="text-2xl font-bold text-green-600 mb-2">✅ ምዝገባው ተሳክቷል!</h2><p class="text-gray-500 text-sm mb-6">እባክዎ ID እና PIN ብቻ ጽፈው ይያዙ</p><div class="bg-slate-50 p-5 rounded-xl border-2 border-blue-100 mb-6 space-y-4"><div><div class="text-xs text-gray-500 font-bold uppercase">መታወቂያ / ID</div><div class="text-3xl font-extrabold text-blue-700 tracking-wide">${autoID}</div></div><div><div class="text-xs text-gray-500 font-bold uppercase">የይለፍ ቃል / PIN</div><div class="text-3xl font-extrabold text-red-600 tracking-widest">${autoPIN}</div></div></div><a href="/?lang=${lang}" class="block w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 rounded-xl">⬅️ ወደ መግቢያ ተመለስ</a></div></body></html>`);
             });
         });
     } catch (error) {
@@ -776,7 +858,7 @@ app.post('/register-student', upload.single('bank_slip'), (req, res) => {
             [autoID, hashedPIN, name, gender, phone, finalClass, finalPayType, paymentProof, mother_name || '', region || '', zone || '', woreda || '', kebele || '', emergency_name || '', emergency_phone || ''],
             function(err) {
                 if (err) return res.redirect('/?error=db');
-                res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Registration Successful</title></head><body style="font-family:sans-serif; background:#eef2f5; display:flex; justify-content:center; align-items:center; min-height:100vh; margin:0;"><div style="background:white; padding:30px; border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,0.15); max-width:420px; width:90%; text-align:center; border-top:6px solid #27ae60;"><h2 style="color:#27ae60; margin-top:0;">✅ ምዝገባው ተሳክቷል!</h2><div style="background:#f8f9fa; padding:15px; border-radius:8px; border:1px solid #ddd; margin:20px 0; text-align:left; font-size:16px; line-height:1.8;"><b>👤 ስም (Name):</b> ${name}<br><b>🆔 መታወቂያ (ID):</b> <span style="color:#2980b9; font-weight:bold;">${autoID}</span><br><b>🔑 የይለፍ ቃል (PIN):</b> <span style="color:#e74c3c; font-weight:bold;">${autoPIN}</span><br><b>🏫 ክፍል (Class):</b> ${finalClass}</div><a href="/" style="display:inline-block; background:#2980b9; color:white; padding:12px 25px; text-decoration:none; border-radius:6px; font-weight:bold;">⬅️ ወደ መግቢያ ገጽ ተመለስ</a></div></body></html>`);
+                res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Registration Successful</title></head><body style="font-family:Segoe UI,sans-serif;background:linear-gradient(135deg,#1f4e79,#0d2b45);display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;padding:20px;"><div style="background:white;padding:32px;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.25);max-width:400px;width:100%;text-align:center;border-top:6px solid #f39c12;"><h2 style="color:#27ae60;margin:0 0 8px;">✅ ምዝገባው ተሳክቷል!</h2><p style="color:#777;font-size:13px;margin:0 0 20px;">ID እና PIN ብቻ ጽፈው ይያዙ</p><div style="background:#f8fafc;padding:18px;border-radius:12px;border:2px solid #dbeafe;margin-bottom:20px;"><div style="font-size:11px;color:#64748b;font-weight:bold;text-transform:uppercase;">መታወቂያ / ID</div><div style="font-size:28px;font-weight:800;color:#1d4ed8;letter-spacing:1px;margin:6px 0 14px;">${autoID}</div><div style="font-size:11px;color:#64748b;font-weight:bold;text-transform:uppercase;">የይለፍ ቃል / PIN</div><div style="font-size:28px;font-weight:800;color:#dc2626;letter-spacing:4px;margin-top:6px;">${autoPIN}</div></div><a href="/" style="display:block;background:#1f4e79;color:white;padding:12px;text-decoration:none;border-radius:10px;font-weight:bold;">⬅️ ወደ መግቢያ ገጽ ተመለስ</a></div></body></html>`);
             }
         );
     });
@@ -1279,7 +1361,8 @@ app.post('/admin/edit-student/:id', upload.single('student_photo'), (req, res) =
     db.get(`SELECT * FROM students WHERE student_id = ?`, [studentId], (err, oldSt) => {
         if (!oldSt) return res.redirect('/admin/registered-students');
 
-        const finalPhoto = req.file ? req.file.filename : (oldSt.photo || '');
+        // Never wipe photo unless a NEW file was uploaded
+        const finalPhoto = (req.file && req.file.filename) ? req.file.filename : oldSt.photo;
 
         const updatePassIfNeeded = (cb) => {
             if (new_password && new_password.trim() !== '') {
