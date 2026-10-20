@@ -215,24 +215,18 @@
             </div>
         </div>
 
-        <!-- 📊 Full charts at bottom -->
-        <div class="card">
-            <h3>📊 <span class="am">የትምህርት ቤት ስታቲስቲክስ (Charts)</span><span class="en">School Statistics (Charts)</span></h3>
-            <div class="charts-grid">
-                <div class="chart-box">
-                    <h4>👨‍🎓👩‍🎓 <span class="am">ጾታ</span><span class="en">Gender</span></h4>
-                    <canvas id="genderChart" height="200"></canvas>
-                </div>
-                <div class="chart-box">
-                    <h4>📈 <span class="am">ውጤት ደረጃ</span><span class="en">Grade Levels</span></h4>
-                    <canvas id="gradeChart" height="200"></canvas>
-                </div>
-                <div class="chart-box">
-                    <h4>🏫 <span class="am">ተማሪ በክፍል</span><span class="en">Students by Class</span></h4>
-                    <canvas id="classChart" height="200"></canvas>
-                </div>
+        <!-- 📊 Compact collapsible stats at bottom -->
+        <details class="card" style="padding:12px 16px;">
+            <summary style="cursor:pointer;font-weight:bold;color:var(--primary);font-size:15px;list-style:none;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                📊 <span class="am">ስታቲስቲክስ (ይጫኑ ይክፈቱ)</span><span class="en">Statistics (click to expand)</span>
+                <span style="margin-left:auto;font-size:12px;color:var(--text2);">👨 <%= typeof maleCount !== 'undefined' ? maleCount : 0 %> · 👩 <%= typeof femaleCount !== 'undefined' ? femaleCount : 0 %> · 👥 <%= (typeof maleCount !== 'undefined' ? maleCount : 0) + (typeof femaleCount !== 'undefined' ? femaleCount : 0) %></span>
+            </summary>
+            <div class="charts-grid" style="margin-top:14px;">
+                <div class="chart-box"><h4>Gender</h4><canvas id="genderChart" height="160"></canvas></div>
+                <div class="chart-box"><h4>Grades</h4><canvas id="gradeChart" height="160"></canvas></div>
+                <div class="chart-box"><h4>Classes</h4><canvas id="classChart" height="160"></canvas></div>
             </div>
-        </div>
+        </details>
 
         <!-- Pending Students & Registered Students Archive -->
         <div class="grid-2">
