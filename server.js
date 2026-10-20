@@ -345,10 +345,15 @@ app.post('/login', loginLimiter, (req, res) => {
         });
     } else if (role === 'parent') {
         // Parent login: Student ID + Parent phone (emergency_phone or student phone)
+        const normPhone = (p) => String(p || '').replace(/[\s\-\(\)]/g, '').replace(/^\+251/, '0');
         db.get(`SELECT * FROM students WHERE UPPER(student_id) = ?`, [uKey.toUpperCase()], (err, s) => {
             if (!s) return res.redirect(`/?lang=${lang}&error=invalid`);
-            const phoneMatch = (s.emergency_phone && String(s.emergency_phone).replace(/\s/g,'') === pass.replace(/\s/g,'')) ||
-                               (s.phone && String(s.phone).replace(/\s/g,'') === pass.replace(/\s/g,''));
+            const entered = normPhone(pass);
+            const phoneMatch =
+                (s.emergency_phone && normPhone(s.emergency_phone) === entered) ||
+                (s.phone && normPhone(s.phone) === entered) ||
+                (entered && String(s.emergency_phone || '').includes(entered)) ||
+                (entered && String(s.phone || '').includes(entered));
             if (phoneMatch) {
                 req.session.parentStudentId = s.student_id;
                 req.session.parentName = s.emergency_name || s.mother_name || 'Parent';
@@ -398,37 +403,39 @@ app.get('/parent-dashboard', (req, res) => {
 
 // ================= LIVE CHAT API =================
 app.get('/api/chat/:room', (req, res) => {
-    const room = req.params.room || 'general';
-    db.all(`SELECT * FROM chat_messages WHERE room = ? ORDER BY id DESC LIMIT 50`, [room], (err, rows = []) => {
-        res.json({ messages: (rows || []).reverse() });
-    });
+    const room = String(req.params.room || 'general').slice(0, 120);
+    pool.query(`SELECT * FROM chat_messages WHERE room = $1 ORDER BY id DESC LIMIT 50`, [room])
+        .then(r => res.json({ messages: (r.rows || []).reverse() }))
+        .catch(() => res.json({ messages: [] }));
 });
 
 app.post('/api/chat/:room', (req, res) => {
-    const room = req.params.room || 'general';
-    const msg = (req.body.message || '').trim();
-    if (!msg || msg.length > 2000) return res.json({ success: false });
+    const room = String(req.params.room || 'general').slice(0, 120);
+    const msg = String(req.body.message || '').trim();
+    if (!msg || msg.length > 2000) return res.json({ success: false, error: 'empty' });
 
     let role = 'Guest', id = '', name = 'Guest';
     if (req.session.isAdmin) { role = 'Admin'; id = 'admin'; name = 'Admin'; }
     else if (req.session.teacherId) { role = 'Teacher'; id = req.session.teacherId; }
     else if (req.session.studentId) { role = 'Student'; id = req.session.studentId; }
     else if (req.session.parentStudentId) { role = 'Parent'; id = req.session.parentStudentId; name = req.session.parentName || 'Parent'; }
-    else return res.json({ success: false, error: 'login required' });
+    else return res.status(401).json({ success: false, error: 'login required' });
 
-    const finish = (senderName) => {
-        const createdAt = getFormattedTimestamp();
-        db.run(`INSERT INTO chat_messages (room, sender_role, sender_id, sender_name, message, created_at) VALUES (?,?,?,?,?,?)`,
-            [room, role, id, senderName, msg, createdAt],
-            () => res.json({ success: true }));
+    const createdAt = getFormattedTimestamp();
+    const insertChat = (senderName) => {
+        pool.query(
+            `INSERT INTO chat_messages (room, sender_role, sender_id, sender_name, message, created_at) VALUES ($1,$2,$3,$4,$5,$6)`,
+            [room, role, id, senderName, msg, createdAt]
+        ).then(() => res.json({ success: true, sender_name: senderName, created_at: createdAt, message: msg }))
+         .catch(e => res.json({ success: false, error: String(e.message || e) }));
     };
 
     if (role === 'Teacher') {
-        db.get(`SELECT name FROM teachers WHERE id = ?`, [id], (e, t) => finish(t ? t.name : id));
+        pool.query(`SELECT name FROM teachers WHERE id = $1`, [id]).then(r => insertChat(r.rows[0] ? r.rows[0].name : id)).catch(() => insertChat(id));
     } else if (role === 'Student') {
-        db.get(`SELECT name FROM students WHERE student_id = ?`, [id], (e, s) => finish(s ? s.name : id));
+        pool.query(`SELECT name FROM students WHERE student_id = $1`, [id]).then(r => insertChat(r.rows[0] ? r.rows[0].name : id)).catch(() => insertChat(id));
     } else {
-        finish(name);
+        insertChat(name);
     }
 });
 
@@ -459,27 +466,44 @@ app.get('/api/sms-logs', (req, res) => {
 
 // PWA manifest
 app.get('/manifest.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/manifest+json');
     res.json({
         name: 'Amanuel Light & Life School',
         short_name: 'ALLS Portal',
-        start_url: '/',
+        description: 'School management portal',
+        start_url: '/?source=pwa',
+        scope: '/',
         display: 'standalone',
-        background_color: '#0f172a',
+        orientation: 'portrait-primary',
+        background_color: '#1f4e79',
         theme_color: '#1f4e79',
         icons: [
-            { src: '/uploads/logo.jpg', sizes: '192x192', type: 'image/jpeg' },
-            { src: '/uploads/logo.jpg', sizes: '512x512', type: 'image/jpeg' }
+            { src: '/uploads/logo.jpg', sizes: '192x192', type: 'image/jpeg', purpose: 'any maskable' },
+            { src: '/uploads/logo.jpg', sizes: '512x512', type: 'image/jpeg', purpose: 'any maskable' }
         ]
     });
 });
 
 app.get('/sw.js', (req, res) => {
-    res.type('application/javascript').send(`
-self.addEventListener('install', e => { self.skipWaiting(); });
-self.addEventListener('activate', e => { e.waitUntil(clients.claim()); });
-self.addEventListener('fetch', e => {
-  // Network-first for HTML; cache optional assets
-  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+    res.setHeader('Content-Type', 'application/javascript');
+    res.setHeader('Service-Worker-Allowed', '/');
+    res.send(`
+const CACHE = 'alls-v1';
+self.addEventListener('install', (e) => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(['/','/manifest.json']).catch(()=>{})));
+  self.skipWaiting();
+});
+self.addEventListener('activate', (e) => { e.waitUntil(self.clients.claim()); });
+self.addEventListener('fetch', (e) => {
+  e.respondWith(
+    fetch(e.request).then(r => {
+      const copy = r.clone();
+      if (e.request.method === 'GET' && r.ok) {
+        caches.open(CACHE).then(c => c.put(e.request, copy)).catch(()=>{});
+      }
+      return r;
+    }).catch(() => caches.match(e.request))
+  );
 });
 `);
 });
