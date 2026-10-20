@@ -80,40 +80,23 @@
 
         <h2>👑 <span class="am">የዲሬክተር / አድሚን መቆጣጠሪያ</span><span class="en">Director / Admin Dashboard</span></h2>
 
-        <!-- 📊 Dashboard Charts -->
-        <div class="card">
-            <h3>📊 <span class="am">የትምህርት ቤት ስታቲስቲክስ</span><span class="en">School Statistics</span></h3>
-            <div class="charts-grid">
-                <div class="chart-box">
-                    <h4>👨‍🎓👩‍🎓 <span class="am">ጾታ</span><span class="en">Gender</span></h4>
-                    <canvas id="genderChart" height="200"></canvas>
-                </div>
-                <div class="chart-box">
-                    <h4>📈 <span class="am">ውጤት ደረጃ</span><span class="en">Grade Levels</span></h4>
-                    <canvas id="gradeChart" height="200"></canvas>
-                </div>
-                <div class="chart-box">
-                    <h4>🏫 <span class="am">ተማሪ በክፍል</span><span class="en">Students by Class</span></h4>
-                    <canvas id="classChart" height="200"></canvas>
-                </div>
+        <!-- Compact stats strip (full charts at bottom) -->
+        <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:18px; justify-content:center;">
+            <div style="background:var(--card); padding:10px 18px; border-radius:10px; text-align:center; min-width:90px; box-shadow:0 2px 8px var(--shadow);">
+                <div style="font-size:20px; font-weight:800; color:#2980b9;"><%= typeof maleCount !== 'undefined' ? maleCount : 0 %></div>
+                <div style="font-size:12px; color:var(--text2);">👨 Male</div>
             </div>
-            <div style="display:flex; gap:20px; flex-wrap:wrap; margin-top:18px; justify-content:center;">
-                <div style="background:var(--even-row); padding:12px 22px; border-radius:10px; text-align:center; min-width:120px;">
-                    <div style="font-size:28px; font-weight:800; color:#2980b9;"><%= typeof maleCount !== 'undefined' ? maleCount : 0 %></div>
-                    <div style="font-size:13px; color:var(--text2);">👨 Male</div>
-                </div>
-                <div style="background:var(--even-row); padding:12px 22px; border-radius:10px; text-align:center; min-width:120px;">
-                    <div style="font-size:28px; font-weight:800; color:#e84393;"><%= typeof femaleCount !== 'undefined' ? femaleCount : 0 %></div>
-                    <div style="font-size:13px; color:var(--text2);">👩 Female</div>
-                </div>
-                <div style="background:var(--even-row); padding:12px 22px; border-radius:10px; text-align:center; min-width:120px;">
-                    <div style="font-size:28px; font-weight:800; color:#27ae60;"><%= (typeof maleCount !== 'undefined' ? maleCount : 0) + (typeof femaleCount !== 'undefined' ? femaleCount : 0) %></div>
-                    <div style="font-size:13px; color:var(--text2);">👥 Total</div>
-                </div>
-                <div style="background:var(--even-row); padding:12px 22px; border-radius:10px; text-align:center; min-width:120px;">
-                    <div style="font-size:28px; font-weight:800; color:#f39c12;"><%= typeof excellent !== 'undefined' ? excellent : 0 %></div>
-                    <div style="font-size:13px; color:var(--text2);">⭐ Excellent (90+)</div>
-                </div>
+            <div style="background:var(--card); padding:10px 18px; border-radius:10px; text-align:center; min-width:90px; box-shadow:0 2px 8px var(--shadow);">
+                <div style="font-size:20px; font-weight:800; color:#e84393;"><%= typeof femaleCount !== 'undefined' ? femaleCount : 0 %></div>
+                <div style="font-size:12px; color:var(--text2);">👩 Female</div>
+            </div>
+            <div style="background:var(--card); padding:10px 18px; border-radius:10px; text-align:center; min-width:90px; box-shadow:0 2px 8px var(--shadow);">
+                <div style="font-size:20px; font-weight:800; color:#27ae60;"><%= (typeof maleCount !== 'undefined' ? maleCount : 0) + (typeof femaleCount !== 'undefined' ? femaleCount : 0) %></div>
+                <div style="font-size:12px; color:var(--text2);">👥 Total</div>
+            </div>
+            <div style="background:var(--card); padding:10px 18px; border-radius:10px; text-align:center; min-width:90px; box-shadow:0 2px 8px var(--shadow);">
+                <div style="font-size:20px; font-weight:800; color:#f39c12;"><%= typeof excellent !== 'undefined' ? excellent : 0 %></div>
+                <div style="font-size:12px; color:var(--text2);">⭐ 90+</div>
             </div>
         </div>
 
@@ -249,6 +232,25 @@
             <h3>🔔 <span class="am">ቀደም ሲል የተላኩ ማስታወቂያዎች</span><span class="en">Previously Sent Notifications</span></h3>
             <div style="max-height: 400px; overflow-y: auto;">
                 <%- adminNotiRows %>
+            </div>
+        </div>
+
+        <!-- 📊 Full charts at bottom -->
+        <div class="card">
+            <h3>📊 <span class="am">የትምህርት ቤት ስታቲስቲክስ (Charts)</span><span class="en">School Statistics (Charts)</span></h3>
+            <div class="charts-grid">
+                <div class="chart-box">
+                    <h4>👨‍🎓👩‍🎓 <span class="am">ጾታ</span><span class="en">Gender</span></h4>
+                    <canvas id="genderChart" height="200"></canvas>
+                </div>
+                <div class="chart-box">
+                    <h4>📈 <span class="am">ውጤት ደረጃ</span><span class="en">Grade Levels</span></h4>
+                    <canvas id="gradeChart" height="200"></canvas>
+                </div>
+                <div class="chart-box">
+                    <h4>🏫 <span class="am">ተማሪ በክፍል</span><span class="en">Students by Class</span></h4>
+                    <canvas id="classChart" height="200"></canvas>
+                </div>
             </div>
         </div>
 
