@@ -80,26 +80,6 @@
 
         <h2>👑 <span class="am">የዲሬክተር / አድሚን መቆጣጠሪያ</span><span class="en">Director / Admin Dashboard</span></h2>
 
-        <!-- Compact stats strip (full charts at bottom) -->
-        <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:18px; justify-content:center;">
-            <div style="background:var(--card); padding:10px 18px; border-radius:10px; text-align:center; min-width:90px; box-shadow:0 2px 8px var(--shadow);">
-                <div style="font-size:20px; font-weight:800; color:#2980b9;"><%= typeof maleCount !== 'undefined' ? maleCount : 0 %></div>
-                <div style="font-size:12px; color:var(--text2);">👨 Male</div>
-            </div>
-            <div style="background:var(--card); padding:10px 18px; border-radius:10px; text-align:center; min-width:90px; box-shadow:0 2px 8px var(--shadow);">
-                <div style="font-size:20px; font-weight:800; color:#e84393;"><%= typeof femaleCount !== 'undefined' ? femaleCount : 0 %></div>
-                <div style="font-size:12px; color:var(--text2);">👩 Female</div>
-            </div>
-            <div style="background:var(--card); padding:10px 18px; border-radius:10px; text-align:center; min-width:90px; box-shadow:0 2px 8px var(--shadow);">
-                <div style="font-size:20px; font-weight:800; color:#27ae60;"><%= (typeof maleCount !== 'undefined' ? maleCount : 0) + (typeof femaleCount !== 'undefined' ? femaleCount : 0) %></div>
-                <div style="font-size:12px; color:var(--text2);">👥 Total</div>
-            </div>
-            <div style="background:var(--card); padding:10px 18px; border-radius:10px; text-align:center; min-width:90px; box-shadow:0 2px 8px var(--shadow);">
-                <div style="font-size:20px; font-weight:800; color:#f39c12;"><%= typeof excellent !== 'undefined' ? excellent : 0 %></div>
-                <div style="font-size:12px; color:var(--text2);">⭐ 90+</div>
-            </div>
-        </div>
-
         <!-- Academic Year -->
         <div class="card" style="border-color: #f39c12;">
             <h3 style="color: #d35400; border-bottom-color: #fce8cd;">🎓 <span class="am">የአካዳሚክ ዓመት ማጠቃለያ</span><span class="en">Academic Year-End Actions</span></h3>
