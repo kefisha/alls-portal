@@ -974,7 +974,18 @@ app.get('/admin', (req, res) => {
                                     else poor++;
                                 });
 
-                                let pRows = pending.map(s => `<tr><td>-</td><td>${s.student_id}</td><td>${s.name}</td><td>${s.payment_type === 'slip_file' || (s.bank_slip_val && s.bank_slip_val.includes('.')) ? `<a href="/uploads/${s.bank_slip_val}" target="_blank" style="color:#2980b9; font-weight:bold;">📄 ደረሰኝ እይ</a>` : `<b>TXN:</b> ${s.bank_slip_val || '-'}`}</td><td><a href="/admin/approve/${s.id}?lang=${lang}" style="color:green; font-weight:bold;">✅ Approve</a></td></tr>`).join('');
+                                let pRows = pending.map(s => `<tr>
+                                    <td>-</td>
+                                    <td><b>${s.student_id}</b></td>
+                                    <td style="text-align:left;">${s.name}</td>
+                                    <td>${s.payment_type === 'slip_file' || (s.bank_slip_val && String(s.bank_slip_val).includes('.'))
+                                        ? `<a href="/uploads/${s.bank_slip_val}" target="_blank" style="color:#2980b9;font-weight:bold;">📄 ደረሰኝ እይ</a>`
+                                        : `<b>TXN:</b> ${s.bank_slip_val || '-'}`}</td>
+                                    <td style="white-space:nowrap;">
+                                        <a href="/admin/approve/${s.id}" style="background:#27ae60;color:#fff;padding:6px 12px;border-radius:6px;text-decoration:none;font-weight:bold;margin-right:6px;">✅</a>
+                                        <a href="/admin/reject/${s.id}" onclick="return confirm('ይህን አመልካች ማጥፋት ይፈልጋሉ?')" style="background:#e74c3c;color:#fff;padding:6px 12px;border-radius:6px;text-decoration:none;font-weight:bold;">❌</a>
+                                    </td>
+                                </tr>`).join('');
                                 let secRows = sections.map(sec => `<tr><td><a href="/class-hub/${encodeURIComponent(sec.name)}" style="color:#16a085; font-weight:bold;" target="_blank">📂 ${sec.name}</a></td><td><form action="/admin/edit-section/${sec.id}?lang=${lang}" method="POST" style="display:flex; gap:4px;"><select name="proctor_name" style="width:140px;"><option value="${sec.proctor_name || ''}">${sec.proctor_name || '-- Select --'}</option>${teachers.map(tc => `<option value="${tc.name}">${tc.name}</option>`).join('')}</select><button type="submit">Save</button></form></td><td><a href="/admin/delete-section/${sec.id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑 Delete</a></td><td><a href="/attendance-sheet/${encodeURIComponent(sec.name)}" style="color:#2980b9; font-weight:bold; margin-right:10px;" target="_blank">📋 Attendance</a><a href="/admin/export-section-students/${encodeURIComponent(sec.name)}" style="background:#27ae60; color:white; padding:4px 8px; border-radius:3px; text-decoration:none; font-weight:bold;">📥 Excel</a></td></tr>`).join('');
 
                                 let sectionOptions = sections.map(sec => `<option value="${sec.name}">${sec.name}</option>`).join('');
@@ -1512,6 +1523,12 @@ app.get('/admin/approve/:id', (req, res) => {
     });
 });
 
+// ❌ Reject pending student (delete after payment check fails)
+app.get('/admin/reject/:id', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.run(`DELETE FROM pending_students WHERE id = ?`, [req.params.id], () => res.redirect('/admin'));
+});
+
 app.post('/admin/register-teacher-full', upload.single('teacher_photo'), (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const { name, gender, phone, subject, assigned_sections, emergency_name, emergency_phone } = req.body;
@@ -1920,6 +1937,15 @@ app.get('/teacher-dashboard', (req, res) => {
 
                             db.all("SELECT * FROM notifications ORDER BY id DESC", [], (err, allNotifs = []) => {
                                 let mySentNotifs = allNotifs.filter(n => n.sender_name === teacher.name);
+                                // Received: to this teacher, all teachers, or admin-style for them
+                                let myReceivedNotifs = allNotifs.filter(n =>
+                                    n.sender_name !== teacher.name && (
+                                        n.target_audience === 'TEACHER:' + teacher.id ||
+                                        n.target_audience === 'ALL_TEACHERS' ||
+                                        n.target_audience === 'ALL' ||
+                                        n.target_audience === 'ADMIN'
+                                    )
+                                );
 
                                 let classOptions = assignedClasses.map(cls => `<option value="${cls}" ${cls === selectedClass ? 'selected' : ''}>${cls}</option>`).join('');
                                 let courseOptions = classCourses.length > 0
@@ -1943,11 +1969,11 @@ app.get('/teacher-dashboard', (req, res) => {
                                         <td>${idx + 1}</td>
                                         <td><b>${st.student_id}</b></td>
                                         <td style="text-align:left;">${st.name}</td>
-                                        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="20" name="quiz" value="${asm.quiz !== undefined && asm.quiz !== null ? asm.quiz : 0}" style="width:60px; text-align:center;"></td>
-                                        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="10" name="assignment" value="${asm.assignment !== undefined && asm.assignment !== null ? asm.assignment : 0}" style="width:60px; text-align:center;"></td>
-                                        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="10" name="project" value="${asm.project !== undefined && asm.project !== null ? asm.project : 0}" style="width:60px; text-align:center;"></td>
-                                        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="30" name="mid" value="${asm.mid !== undefined && asm.mid !== null ? asm.mid : 0}" style="width:60px; text-align:center;"></td>
-                                        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="30" name="final" value="${asm.final !== undefined && asm.final !== null ? asm.final : 0}" style="width:60px; text-align:center;"></td>
+                                        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="100" name="quiz" value="${asm.quiz !== undefined && asm.quiz !== null ? asm.quiz : 0}" style="width:60px; text-align:center;"></td>
+                                        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="100" name="assignment" value="${asm.assignment !== undefined && asm.assignment !== null ? asm.assignment : 0}" style="width:60px; text-align:center;"></td>
+                                        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="100" name="project" value="${asm.project !== undefined && asm.project !== null ? asm.project : 0}" style="width:60px; text-align:center;"></td>
+                                        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="100" name="mid" value="${asm.mid !== undefined && asm.mid !== null ? asm.mid : 0}" style="width:60px; text-align:center;"></td>
+                                        <td><input form="form_${st.student_id}" type="number" step="any" min="0" max="100" name="final" value="${asm.final !== undefined && asm.final !== null ? asm.final : 0}" style="width:60px; text-align:center;"></td>
                                         <td>
                                             <form id="form_${st.student_id}" class="ajax-grade-form" action="/teacher/save-grade?course_id=${encodeURIComponent(selectedCourseId || 'default')}&cls=${encodeURIComponent(selectedClass)}" method="POST">
                                                 <input type="hidden" name="student_id" value="${st.student_id}">
@@ -1960,9 +1986,29 @@ app.get('/teacher-dashboard', (req, res) => {
 
                                 let absRows = classAbsences.map(ab => `<tr><td>${ab.student_name}</td><td>${ab.date || ab.created_at || ''}</td><td>${ab.reason}</td><td>${ab.teacher_feedback || 'Pending'}</td></tr>`).join('');
                                 
-                                let teacherNotiRows = mySentNotifs.map(n => `
+                                let teacherNotiRows = '';
+                                // Received first (with Reply)
+                                teacherNotiRows += myReceivedNotifs.map(n => {
+                                    const replyTarget = n.sender_role === 'Student' ? ('STUDENT:' + (n.sender_id || '')) : (n.sender_role === 'Admin' ? 'ADMIN' : 'ADMIN');
+                                    return `<div style="background:#eef9ff; padding:15px; margin-bottom:12px; border-radius:8px; border-left:4px solid #2980b9;">
+                                        <strong>📥 ከ: ${n.sender_name} (${n.sender_role||''}) | ${n.created_at||''}</strong>
+                                        <div style="margin-top:8px; background:white; padding:10px; border-radius:6px; border:1px solid #ddd;">${n.message}</div>
+                                        ${n.attachment ? `<div style="margin-top:6px;"><a href="/uploads/${n.attachment}" target="_blank" style="color:#2980b9;font-weight:bold;">📎 File</a></div>` : ''}
+                                        <div style="margin-top:10px;">
+                                            <button type="button" onclick="document.getElementById('tReply_${n.id}').style.display='block'" style="background:#2980b9;color:white;border:none;padding:5px 12px;border-radius:4px;font-weight:bold;font-size:12px;cursor:pointer;">💬 Reply</button>
+                                        </div>
+                                        <form id="tReply_${n.id}" action="/teacher/send-notification?cls=${encodeURIComponent(selectedClass)}" method="POST" style="display:none;margin-top:10px;background:#f0f9ff;padding:12px;border-radius:6px;">
+                                            <input type="hidden" name="target_audience" value="${replyTarget || 'ADMIN'}">
+                                            <textarea name="message" rows="2" required placeholder="Reply..." style="width:100%;padding:8px;margin-bottom:8px;border:1px solid #ccc;border-radius:4px;"></textarea>
+                                            <button type="submit" style="background:#27ae60;color:white;border:none;padding:6px 14px;border-radius:4px;font-weight:bold;">📤 Send</button>
+                                            <button type="button" onclick="document.getElementById('tReply_${n.id}').style.display='none'" style="background:#7f8c8d;color:white;border:none;padding:6px 12px;border-radius:4px;margin-left:5px;">Cancel</button>
+                                        </form>
+                                    </div>`;
+                                }).join('');
+                                // Sent (edit/delete own)
+                                teacherNotiRows += mySentNotifs.map(n => `
                                     <div style="background:#fdf2e9; padding:15px; margin-bottom:12px; border-radius:8px; border:1px solid #e67e22;">
-                                        <strong>🔔 ለ: <span style="color:#2980b9;">${n.target_audience}</span> | ቀን: ${n.created_at || ''}</strong>
+                                        <strong>📤 ለ: <span style="color:#2980b9;">${n.target_audience}</span> | ቀን: ${n.created_at || ''}</strong>
                                         <div style="margin-top:8px; background:white; padding:10px; border-radius:6px; border:1px solid #ddd;">${n.message}</div>
                                         ${n.attachment ? `<div style="margin-top:6px;"><a href="/uploads/${n.attachment}" target="_blank" style="color:#2980b9; font-weight:bold;">📎 የተያያዘ ፋይል ክፈት</a></div>` : ''}
                                         <div style="margin-top:10px; display:flex; gap:8px;">
@@ -2030,11 +2076,12 @@ app.post('/teacher/save-grade', (req, res) => {
     let selectedCls = req.query.cls || '';
     let { student_id, quiz, mid, final, assignment, project } = req.body;
     
-    let q = Math.min(20, Math.max(0, parseFloat(quiz) || 0));
-    let a = Math.min(10, Math.max(0, parseFloat(assignment) || 0));
-    let p = Math.min(10, Math.max(0, parseFloat(project) || 0));
-    let m = Math.min(30, Math.max(0, parseFloat(mid) || 0));
-    let f = Math.min(30, Math.max(0, parseFloat(final) || 0));
+    // Teacher can set any marks they want (0–100 each)
+    let q = Math.min(100, Math.max(0, parseFloat(quiz) || 0));
+    let a = Math.min(100, Math.max(0, parseFloat(assignment) || 0));
+    let p = Math.min(100, Math.max(0, parseFloat(project) || 0));
+    let m = Math.min(100, Math.max(0, parseFloat(mid) || 0));
+    let f = Math.min(100, Math.max(0, parseFloat(final) || 0));
     let total = Number((q + a + p + m + f).toFixed(2));
 
     const saveAssessmentRecord = (code, title) => {
