@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#1f4e79">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/uploads/logo.jpg">
     <title>Login - Amanuel Light and Life School</title>
     <style>
         * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -91,6 +94,7 @@
     <div class="lang-bar">
         <button type="button" id="btn-am" class="lang-btn" onclick="switchPortalLang('am')" style="background:#27ae60; color:white;">🇪🇹 አማርኛ</button>
         <button type="button" id="btn-en" class="lang-btn" onclick="switchPortalLang('en')" style="background:transparent; color:white;">🇬🇧 English</button>
+        <button type="button" id="btnInstallPWA" class="lang-btn" style="display:none;background:#f39c12;color:white;">📲 Install App</button>
     </div>
 
     <div class="login-card">
@@ -110,10 +114,10 @@
             <form action="/login" method="POST" id="loginForm">
                 <label>👤 <span class="am">የተጠቃሚ ሚና ይምረጡ (Role):</span><span class="en">Select User Role:</span></label>
                 <select name="role" id="roleSelect" required>
-                    <option value="student"> ተማሪ / Student</option>
-                    <option value="teacher"> መምህር / Teacher</option>
+                    <option value="student">👨‍🎓 ተማሪ / Student</option>
+                    <option value="teacher">👩‍🏫 መምህር / Teacher</option>
                     <option value="parent">👨‍👩‍👧 ወላጅ / Parent</option>
-                    <option value="admin"> ዲሬክተር / አድሚን (Director / Admin)</option>
+                    <option value="admin">👑 ዲሬክተር / አድሚን (Director / Admin)</option>
                 </select>
 
                 <div class="parent-hint" id="parentHint">
@@ -228,6 +232,28 @@
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('/sw.js').catch(() => {});
             }
+
+        let deferredPrompt = null;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            const b = document.getElementById('btnInstallPWA');
+            if (b) b.style.display = 'inline-block';
+        });
+        const installBtn = document.getElementById('btnInstallPWA');
+        if (installBtn) {
+            installBtn.addEventListener('click', async () => {
+                if (!deferredPrompt) {
+                    alert('Install: use browser menu → Add to Home Screen / Install app\n(HTTPS required)');
+                    return;
+                }
+                deferredPrompt.prompt();
+                await deferredPrompt.userChoice;
+                deferredPrompt = null;
+                installBtn.style.display = 'none';
+            });
+        }
+
         });
 
         function openResetModal() {
