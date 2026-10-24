@@ -296,7 +296,8 @@
             <input type="file" name="csv" accept=".csv,text/csv" required>
             <button type="submit">📥 Import Grades CSV</button>
         </form>
-        <p style="margin-top:12px;"><a href="/learning-hub">📚 Learning Hub</a> · <a href="/qr-scan">📷 QR Attendance</a></p>
+        <div id="homeworkSubList" style="margin-top:12px;font-size:13px;"></div>
+        <p style="margin-top:12px;"><a href="/learning-hub">📚 Learning Hub</a> · <a href="/admin/attendance-report">📋 Attendance</a> · <a href="/qr-scan">📷 QR Attendance</a></p>
         <div id="classAvg" style="margin-top:10px;font-weight:bold;color:#1f4e79;"></div>
     </div>
 
@@ -734,6 +735,23 @@
         el.textContent = '📊 Class average (sum of components): ' + avg.toFixed(1) + ' · Students: ' + totals.length;
     };
     window.classAvgCalc();
+
+    fetch('/api/homework-submissions',{credentials:'same-origin'}).then(r=>r.json()).then(d=>{
+        var el=document.getElementById('homeworkSubList');
+        if(!el) return;
+        var rows=d.rows||[];
+        if(!rows.length){ el.innerHTML='<p style="color:#888;">No homework submissions yet</p>'; return; }
+        el.innerHTML='<h4>📥 Homework to grade</h4>'+rows.slice(0,20).map(function(s){
+            return '<div style="border:1px solid #ddd;padding:10px;border-radius:8px;margin:6px 0;">'
+              +'<b>'+(s.student_name||'')+'</b> (HW #'+s.homework_id+') — '+(s.status||'')
+              +(s.file_path?' · <a href="/uploads/'+s.file_path+'" target="_blank">File</a>':'')
+              +'<form action="/teacher/homework-grade" method="POST" style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">'
+              +'<input type="hidden" name="id" value="'+s.id+'">'
+              +'<input type="number" name="score" placeholder="Score" value="'+(s.score||'')+'" style="width:90px;">'
+              +'<input type="hidden" name="status" value="graded">'
+              +'<button type="submit">Save grade</button></form></div>';
+        }).join('');
+    }).catch(function(){});
 </script>
 </body>
 </html>
