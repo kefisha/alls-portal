@@ -82,7 +82,45 @@
                 <span style="font-weight:bold; font-size:14px;">🔔 <span id="unreadBadge" style="background:#e74c3c;color:#fff;border-radius:50px;padding:2px 8px;font-size:12px;display:none;">0</span></span>
                 <button type="button" onclick="setLang('am')" id="btn-am" style="background:#27ae60; color:white; padding:7px 14px;">🇪🇹 አማርኛ</button>
                 <button type="button" onclick="setLang('en')" id="btn-en" style="background:#7f8c8d; color:white; padding:7px 14px;">🇬🇧 English</button>
-                <a href="/logout" class="logout-btn">🚪 <span class="am">ውጣ</span><span class="en">Logout</span></a>
+                
+    <div class="card" id="homework">
+        <h3>📝 Homework · ❓ Quiz · 📋 Lesson Plan · 📥 Bulk Grades</h3>
+        <form action="/teacher/homework" method="POST" style="margin-bottom:14px;">
+            <input type="text" name="title" placeholder="Homework title" required>
+            <textarea name="description" rows="2" placeholder="Instructions"></textarea>
+            <input type="text" name="class_level" placeholder="Class" value="<%= typeof selectedClass !== 'undefined' ? selectedClass : '' %>">
+            <input type="date" name="due_date">
+            <button type="submit">📝 Assign Homework</button>
+        </form>
+        <form action="/teacher/quiz" method="POST" style="margin-bottom:14px;border-top:1px solid #ddd;padding-top:12px;">
+            <input type="text" name="title" placeholder="Quiz title" required>
+            <input type="text" name="class_level" placeholder="Class" value="<%= typeof selectedClass !== 'undefined' ? selectedClass : '' %>">
+            <input type="text" name="q1" placeholder="Question 1" required>
+            <input type="text" name="a1" placeholder="Answer 1" required>
+            <input type="text" name="q2" placeholder="Question 2">
+            <input type="text" name="a2" placeholder="Answer 2">
+            <input type="text" name="q3" placeholder="Question 3">
+            <input type="text" name="a3" placeholder="Answer 3">
+            <button type="submit">❓ Create Quiz</button>
+        </form>
+        <form action="/teacher/lesson-plan" method="POST" style="margin-bottom:14px;border-top:1px solid #ddd;padding-top:12px;">
+            <input type="text" name="week_label" placeholder="Week e.g. Week 12" required>
+            <input type="text" name="class_level" placeholder="Class">
+            <textarea name="content" rows="3" placeholder="Lesson plan content..." required></textarea>
+            <button type="submit">📋 Save Lesson Plan</button>
+        </form>
+        <form action="/teacher/bulk-grades" method="POST" enctype="multipart/form-data" style="border-top:1px solid #ddd;padding-top:12px;">
+            <p style="font-size:12px;color:#666;">CSV: student_id,quiz,assignment,project,mid,final</p>
+            <input type="text" name="course_code" placeholder="Course code" value="GEN">
+            <input type="text" name="course_title" placeholder="Course title">
+            <input type="file" name="csv" accept=".csv,text/csv" required>
+            <button type="submit">📥 Import Grades CSV</button>
+        </form>
+        <p style="margin-top:12px;"><a href="/learning-hub">📚 Learning Hub</a> · <a href="/qr-scan">📷 QR Attendance</a></p>
+        <div id="classAvg" style="margin-top:10px;font-weight:bold;color:#1f4e79;"></div>
+    </div>
+
+    <a href="/logout" class="logout-btn">🚪 <span class="am">ውጣ</span><span class="en">Logout</span></a>
             </div>
         </div>
 
@@ -363,6 +401,7 @@
                     .then(r => r.json())
                     .then(data => {
                         if (data && data.success && window.showToast) showToast('✅ Grade saved');
+                        if (typeof window.classAvgCalc === 'function') window.classAvgCalc();
                         else if (data && data.error && window.showToast) showToast(data.error, 'err');
                         btn.disabled = false;
                         if (data && data.success) {
@@ -499,6 +538,22 @@
         });
     });
 
+
+    window.classAvgCalc = function() {
+        const totals = [];
+        document.querySelectorAll('.ajax-grade-form').forEach(f => {
+            const row = f.closest('tr');
+            if (!row) return;
+            const nums = row.querySelectorAll('input[type="number"]');
+            let s = 0; nums.forEach(n => s += parseFloat(n.value)||0);
+            totals.push(s);
+        });
+        const el = document.getElementById('classAvg');
+        if (!el || !totals.length) return;
+        const avg = totals.reduce((a,b)=>a+b,0)/totals.length;
+        el.textContent = '📊 Class average (sum of components): ' + avg.toFixed(1) + ' · Students: ' + totals.length;
+    };
+    window.classAvgCalc();
 </script>
 </body>
 </html>
