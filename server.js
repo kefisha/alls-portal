@@ -3538,20 +3538,46 @@ app.get('/report-card/:studentId', (req, res) => {
     });
 });
 
-// 14 Backup export
+// 14 Backup export — safe per-table (missing tables skipped)
 app.get('/admin/backup-export', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
-    const out = {};
-    const tables = ['students', 'teachers', 'courses', 'sections', 'course_assessments', 'notifications', 'fee_ledger', 'timetable', 'announcements'];
+    const out = {
+        meta: {
+            school: 'Amanuel Light & Life School',
+            exported_at: getFormattedTimestamp(),
+            version: 1
+        }
+    };
+    const tables = [
+        'students', 'pending_students', 'teachers', 'courses', 'sections',
+        'course_assessments', 'notifications', 'notification_reads',
+        'fee_ledger', 'timetable', 'announcements', 'homework',
+        'homework_submissions', 'library_items', 'quizzes', 'quiz_attempts',
+        'lesson_plans', 'absence_requests', 'daily_attendance',
+        'grade_submissions', 'activity_log', 'chat_messages', 'sms_logs'
+    ];
     let i = 0;
     const next = () => {
         if (i >= tables.length) {
-            res.setHeader('Content-Type', 'application/json');
-            res.setHeader('Content-Disposition', 'attachment; filename=alls_backup.json');
-            return res.send(JSON.stringify(out, null, 2));
+            try {
+                const body = JSON.stringify(out, null, 2);
+                res.setHeader('Content-Type', 'application/json; charset=utf-8');
+                res.setHeader('Content-Disposition', 'attachment; filename="alls_backup.json"');
+                res.setHeader('Content-Length', Buffer.byteLength(body, 'utf8'));
+                return res.status(200).send(body);
+            } catch (err) {
+                return res.status(500).send('Backup failed: ' + (err.message || err));
+            }
         }
         const t = tables[i++];
-        db.all(`SELECT * FROM ${t}`, [], (e, rows) => { out[t] = rows || []; next(); });
+        db.all(`SELECT * FROM ${t}`, [], (e, rows) => {
+            if (e) {
+                out[t] = { error: String(e.message || e), rows: [] };
+            } else {
+                out[t] = rows || [];
+            }
+            next();
+        });
     };
     next();
 });
