@@ -2046,7 +2046,26 @@ app.get('/teacher-dashboard', (req, res) => {
                                     </tr>`;
                                 }).join('');
 
-                                let absRows = classAbsences.map(ab => `<tr><td>${ab.student_name}</td><td>${ab.date || ab.created_at || ''}</td><td>${ab.reason}</td><td>${ab.teacher_feedback || 'Pending'}</td></tr>`).join('');
+                                let absRows = classAbsences.map(ab => {
+                                    const fb = (ab.teacher_feedback || '').trim();
+                                    let feedbackCell;
+                                    if (fb) {
+                                        feedbackCell = `<span style="color:#27ae60;font-weight:bold;">${fb.replace(/</g,'&lt;')}</span>`;
+                                    } else {
+                                        feedbackCell = `<form action="/teacher/absence-feedback" method="POST" style="display:flex;flex-direction:column;gap:6px;min-width:160px;">
+                                                <input type="hidden" name="id" value="${ab.id}">
+                                                <input type="hidden" name="cls" value="${selectedClass || ''}">
+                                                <textarea name="feedback" rows="2" required placeholder="Reply / Feedback..." style="width:100%;padding:6px;border:1px solid #ccc;border-radius:6px;font-size:12px;"></textarea>
+                                                <button type="submit" style="background:#27ae60;color:#fff;border:none;padding:6px 10px;border-radius:6px;font-weight:bold;cursor:pointer;font-size:12px;">💬 Reply</button>
+                                            </form>`;
+                                    }
+                                    return `<tr>
+                                        <td style="text-align:left;">${ab.student_name || ''}</td>
+                                        <td>${ab.date || ab.created_at || ''}</td>
+                                        <td style="text-align:left;">${ab.reason || ''}${ab.attachment ? `<br><a href="/uploads/${ab.attachment}" target="_blank">📎</a>` : ''}</td>
+                                        <td>${feedbackCell}</td>
+                                    </tr>`;
+                                }).join('');
                                 
                                 let teacherNotiRows = '';
                                 // Received first (with Reply)
@@ -2130,6 +2149,23 @@ app.post('/teacher/send-notification', upload.single('attachment'), (req, res) =
                 () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(returnClass)}#notifications`));
         }
     });
+});
+
+
+app.post('/teacher/absence-feedback', (req, res) => {
+    if (!req.session.teacherId) return res.redirect('/');
+    const id = req.body.id;
+    const feedback = xss(String(req.body.feedback || '').trim());
+    const cls = req.body.cls || '';
+    if (!id || !feedback) {
+        return res.redirect(cls ? `/teacher-dashboard?cls=${encodeURIComponent(cls)}` : '/teacher-dashboard');
+    }
+    db.run(`UPDATE absence_requests SET teacher_feedback = ?, status = ? WHERE id = ?`,
+        [feedback, 'Replied', id],
+        () => {
+            try { logActivity('Teacher', String(req.session.teacherId), 'ABSENCE_FEEDBACK', 'id=' + id); } catch(e) {}
+            res.redirect(cls ? `/teacher-dashboard?cls=${encodeURIComponent(cls)}` : '/teacher-dashboard');
+        });
 });
 
 app.post('/teacher/save-grade', (req, res) => {
