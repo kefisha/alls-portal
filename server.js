@@ -833,7 +833,7 @@ app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 },
             db.run(`INSERT INTO pending_students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
             [autoID, hashedPIN, name, mother_name || '', gender || '', age || null, phone || '', emergency_phone || '', region || '', zone || '', woreda || '', kebele || '', assignedSection, payment_type, slipPath, photoPath], function(err) {
                 if (err) return res.redirect(`/student-register?lang=${lang}&error=db`);
-                res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gradient-to-br from-blue-900 to-slate-900 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md text-center border-t-8 border-amber-500"><h2 class="text-2xl font-bold text-green-600 mb-2">✅ ምዝገባው ተሳክቷል!</h2><p class="text-gray-500 text-sm mb-6">እባክዎ ID እና PIN ብቻ ጽፈው ይያዙ</p><div class="bg-slate-50 p-5 rounded-xl border-2 border-blue-100 mb-6 space-y-4"><div><div class="text-xs text-gray-500 font-bold uppercase">መታወቂያ / ID</div><div class="text-3xl font-extrabold text-blue-700 tracking-wide">${autoID}</div></div><div><div class="text-xs text-gray-500 font-bold uppercase">የይለፍ ቃል / PIN</div><div class="text-3xl font-extrabold text-red-600 tracking-widest">${autoPIN}</div></div></div><a href="/?lang=${lang}" class="block w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 rounded-xl">⬅️ ወደ መግቢያ ተመለስ</a></div></body></html>`);
+                res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gradient-to-br from-blue-900 to-slate-900 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md text-center border-t-8 border-amber-500"><h2 class="text-2xl font-bold text-green-600 mb-2">ምዝገባ ተልኳል (Pending)</h2><p class="text-gray-600 text-sm mb-2">የክፍያ transaction/ደረሰኝ ወደ ዳይሬክተር ተልኳል።</p><p class="text-amber-700 text-sm font-bold mb-6">⚠️ ዳይሬክተር ክፍያ እስኪያረጋግጥ ድረስ Registered አይደሉም — Login አይችሉም። ID እና PIN ይያዙ፦</p><div class="bg-slate-50 p-5 rounded-xl border-2 border-blue-100 mb-6 space-y-4"><div><div class="text-xs text-gray-500 font-bold uppercase">መታወቂያ / ID</div><div class="text-3xl font-extrabold text-blue-700 tracking-wide">${autoID}</div></div><div><div class="text-xs text-gray-500 font-bold uppercase">የይለፍ ቃል / PIN</div><div class="text-3xl font-extrabold text-red-600 tracking-widest">${autoPIN}</div></div></div><a href="/?lang=${lang}" class="block w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 rounded-xl">⬅️ ወደ መግቢያ ተመለስ</a></div></body></html>`);
             });
         });
     } catch (error) {
@@ -858,7 +858,7 @@ app.post('/register-student', upload.single('bank_slip'), (req, res) => {
             [autoID, hashedPIN, name, gender, phone, finalClass, finalPayType, paymentProof, mother_name || '', region || '', zone || '', woreda || '', kebele || '', emergency_name || '', emergency_phone || ''],
             function(err) {
                 if (err) return res.redirect('/?error=db');
-                res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Registration Successful</title></head><body style="font-family:Segoe UI,sans-serif;background:linear-gradient(135deg,#1f4e79,#0d2b45);display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;padding:20px;"><div style="background:white;padding:32px;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.25);max-width:400px;width:100%;text-align:center;border-top:6px solid #f39c12;"><h2 style="color:#27ae60;margin:0 0 8px;">✅ ምዝገባው ተሳክቷል!</h2><p style="color:#777;font-size:13px;margin:0 0 20px;">ID እና PIN ብቻ ጽፈው ይያዙ</p><div style="background:#f8fafc;padding:18px;border-radius:12px;border:2px solid #dbeafe;margin-bottom:20px;"><div style="font-size:11px;color:#64748b;font-weight:bold;text-transform:uppercase;">መታወቂያ / ID</div><div style="font-size:28px;font-weight:800;color:#1d4ed8;letter-spacing:1px;margin:6px 0 14px;">${autoID}</div><div style="font-size:11px;color:#64748b;font-weight:bold;text-transform:uppercase;">የይለፍ ቃል / PIN</div><div style="font-size:28px;font-weight:800;color:#dc2626;letter-spacing:4px;margin-top:6px;">${autoPIN}</div></div><a href="/" style="display:block;background:#1f4e79;color:white;padding:12px;text-decoration:none;border-radius:10px;font-weight:bold;">⬅️ ወደ መግቢያ ገጽ ተመለስ</a></div></body></html>`);
+                res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Registration Successful</title></head><body style="font-family:Segoe UI,sans-serif;background:linear-gradient(135deg,#1f4e79,#0d2b45);display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;padding:20px;"><div style="background:white;padding:32px;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.25);max-width:400px;width:100%;text-align:center;border-top:6px solid #f39c12;"><h2 style="color:#27ae60;margin:0 0 8px;">ምዝገባ ተልኳል (Pending)</h2><p style="color:#555;font-size:13px;margin:0 0 8px;">የክፍያ transaction/ደረሰኝ ወደ ዳይሬክተር ተልኳል።</p><p style="color:#b45309;font-size:13px;font-weight:bold;margin:0 0 20px;">⚠️ ዳይሬክተር ክፍያ እስኪያረጋግጥ ድረስ Registered አይደሉም — Login አይችሉም። ID እና PIN ይያዙ፦</p><div style="background:#f8fafc;padding:18px;border-radius:12px;border:2px solid #dbeafe;margin-bottom:20px;"><div style="font-size:11px;color:#64748b;font-weight:bold;text-transform:uppercase;">መታወቂያ / ID</div><div style="font-size:28px;font-weight:800;color:#1d4ed8;letter-spacing:1px;margin:6px 0 14px;">${autoID}</div><div style="font-size:11px;color:#64748b;font-weight:bold;text-transform:uppercase;">የይለፍ ቃል / PIN</div><div style="font-size:28px;font-weight:800;color:#dc2626;letter-spacing:4px;margin-top:6px;">${autoPIN}</div></div><a href="/" style="display:block;background:#1f4e79;color:white;padding:12px;text-decoration:none;border-radius:10px;font-weight:bold;">⬅️ ወደ መግቢያ ገጽ ተመለስ</a></div></body></html>`);
             }
         );
     });
@@ -1115,7 +1115,7 @@ app.post('/admin/send-notification', upload.single('attachment'), (req, res) => 
         db.run(
             `INSERT INTO notifications (sender_role, sender_name, target_audience, message, attachment, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
             ['Admin', 'School Admin', target_audience, message, attachment, createdAt],
-            () => res.redirect('/admin')
+            () => res.redirect('/admin#notifications')
         );
     } else if (req.session.teacherId) {
         db.get(`SELECT name FROM teachers WHERE id = ?`, [req.session.teacherId], (err, t) => {
@@ -1132,7 +1132,7 @@ app.post('/admin/send-notification', upload.single('attachment'), (req, res) => 
             db.run(
                 `INSERT INTO notifications (sender_role, sender_name, target_audience, message, attachment, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
                 ['Student', s.name, target_audience, message, attachment, createdAt],
-                () => res.redirect('/student-dashboard')
+                () => res.redirect('/student-dashboard#notifications')
             );
         });
     } else {
@@ -1167,7 +1167,7 @@ app.get('/delete-notification/:id', (req, res) => {
             // Student can delete only their own messages
             db.get(`SELECT name FROM students WHERE student_id = ?`, [req.session.studentId], (e, s) => {
                 if (s && n.sender_name === s.name && n.sender_role === 'Student') {
-                    db.run(`DELETE FROM notifications WHERE id = ?`, [req.params.id], () => res.redirect('/student-dashboard'));
+                    db.run(`DELETE FROM notifications WHERE id = ?`, [req.params.id], () => res.redirect('/student-dashboard#notifications'));
                 } else {
                     res.redirect('/student-dashboard');
                 }
@@ -1195,9 +1195,9 @@ app.post('/edit-notification/:id', upload.single('attachment'), (req, res) => {
             let q = req.file ? `UPDATE notifications SET message = ?, attachment = ? WHERE id = ?` : `UPDATE notifications SET message = ? WHERE id = ?`;
             let p = req.file ? [msg, req.file.filename, req.params.id] : [msg, req.params.id];
             db.run(q, p, () => {
-                if (req.session.isAdmin) return res.redirect('/admin');
-                if (req.session.teacherId) return res.redirect('/teacher-dashboard');
-                return res.redirect('/student-dashboard');
+                if (req.session.isAdmin) return res.redirect('/admin#notifications');
+                if (req.session.teacherId) return res.redirect('/teacher-dashboard#notifications');
+                return res.redirect('/student-dashboard#notifications');
             });
         };
 
@@ -1518,7 +1518,7 @@ app.get('/admin/approve/:id', (req, res) => {
         if (!st) return res.redirect('/admin');
         db.run(`INSERT INTO students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo, status, admin_message) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [st.student_id, st.password, st.name, st.mother_name, st.gender, st.age, st.phone, st.emergency_phone, st.region, st.zone, st.woreda, st.kebele, st.class_level, st.payment_type, st.bank_slip_val, st.photo, 'Approved', '🎉 Your registration is approved!'], () => {
-            db.run(`DELETE FROM pending_students WHERE id = ?`, [req.params.id], () => res.redirect('/admin'));
+            db.run(`DELETE FROM pending_students WHERE id = ?`, [req.params.id], () => res.redirect('/admin#pending-approvals'));
         });
     });
 });
@@ -1526,7 +1526,7 @@ app.get('/admin/approve/:id', (req, res) => {
 // ❌ Reject pending student (delete after payment check fails)
 app.get('/admin/reject/:id', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
-    db.run(`DELETE FROM pending_students WHERE id = ?`, [req.params.id], () => res.redirect('/admin'));
+    db.run(`DELETE FROM pending_students WHERE id = ?`, [req.params.id], () => res.redirect('/admin#pending-approvals'));
 });
 
 app.post('/admin/register-teacher-full', upload.single('teacher_photo'), (req, res) => {
@@ -2061,11 +2061,11 @@ app.post('/teacher/send-notification', upload.single('attachment'), (req, res) =
                 db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at, attachment) VALUES (?,?,?,?,?,?)`,
                     ['Teacher', teacher.name, sec, msg, nowStr, file]);
             });
-            return res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(returnClass)}`);
+            return res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(returnClass)}#notifications`);
         } else {
             db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at, attachment) VALUES (?,?,?,?,?,?)`,
                 ['Teacher', teacher.name, chosenTarget, msg, nowStr, file],
-                () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(returnClass)}`));
+                () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(returnClass)}#notifications`));
         }
     });
 });
@@ -2361,7 +2361,7 @@ app.get('/student-dashboard', (req, res) => {
 app.post('/student/update-photo', upload.single('new_photo'), (req, res) => {
     if (!req.session.studentId) return res.redirect('/');
     if (req.file) {
-        db.run('UPDATE students SET photo = ? WHERE student_id = ?', [req.file.filename, req.session.studentId], () => res.redirect('/student-dashboard'));
+        db.run('UPDATE students SET photo = ? WHERE student_id = ?', [req.file.filename, req.session.studentId], () => res.redirect('/student-dashboard#notifications'));
     } else {
         res.redirect('/student-dashboard');
     }
@@ -2372,7 +2372,7 @@ app.post('/student/absence', upload.single('attachment'), (req, res) => {
     db.get('SELECT name, class_level FROM students WHERE student_id=?', [req.session.studentId], (err, st) => {
         if(st) {
             db.run(`INSERT INTO absence_requests (student_id, student_name, class_level, reason, teacher_feedback, status, created_at, attachment) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, 
-            [req.session.studentId, st.name, st.class_level, xss(req.body.reason), '', 'Pending', new Date().toLocaleString(), req.file ? req.file.filename : null], () => res.redirect('/student-dashboard'));
+            [req.session.studentId, st.name, st.class_level, xss(req.body.reason), '', 'Pending', new Date().toLocaleString(), req.file ? req.file.filename : null], () => res.redirect('/student-dashboard#notifications'));
         }
     });
 });
