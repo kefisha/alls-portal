@@ -231,6 +231,45 @@ async function initDB() {
             created_at TEXT
         )`);
 
+        await pool.query(`CREATE TABLE IF NOT EXISTS homework (
+            id SERIAL PRIMARY KEY, teacher_id TEXT, teacher_name TEXT, class_level TEXT,
+            title TEXT, description TEXT, due_date TEXT, created_at TEXT
+        )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS homework_submissions (
+            id SERIAL PRIMARY KEY, homework_id INTEGER, student_id TEXT, student_name TEXT,
+            file_path TEXT, note TEXT, status TEXT DEFAULT 'submitted', score REAL, created_at TEXT
+        )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS library_items (
+            id SERIAL PRIMARY KEY, title TEXT, category TEXT, class_level TEXT,
+            file_path TEXT, uploaded_by TEXT, created_at TEXT
+        )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS quizzes (
+            id SERIAL PRIMARY KEY, teacher_id TEXT, teacher_name TEXT, class_level TEXT,
+            title TEXT, questions_json TEXT, created_at TEXT
+        )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS quiz_attempts (
+            id SERIAL PRIMARY KEY, quiz_id INTEGER, student_id TEXT, student_name TEXT,
+            answers_json TEXT, score REAL, total REAL, created_at TEXT
+        )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS lesson_plans (
+            id SERIAL PRIMARY KEY, teacher_id TEXT, teacher_name TEXT, class_level TEXT,
+            week_label TEXT, content TEXT, created_at TEXT
+        )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS fee_ledger (
+            id SERIAL PRIMARY KEY, student_id TEXT, student_name TEXT, class_level TEXT,
+            amount REAL, paid REAL DEFAULT 0, description TEXT, status TEXT DEFAULT 'unpaid',
+            created_at TEXT, updated_at TEXT
+        )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS timetable (
+            id SERIAL PRIMARY KEY, class_level TEXT, day_of_week TEXT,
+            period_no INTEGER, subject TEXT, teacher_name TEXT, room TEXT
+        )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS announcements (
+            id SERIAL PRIMARY KEY, title TEXT, body TEXT, audience TEXT DEFAULT 'ALL',
+            created_by TEXT, created_at TEXT
+        )`);
+
+
         let tRes = await pool.query("SELECT COUNT(*) as count FROM teachers");
         if (tRes.rows[0].count == 0) {
             let hashedPass = bcrypt.hashSync('5829', 10);
@@ -1535,6 +1574,7 @@ app.get('/admin/approve/:id', (req, res) => {
         db.run(`INSERT INTO students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo, status, admin_message) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [st.student_id, st.password, st.name, st.mother_name, st.gender, st.age, st.phone, st.emergency_phone, st.region, st.zone, st.woreda, st.kebele, st.class_level, st.payment_type, st.bank_slip_val, st.photo, 'Approved', '🎉 Your registration is approved!'], () => {
             logActivity('Admin', 'Director', 'APPROVE_STUDENT', st.student_id + ' ' + (st.name||''));
+            if (st.phone || st.emergency_phone) { db.run(`INSERT INTO sms_logs (recipient_phone, recipient_name, message, channel, status, created_at) VALUES (?,?,?,?,?,?)`, [st.emergency_phone || st.phone, st.name, 'ALLS: Registration approved. You can login now. ID: '+st.student_id, 'sms', 'queued', getFormattedTimestamp()]); }
             db.run(`DELETE FROM pending_students WHERE id = ?`, [req.params.id], () => res.redirect('/admin#pending-approvals'));
         });
     });
@@ -2915,6 +2955,340 @@ app.get('/api/activity-log', (req, res) => {
     db.all(`SELECT * FROM activity_log ORDER BY id DESC LIMIT 50`, [], (err, rows) => {
         res.json({ rows: rows || [] });
     });
+});
+
+
+// ================= LEARNING HUB FEATURES 1-15 =================
+
+// 12 Announcements board
+app.get('/api/announcements', (req, res) => {
+    db.all(`SELECT * FROM announcements ORDER BY id DESC LIMIT 30`, [], (e, rows) => res.json({ rows: rows || [] }));
+});
+app.post('/admin/announcement', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    const { title, body, audience } = req.body;
+    db.run(`INSERT INTO announcements (title, body, audience, created_by, created_at) VALUES (?,?,?,?,?)`,
+        [title || '', body || '', audience || 'ALL', 'Admin', getFormattedTimestamp()],
+        () => { logActivity('Admin','Director','ANNOUNCEMENT', title||''); res.redirect('/admin#announcements'); });
+});
+
+// 2 Digital library
+app.post('/library/upload', upload.single('file'), (req, res) => {
+    if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
+    const { title, category, class_level } = req.body;
+    const file = req.file ? req.file.filename : '';
+    const by = req.session.isAdmin ? 'Admin' : (req.session.teacherId || 'Teacher');
+    db.run(`INSERT INTO library_items (title, category, class_level, file_path, uploaded_by, created_at) VALUES (?,?,?,?,?,?)`,
+        [title || 'Resource', category || 'General', class_level || 'ALL', file, by, getFormattedTimestamp()],
+        () => res.redirect(req.get('Referer') || '/admin'));
+});
+app.get('/api/library', (req, res) => {
+    db.all(`SELECT * FROM library_items ORDER BY id DESC LIMIT 100`, [], (e, rows) => res.json({ rows: rows || [] }));
+});
+
+// 1 Homework
+app.post('/teacher/homework', (req, res) => {
+    if (!req.session.teacherId) return res.redirect('/');
+    const { title, description, due_date, class_level } = req.body;
+    db.get(`SELECT name FROM teachers WHERE id=?`, [req.session.teacherId], (e, t) => {
+        db.run(`INSERT INTO homework (teacher_id, teacher_name, class_level, title, description, due_date, created_at) VALUES (?,?,?,?,?,?,?)`,
+            [req.session.teacherId, t ? t.name : '', class_level || '', title || '', description || '', due_date || '', getFormattedTimestamp()],
+            () => res.redirect('/teacher-dashboard#homework'));
+    });
+});
+app.post('/student/homework-submit', upload.single('file'), (req, res) => {
+    if (!req.session.studentId) return res.redirect('/');
+    const { homework_id, note } = req.body;
+    const file = req.file ? req.file.filename : '';
+    db.get(`SELECT name FROM students WHERE student_id=?`, [req.session.studentId], (e, s) => {
+        db.run(`INSERT INTO homework_submissions (homework_id, student_id, student_name, file_path, note, status, created_at) VALUES (?,?,?,?,?,?,?)`,
+            [homework_id, req.session.studentId, s ? s.name : '', file, note || '', 'submitted', getFormattedTimestamp()],
+            () => res.redirect('/student-dashboard#homework'));
+    });
+});
+app.get('/api/homework', (req, res) => {
+    const cls = req.query.class || '';
+    db.all(`SELECT * FROM homework ORDER BY id DESC LIMIT 50`, [], (e, rows) => {
+        rows = rows || [];
+        if (cls) rows = rows.filter(h => !h.class_level || h.class_level === 'ALL' || String(h.class_level).includes(cls) || isClassMatch(h.class_level, cls));
+        res.json({ rows });
+    });
+});
+
+// 3 Online Quiz
+app.post('/teacher/quiz', (req, res) => {
+    if (!req.session.teacherId) return res.redirect('/');
+    const { title, class_level, q1, a1, q2, a2, q3, a3 } = req.body;
+    const questions = [
+        { q: q1 || '', a: (a1 || '').toLowerCase().trim() },
+        { q: q2 || '', a: (a2 || '').toLowerCase().trim() },
+        { q: q3 || '', a: (a3 || '').toLowerCase().trim() }
+    ].filter(x => x.q);
+    db.get(`SELECT name FROM teachers WHERE id=?`, [req.session.teacherId], (e, t) => {
+        db.run(`INSERT INTO quizzes (teacher_id, teacher_name, class_level, title, questions_json, created_at) VALUES (?,?,?,?,?,?)`,
+            [req.session.teacherId, t ? t.name : '', class_level || '', title || 'Quiz', JSON.stringify(questions), getFormattedTimestamp()],
+            () => res.redirect('/teacher-dashboard#quiz'));
+    });
+});
+app.get('/api/quizzes', (req, res) => {
+    db.all(`SELECT id, teacher_name, class_level, title, questions_json, created_at FROM quizzes ORDER BY id DESC LIMIT 30`, [], (e, rows) => {
+        res.json({ rows: (rows || []).map(r => ({ ...r, questions: JSON.parse(r.questions_json || '[]').map(q => ({ q: q.q })) })) });
+    });
+});
+app.post('/student/quiz-attempt', (req, res) => {
+    if (!req.session.studentId) return res.json({ success: false });
+    const { quiz_id, answers } = req.body;
+    db.get(`SELECT * FROM quizzes WHERE id=?`, [quiz_id], (e, quiz) => {
+        if (!quiz) return res.json({ success: false });
+        const qs = JSON.parse(quiz.questions_json || '[]');
+        const ans = answers || [];
+        let score = 0;
+        qs.forEach((q, i) => { if (String(ans[i] || '').toLowerCase().trim() === q.a) score++; });
+        db.get(`SELECT name FROM students WHERE student_id=?`, [req.session.studentId], (e2, s) => {
+            db.run(`INSERT INTO quiz_attempts (quiz_id, student_id, student_name, answers_json, score, total, created_at) VALUES (?,?,?,?,?,?,?)`,
+                [quiz_id, req.session.studentId, s ? s.name : '', JSON.stringify(ans), score, qs.length, getFormattedTimestamp()],
+                () => res.json({ success: true, score, total: qs.length }));
+        });
+    });
+});
+
+// 5 Lesson plan
+app.post('/teacher/lesson-plan', (req, res) => {
+    if (!req.session.teacherId) return res.redirect('/');
+    const { class_level, week_label, content } = req.body;
+    db.get(`SELECT name FROM teachers WHERE id=?`, [req.session.teacherId], (e, t) => {
+        db.run(`INSERT INTO lesson_plans (teacher_id, teacher_name, class_level, week_label, content, created_at) VALUES (?,?,?,?,?,?)`,
+            [req.session.teacherId, t ? t.name : '', class_level || '', week_label || '', content || '', getFormattedTimestamp()],
+            () => res.redirect('/teacher-dashboard#lesson'));
+    });
+});
+app.get('/api/lesson-plans', (req, res) => {
+    db.all(`SELECT * FROM lesson_plans ORDER BY id DESC LIMIT 40`, [], (e, rows) => res.json({ rows: rows || [] }));
+});
+
+// 6 Bulk grade import CSV: student_id,quiz,assignment,project,mid,final
+app.post('/teacher/bulk-grades', upload.single('csv'), (req, res) => {
+    if (!req.session.teacherId) return res.redirect('/');
+    const courseCode = req.body.course_code || 'GEN';
+    const courseTitle = req.body.course_title || 'Course';
+    if (!req.file) return res.redirect('/teacher-dashboard');
+    const fs = require('fs');
+    const raw = fs.readFileSync(req.file.path, 'utf8');
+    const lines = raw.split(/\r?\n/).filter(Boolean);
+    let i = 0;
+    const processNext = () => {
+        if (i >= lines.length) return res.redirect('/teacher-dashboard#grades');
+        const line = lines[i++];
+        if (line.toLowerCase().startsWith('student')) return processNext();
+        const p = line.split(',').map(s => s.trim());
+        if (p.length < 2) return processNext();
+        const student_id = p[0];
+        const quiz = parseFloat(p[1]) || 0, assignment = parseFloat(p[2]) || 0, project = parseFloat(p[3]) || 0;
+        const mid = parseFloat(p[4]) || 0, fin = parseFloat(p[5]) || 0;
+        const total = quiz + assignment + project + mid + fin;
+        db.get(`SELECT id FROM course_assessments WHERE student_id=? AND course_code=?`, [student_id, courseCode], (e, row) => {
+            if (row) {
+                db.run(`UPDATE course_assessments SET quiz=?,assignment=?,project=?,mid=?,final=?,total=?,teacher_id=? WHERE id=?`,
+                    [quiz, assignment, project, mid, fin, total, req.session.teacherId, row.id], processNext);
+            } else {
+                db.run(`INSERT INTO course_assessments (student_id,teacher_id,course_code,course_title,quiz,assignment,project,mid,final,total,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+                    [student_id, req.session.teacherId, courseCode, courseTitle, quiz, assignment, project, mid, fin, total, total >= 50 ? 'Pass' : 'Fail'], processNext);
+            }
+        });
+    };
+    processNext();
+});
+
+// 9 Fee ledger
+app.post('/admin/fee', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    const { student_id, amount, paid, description } = req.body;
+    db.get(`SELECT name, class_level FROM students WHERE student_id=?`, [student_id], (e, s) => {
+        const amt = parseFloat(amount) || 0, pd = parseFloat(paid) || 0;
+        const status = pd >= amt ? 'paid' : (pd > 0 ? 'partial' : 'unpaid');
+        db.run(`INSERT INTO fee_ledger (student_id, student_name, class_level, amount, paid, description, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)`,
+            [student_id, s ? s.name : '', s ? s.class_level : '', amt, pd, description || '', status, getFormattedTimestamp(), getFormattedTimestamp()],
+            () => res.redirect('/admin#fees'));
+    });
+});
+app.get('/api/fees', (req, res) => {
+    const sid = req.query.student_id;
+    if (sid) {
+        db.all(`SELECT * FROM fee_ledger WHERE student_id=? ORDER BY id DESC`, [sid], (e, rows) => res.json({ rows: rows || [] }));
+    } else {
+        if (!req.session.isAdmin) return res.status(401).json({ rows: [] });
+        db.all(`SELECT * FROM fee_ledger ORDER BY id DESC LIMIT 100`, [], (e, rows) => res.json({ rows: rows || [] }));
+    }
+});
+
+// 10 Timetable
+app.post('/admin/timetable', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    const { class_level, day_of_week, period_no, subject, teacher_name, room } = req.body;
+    db.run(`INSERT INTO timetable (class_level, day_of_week, period_no, subject, teacher_name, room) VALUES (?,?,?,?,?,?)`,
+        [class_level || '', day_of_week || '', parseInt(period_no) || 1, subject || '', teacher_name || '', room || ''],
+        () => res.redirect('/admin#timetable'));
+});
+app.get('/api/timetable', (req, res) => {
+    const cls = req.query.class || '';
+    db.all(`SELECT * FROM timetable ORDER BY day_of_week, period_no`, [], (e, rows) => {
+        rows = rows || [];
+        if (cls) rows = rows.filter(r => !r.class_level || r.class_level === cls || isClassMatch(r.class_level, cls));
+        res.json({ rows });
+    });
+});
+
+// 11 Report card PDF
+app.get('/report-card/:studentId', (req, res) => {
+    if (!req.session.isAdmin && !req.session.teacherId && req.session.studentId !== req.params.studentId && req.session.parentStudentId !== req.params.studentId) {
+        return res.redirect('/');
+    }
+    const sid = req.params.studentId;
+    db.get(`SELECT * FROM students WHERE student_id=?`, [sid], (e, st) => {
+        if (!st) return res.status(404).send('Not found');
+        db.all(`SELECT * FROM course_assessments WHERE student_id=?`, [sid], (e2, grades) => {
+            grades = grades || [];
+            const doc = new PDFDocument({ margin: 50 });
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename=ReportCard_${sid}.pdf`);
+            doc.pipe(res);
+            doc.fontSize(18).text('AMANUEL LIGHT & LIFE SCHOOL', { align: 'center' });
+            doc.fontSize(14).text('Student Report Card', { align: 'center' });
+            doc.moveDown();
+            doc.fontSize(11).text(`Name: ${st.name}`);
+            doc.text(`ID: ${st.student_id}   Class: ${st.class_level || ''}`);
+            doc.text(`Date: ${getFormattedTimestamp()}`);
+            doc.moveDown();
+            doc.fontSize(10).text('Course                          Q    A    P    Mid  Fin  Total');
+            doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke();
+            grades.forEach(g => {
+                const line = `${(g.course_code||'').padEnd(12)} ${(g.course_title||'').substring(0,18).padEnd(18)} ${g.quiz||0}  ${g.assignment||0}  ${g.project||0}  ${g.mid||0}  ${g.final||0}  ${g.total||0}`;
+                doc.text(line);
+            });
+            if (!grades.length) doc.text('No grades recorded yet.');
+            doc.moveDown(2);
+            doc.text('Director signature: ____________________', { align: 'left' });
+            doc.end();
+        });
+    });
+});
+
+// 14 Backup export
+app.get('/admin/backup-export', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    const out = {};
+    const tables = ['students', 'teachers', 'courses', 'sections', 'course_assessments', 'notifications', 'fee_ledger', 'timetable', 'announcements'];
+    let i = 0;
+    const next = () => {
+        if (i >= tables.length) {
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Content-Disposition', 'attachment; filename=alls_backup.json');
+            return res.send(JSON.stringify(out, null, 2));
+        }
+        const t = tables[i++];
+        db.all(`SELECT * FROM ${t}`, [], (e, rows) => { out[t] = rows || []; next(); });
+    };
+    next();
+});
+
+// 8 SMS trigger helper already exists - fire on approve
+// (hook already can use logActivity; enhance approve)
+
+// 4 Progress data API for charts
+app.get('/api/student-progress/:id', (req, res) => {
+    const sid = req.params.id;
+    if (!req.session.isAdmin && !req.session.teacherId && req.session.studentId !== sid && req.session.parentStudentId !== sid) {
+        return res.status(401).json({ labels: [], data: [] });
+    }
+    db.all(`SELECT course_code, total FROM course_assessments WHERE student_id=?`, [sid], (e, rows) => {
+        rows = rows || [];
+        res.json({ labels: rows.map(r => r.course_code || ''), data: rows.map(r => Number(r.total) || 0) });
+    });
+});
+
+// Learning hub page (shared)
+app.get('/learning-hub', (req, res) => {
+    if (!req.session.isAdmin && !req.session.teacherId && !req.session.studentId && !req.session.parentStudentId) return res.redirect('/');
+    res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Learning Hub - ALLS</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+body{font-family:Segoe UI,sans-serif;background:#eef2f5;margin:0;padding:16px;color:#333}
+.wrap{max-width:960px;margin:auto}
+.card{background:#fff;border-radius:12px;padding:18px;margin-bottom:16px;box-shadow:0 4px 12px rgba(0,0,0,.06);border-top:4px solid #2980b9}
+h2{color:#1f4e79;margin-top:0}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{border:1px solid #e0e0e0;padding:8px;text-align:left}
+th{background:#1f4e79;color:#fff}
+input,select,textarea,button{padding:8px;margin:4px 0;border-radius:6px;border:1px solid #ccc;width:100%;box-sizing:border-box}
+button{background:#2980b9;color:#fff;border:none;font-weight:bold;cursor:pointer}
+.tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.tabs button{width:auto;padding:8px 14px;background:#64748b}
+.tabs button.on{background:#1f4e79}
+.hidden{display:none}
+a{color:#2980b9}
+</style></head><body><div class="wrap">
+<h2>📚 Learning Hub / የትምህርት ማዕከል</h2>
+<p><a href="javascript:history.back()">⬅️ Back</a></p>
+<div class="tabs">
+<button type="button" class="on" data-t="ann">📢 Announcements</button>
+<button type="button" data-t="lib">📖 Library</button>
+<button type="button" data-t="hw">📝 Homework</button>
+<button type="button" data-t="quiz">❓ Quiz</button>
+<button type="button" data-t="tt">📅 Timetable</button>
+<button type="button" data-t="prog">📈 Progress</button>
+</div>
+<div class="card panel" id="ann"><h3>Announcements</h3><div id="annList">Loading...</div></div>
+<div class="card panel hidden" id="lib"><h3>Digital Library</h3><div id="libList">Loading...</div></div>
+<div class="card panel hidden" id="hw"><h3>Homework</h3><div id="hwList">Loading...</div></div>
+<div class="card panel hidden" id="quiz"><h3>Quizzes</h3><div id="quizList">Loading...</div></div>
+<div class="card panel hidden" id="tt"><h3>Timetable</h3><div id="ttList">Loading...</div></div>
+<div class="card panel hidden" id="prog"><h3>Progress</h3><canvas id="progChart" height="180"></canvas></div>
+</div>
+<script>
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');
+  document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));
+  document.getElementById(b.dataset.t).classList.remove('hidden');
+});
+fetch('/api/announcements').then(r=>r.json()).then(d=>{
+  document.getElementById('annList').innerHTML=(d.rows||[]).map(a=>'<div style="border-bottom:1px solid #eee;padding:8px 0"><b>'+a.title+'</b><br><small>'+a.created_at+'</small><p>'+a.body+'</p></div>').join('')||'No announcements';
+});
+fetch('/api/library').then(r=>r.json()).then(d=>{
+  document.getElementById('libList').innerHTML=(d.rows||[]).map(i=>'<div style="padding:8px 0;border-bottom:1px solid #eee"><b>'+i.title+'</b> ('+(i.category||'')+') — '+(i.class_level||'')+'<br>'+(i.file_path?'<a href="/uploads/'+i.file_path+'" target="_blank">Download</a>':'')+'</div>').join('')||'Empty library';
+});
+fetch('/api/homework').then(r=>r.json()).then(d=>{
+  document.getElementById('hwList').innerHTML=(d.rows||[]).map(h=>'<div style="padding:8px 0;border-bottom:1px solid #eee"><b>'+h.title+'</b> — '+h.class_level+'<br>'+h.description+'<br><small>Due: '+(h.due_date||'-')+' | '+h.teacher_name+'</small></div>').join('')||'No homework';
+});
+fetch('/api/quizzes').then(r=>r.json()).then(d=>{
+  const box=document.getElementById('quizList');
+  box.innerHTML=(d.rows||[]).map(q=>{
+    const qs=q.questions||[];
+    return '<div style="padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:10px"><b>'+q.title+'</b> ('+q.class_level+')<form onsubmit="return takeQuiz(event,'+q.id+','+qs.length+')">'
+      +qs.map((qq,i)=>'<label>'+qq.q+'<input name="a'+i+'" required></label>').join('')
+      +'<button type="submit">Submit Quiz</button></form><div id="qres'+q.id+'"></div></div>';
+  }).join('')||'No quizzes';
+});
+function takeQuiz(e,id,n){
+  e.preventDefault();
+  const fd=new FormData(e.target);
+  const answers=[]; for(let i=0;i<n;i++) answers.push(fd.get('a'+i));
+  fetch('/student/quiz-attempt',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({quiz_id:id,answers})})
+    .then(r=>r.json()).then(d=>{ document.getElementById('qres'+id).textContent=d.success?('Score: '+d.score+'/'+d.total):'Error'; });
+  return false;
+}
+fetch('/api/timetable').then(r=>r.json()).then(d=>{
+  document.getElementById('ttList').innerHTML='<table><tr><th>Day</th><th>Period</th><th>Subject</th><th>Teacher</th><th>Room</th><th>Class</th></tr>'
+    +(d.rows||[]).map(r=>'<tr><td>'+r.day_of_week+'</td><td>'+r.period_no+'</td><td>'+r.subject+'</td><td>'+r.teacher_name+'</td><td>'+r.room+'</td><td>'+r.class_level+'</td></tr>').join('')
+    +'</table>';
+});
+const sid=document.cookie; // progress loaded if student session via separate call
+fetch('/api/student-progress/'+encodeURIComponent((window.STUDENT_ID||''))).then(r=>r.json()).then(d=>{
+  if(!d.labels||!d.labels.length) return;
+  new Chart(document.getElementById('progChart'),{type:'bar',data:{labels:d.labels,datasets:[{label:'Total',data:d.data,backgroundColor:'#2980b9'}]},options:{scales:{y:{beginAtZero:true,max:100}}}});
+}).catch(()=>{});
+</script></body></html>`);
 });
 
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
