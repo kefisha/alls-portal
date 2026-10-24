@@ -328,7 +328,34 @@
                 <a href="/learning-hub" style="background:#1f4e79;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📚 Learning Hub</a>
                 <a href="/qr-scan" style="background:#e67e22;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📷 QR Attendance</a>
                 <a href="/admin/backup-export" style="background:#27ae60;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📦 Full Backup (JSON)</a>
+                <a href="/admin/attendance-report" style="background:#0f766e;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📋 Attendance Report</a>
+                <a href="/admin/certificate" style="background:#a16207;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">🎓 Certificate</a>
+                <a href="#examSchedule" onclick="openAdminPanel && openAdminPanel('examSchedule')" style="background:#7c3aed;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📝 Exam Schedule</a>
+                <a href="#restoreBackup" onclick="openAdminPanel && openAdminPanel('restoreBackup')" style="background:#b91c1c;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">♻️ Restore Backup</a>
             </div>
+        </div>
+
+        
+        <div class="card admin-tools-panel" id="examSchedule">
+            <h3>📝 Exam Schedule</h3>
+            <form action="/admin/exam-schedule" method="POST">
+                <input type="text" name="class_level" placeholder="Class e.g. Grade 8A" required>
+                <input type="text" name="subject" placeholder="Subject" required>
+                <input type="date" name="exam_date" required>
+                <input type="text" name="exam_time" placeholder="Time e.g. 9:00 AM">
+                <input type="text" name="room" placeholder="Room">
+                <input type="text" name="notes" placeholder="Notes">
+                <button type="submit" class="btn-green">➕ Add Exam</button>
+            </form>
+            <div id="examList" style="margin-top:12px;font-size:13px;"></div>
+        </div>
+        <div class="card admin-tools-panel" id="restoreBackup">
+            <h3>♻️ Restore from Backup</h3>
+            <p style="font-size:13px;color:#b91c1c;"><b>Warning:</b> Restores data from a JSON backup file (best-effort insert).</p>
+            <form action="/admin/backup-restore" method="POST" enctype="multipart/form-data">
+                <input type="file" name="backup" accept=".json,application/json" required>
+                <button type="submit" style="background:#b91c1c;color:#fff;">♻️ Restore</button>
+            </form>
         </div>
 
         <!-- Activity Log -->
@@ -1085,6 +1112,13 @@
         };
         // Build empty grid on page load so cells are visible
         window.buildTTGrid({});
+        fetch('/api/exam-schedule').then(r=>r.json()).then(d=>{
+            var el=document.getElementById('examList');
+            if(!el) return;
+            el.innerHTML='<table style="font-size:12px;width:100%"><tr><th>Date</th><th>Time</th><th>Class</th><th>Subject</th><th>Room</th></tr>'
+              +(d.rows||[]).map(function(x){return '<tr><td>'+(x.exam_date||'')+'</td><td>'+(x.exam_time||'')+'</td><td>'+(x.class_level||'')+'</td><td>'+(x.subject||'')+'</td><td>'+(x.room||'')+'</td></tr>';}).join('')
+              +'</table>';
+        }).catch(function(){});
 
         // Report card: name search → select → then open
         (function(){
@@ -1150,13 +1184,13 @@
                 el.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
         }
-        document.querySelectorAll('a[href="#timetable"], a[href="#fees"], a[href="#librarySection"]').forEach(function(a) {
+        document.querySelectorAll('a[href="#timetable"], a[href="#fees"], a[href="#librarySection"], a[href="#examSchedule"], a[href="#restoreBackup"]').forEach(function(a) {
             a.addEventListener('click', function(e) {
                 var id = (a.getAttribute('href') || '').replace('#','');
                 if (id) { e.preventDefault(); openAdminPanel(id); history.replaceState(null,'','#'+id); }
             });
         });
-        if (location.hash === '#timetable' || location.hash === '#fees' || location.hash === '#librarySection') {
+        if (['#timetable','#fees','#librarySection','#examSchedule','#restoreBackup'].indexOf(location.hash) !== -1) {
             openAdminPanel(location.hash.replace('#',''));
         }
 
