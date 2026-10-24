@@ -3056,15 +3056,15 @@ app.get('/api/homework', (req, res) => {
 });
 
 // 3 Online Quiz — Telegram-style (one-by-one) + formulas + answer description
-app.post('/teacher/quiz', (req, res) => {
+app.post('/teacher/quiz', upload.any(), (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
     // questions_json can be sent as JSON string from multi-question builder
     let questions = [];
     try {
         if (req.body.questions_json) {
+            // Raw JSON — do NOT run xss on formulas/symbols (∫ ∑ √ ² × etc.)
             questions = JSON.parse(req.body.questions_json);
         } else {
-            // fallback q1..q20 style
             for (let i = 1; i <= 20; i++) {
                 const q = req.body['q' + i];
                 const a = req.body['a' + i];
@@ -3074,13 +3074,42 @@ app.post('/teacher/quiz', (req, res) => {
                         q: String(q),
                         a: String(a || '').trim(),
                         desc: String(d || ''),
-                        // keep original casing for symbols; compare case-insensitive later
+                        options: {
+                            A: req.body['oA' + i] || '',
+                            B: req.body['oB' + i] || '',
+                            C: req.body['oC' + i] || '',
+                            D: req.body['oD' + i] || ''
+                        },
+                        type: 'mcq'
                     });
                 }
             }
         }
     } catch (e) { questions = []; }
-    questions = (questions || []).filter(x => x && x.q);
+    // Keep every character; only require non-empty question text
+    questions = (questions || []).filter(x => x && String(x.q || '').length > 0).map(x => ({
+        q: String(x.q == null ? '' : x.q),
+        a: String(x.a == null ? '' : x.a).trim(),
+        desc: String(x.desc == null ? '' : x.desc),
+        type: x.type || (x.options ? 'mcq' : 'text'),
+        options: x.options ? {
+            A: String(x.options.A == null ? '' : x.options.A),
+            B: String(x.options.B == null ? '' : x.options.B),
+            C: String(x.options.C == null ? '' : x.options.C),
+            D: String(x.options.D == null ? '' : x.options.D)
+        } : null
+    }));
+    // Attach uploaded images to questions
+    const files = req.files || [];
+    const fileMap = {};
+    files.forEach(f => { fileMap[f.fieldname] = f.filename; });
+    questions = questions.map(q => {
+        if (q.imageField && fileMap[q.imageField]) {
+            q.image = fileMap[q.imageField];
+        }
+        delete q.imageField;
+        return q;
+    });
     if (!questions.length) return res.redirect('/teacher-dashboard#quiz');
     const title = req.body.title || 'Quiz';
     const class_level = req.body.class_level || '';
@@ -3119,7 +3148,8 @@ app.get('/api/quiz/:id', (req, res) => {
             questions: qs.map(q => ({
                 q: q.q,
                 type: q.type || (q.options ? 'mcq' : 'text'),
-                options: q.options || null
+                options: q.options || null,
+                image: q.image || null
             }))
         });
     });
@@ -3217,11 +3247,18 @@ function showQ(){
   } else {
     optsHtml='<input type="text" id="ans" placeholder="Your answer..." style="width:100%;padding:14px;border:2px solid #cbd5e1;border-radius:10px;font-size:16px;box-sizing:border-box;">';
   }
-  app.innerHTML='<h2 id="title"></h2><div class="meta">Question '+(idx+1)+' / '+questions.length+'</div><div class="progress"><div class="bar" style="width:'+pct+'%"></div></div><div class="qbox" id="qtext"></div>'+optsHtml+'<button type="button" id="nextBtn" disabled>'+(idx===questions.length-1?'Finish ✅':'Next ➡️')+'</button><button type="button" class="sec" onclick="location.href=\\'/learning-hub\\'">Exit</button>';
+  var imgHtml=q.image?('<img src="/uploads/'+q.image+'" style="max-width:100%;border-radius:8px;margin-bottom:10px;">'):'';
+  app.innerHTML='<h2 id="title"></h2><div class="meta">Question '+(idx+1)+' / '+questions.length+'</div><div class="progress"><div class="bar" style="width:'+pct+'%"></div></div>'+imgHtml+'<div class="qbox" id="qtext"></div>'+optsHtml+'<button type="button" id="nextBtn" disabled>'+(idx===questions.length-1?'Finish ✅':'Next ➡️')+'</button><button type="button" class="sec" onclick="location.href=\\'/learning-hub\\'">Exit</button>';
   document.getElementById('title').textContent=window._quizTitle||'Quiz';
   const qt=document.getElementById('qtext');
-  qt.textContent=q.q||'';
-  renderMath(qt);
+  var qraw=q.q||'';
+  if(qraw && qraw.indexOf('$')===-1 && /\\(lim|frac|sum|int|sqrt|to)/.test(qraw)){
+    try{ if(window.katex){ katex.render(qraw, qt, {throwOnError:false, displayMode:true}); } else { qt.textContent=qraw; renderMath(qt); } }
+    catch(e){ qt.textContent=qraw; renderMath(qt); }
+  } else {
+    qt.textContent=qraw;
+    renderMath(qt);
+  }
   if(q.options){
     const buttons=app.querySelectorAll('.opt');
     let oi=0;
