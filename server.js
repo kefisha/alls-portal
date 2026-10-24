@@ -871,24 +871,12 @@ app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 },
     try {
         let { name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, year_level, payment_type, txn_id } = req.body;
         name = xss(name); mother_name = xss(mother_name); phone = xss(phone);
-        const normPhone = (p) => String(p || '').replace(/[\s\-\(\)]/g, '').replace(/^\+251/, '0');
-        const pCheck = normPhone(phone);
+        // Family fields may match siblings (mother, emergency phone, etc.) — ALLOWED.
+        // Each child gets unique student_id + PIN. Full form goes to admin pending.
 
-        // Prevent double registration (same phone or same name+mother in students or pending)
-        db.get(`SELECT student_id FROM students WHERE REPLACE(REPLACE(phone,' ',''),'+251','0') = ? OR (LOWER(name)=LOWER(?) AND LOWER(COALESCE(mother_name,''))=LOWER(?)) LIMIT 1`,
-            [pCheck, name, mother_name || ''], (e1, existSt) => {
-            if (existSt) {
-                return res.send(`<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:40px;"><h2 style="color:#c0392b;">❌ አስቀድሞ ተመዝግበዋል</h2><p>This student is already registered (ID: ${existSt.student_id}).</p><a href="/">Back</a></body></html>`);
-            }
-            db.get(`SELECT student_id FROM pending_students WHERE REPLACE(REPLACE(phone,' ',''),'+251','0') = ? OR (LOWER(name)=LOWER(?) AND LOWER(COALESCE(mother_name,''))=LOWER(?)) LIMIT 1`,
-                [pCheck, name, mother_name || ''], (e2, existP) => {
-                if (existP) {
-                    return res.send(`<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:40px;"><h2 style="color:#c0392b;">❌ በመጠባበቅ ላይ ነው</h2><p>Already pending approval (ID: ${existP.student_id}). Wait for director.</p><a href="/">Back</a></body></html>`);
-                }
-
-        let autoID = generateStudentID(); 
+        let autoID = generateStudentID();
         let autoPIN = generateStrong4DigitPIN();
-        let hashedPIN = bcrypt.hashSync(autoPIN, 10); 
+        let hashedPIN = bcrypt.hashSync(autoPIN, 10);
 
         assignClassSection(year_level || 'Grade 1', (assignedSection) => {
             let photoPath = (req.files && req.files['student_photo']) ? req.files['student_photo'][0].filename : '';
@@ -902,15 +890,15 @@ app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 },
             db.run(`INSERT INTO pending_students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
             [autoID, hashedPIN, name, mother_name || '', gender || '', age || null, phone || '', emergency_phone || '', region || '', zone || '', woreda || '', kebele || '', assignedSection, payment_type, slipPath, photoPath], function(err) {
                 if (err) return res.redirect(`/student-register?lang=${lang}&error=db`);
-                res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gradient-to-br from-blue-900 to-slate-900 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md text-center border-t-8 border-amber-500"><h2 class="text-2xl font-bold text-green-600 mb-2">ምዝገባ ተልኳል (Pending)</h2><p class="text-gray-600 text-sm mb-2">የክፍያ transaction/ደረሰኝ ወደ ዳይሬክተር ተልኳል።</p><p class="text-amber-700 text-sm font-bold mb-6">⚠️ ዳይሬክተር ክፍያ እስኪያረጋግጥ ድረስ Registered አይደሉም — Login አይችሉም። ID እና PIN ይያዙ፦</p><div class="bg-slate-50 p-5 rounded-xl border-2 border-blue-100 mb-6 space-y-4"><div><div class="text-xs text-gray-500 font-bold uppercase">መታወቂያ / ID</div><div class="text-3xl font-extrabold text-blue-700 tracking-wide">${autoID}</div></div><div><div class="text-xs text-gray-500 font-bold uppercase">የይለፍ ቃል / PIN</div><div class="text-3xl font-extrabold text-red-600 tracking-widest">${autoPIN}</div></div></div><a href="/?lang=${lang}" class="block w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 rounded-xl">⬅️ ወደ መግቢያ ተመለስ</a></div></body></html>`);
-            });
-        });
+                // Only ID + PIN shown to registrant; full data is for admin
+                res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gradient-to-br from-blue-900 to-slate-900 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md text-center border-t-8 border-amber-500"><h2 class="text-2xl font-bold text-green-600 mb-2">ምዝገባ ተልኳል (Pending)</h2><p class="text-gray-600 text-sm mb-2">ሙሉ መረጃ ወደ አድሚን ተልኳል። የክፍያ transaction/ደረሰኝ ዳይሬክተር ያረጋግጣል።</p><p class="text-amber-700 text-sm font-bold mb-6">⚠️ እስከ approval ድረስ Login አይችሉም። <u>ID እና PIN ብቻ</u> ይያዙ፦</p><div class="bg-slate-50 p-5 rounded-xl border-2 border-blue-100 mb-6 space-y-4"><div><div class="text-xs text-gray-500 font-bold uppercase">መታወቂያ / ID</div><div class="text-3xl font-extrabold text-blue-700 tracking-wide">${autoID}</div></div><div><div class="text-xs text-gray-500 font-bold uppercase">የይለፍ ቃል / PIN</div><div class="text-3xl font-extrabold text-red-600 tracking-widest">${autoPIN}</div></div></div><a href="/?lang=${lang}" class="block w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 rounded-xl">⬅️ ወደ መግቢያ ተመለስ</a></div></body></html>`);
             });
         });
     } catch (error) {
         res.redirect(`/student-register?lang=${lang}&error=db`);
     }
 });
+
 
 app.post('/register-student', upload.single('bank_slip'), (req, res) => {
     const { name, mother_name, gender, phone, class_level, region, zone, woreda, kebele, emergency_name, emergency_phone, transaction_id, txn_id, payment_type } = req.body;
