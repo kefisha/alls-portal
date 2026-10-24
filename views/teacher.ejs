@@ -93,7 +93,7 @@
             <button type="submit">📝 Assign Homework</button>
         </form>
         <form id="quizBuilderForm" action="/teacher/quiz" method="POST" style="margin-bottom:14px;border-top:1px solid #ddd;padding-top:12px;">
-            <p style="font-size:12px;color:#666;">Telegram-style quiz · Formulas: use $x^2$ or $$\\frac{a}{b}$$ · Copy-paste OK · Symbols preserved</p>
+            <p style="font-size:12px;color:#666;">A–D choices · <b>Copy-paste from Word/PDF/web keeps symbols</b> (∫ ∑ √ ² × ÷ ≤ → sin cos) · Formulas also OK as $...$</p>
             <input type="text" name="title" placeholder="Quiz title" required>
             <input type="text" name="class_level" placeholder="Class" value="<%= typeof selectedClass !== 'undefined' ? selectedClass : '' %>">
             <input type="hidden" name="questions_json" id="questionsJson">
@@ -101,27 +101,85 @@
             <button type="button" onclick="addQuizQuestion()" style="background:#8e44ad;margin-top:8px;">➕ Add Question</button>
             <button type="submit" style="margin-top:8px;">❓ Publish Quiz</button>
         </form>
+        <style>
+            .quiz-paste {
+                width: 100%;
+                box-sizing: border-box;
+                font-family: "Segoe UI", "Noto Sans", "Noto Sans Math", "Cambria Math", "DejaVu Sans", sans-serif;
+                font-size: 15px;
+                line-height: 1.5;
+                white-space: pre-wrap;
+                word-break: break-word;
+                unicode-bidi: plaintext;
+            }
+        </style>
         <script>
         (function(){
+            // Paste as raw text — keep every symbol/formula character unchanged
+            function bindPreservePaste(el) {
+                if (!el || el._pasteBound) return;
+                el._pasteBound = true;
+                el.addEventListener('paste', function(e) {
+                    e.preventDefault();
+                    var cd = (e.clipboardData || window.clipboardData);
+                    if (!cd) return;
+                    // Prefer plain text (preserves Unicode math from Word/PDF)
+                    var text = cd.getData('text/plain');
+                    if (text == null || text === '') {
+                        // Fallback: strip tags from HTML but keep text content
+                        var html = cd.getData('text/html') || '';
+                        if (html) {
+                            var tmp = document.createElement('div');
+                            tmp.innerHTML = html;
+                            text = tmp.innerText || tmp.textContent || '';
+                        }
+                    }
+                    // Normalize only newlines; do NOT alter symbols
+                    text = String(text).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+                    var start = el.selectionStart, end = el.selectionEnd;
+                    var val = el.value || '';
+                    el.value = val.slice(0, start) + text + val.slice(end);
+                    var pos = start + text.length;
+                    el.selectionStart = el.selectionEnd = pos;
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                });
+            }
+
             let n = 0;
             window.addQuizQuestion = function() {
                 n++;
                 const wrap = document.getElementById('quizQuestions');
                 const div = document.createElement('div');
-                div.style.cssText = 'border:1px solid #ddd;border-radius:8px;padding:10px;margin:8px 0;background:#f8fafc;';
-                div.innerHTML = '<b>Q'+n+'</b><textarea class="qq" rows="2" placeholder="Question (write / paste / formulas $E=mc^2$)" style="width:100%;margin:6px 0;"></textarea>'
-                  +'<input class="qa" placeholder="Correct answer" style="width:100%;margin:4px 0;">'
-                  +'<textarea class="qd" rows="2" placeholder="Answer description / explanation (optional)" style="width:100%;margin:4px 0;"></textarea>';
+                div.style.cssText = 'border:1px solid #ddd;border-radius:8px;padding:12px;margin:10px 0;background:#f8fafc;';
+                div.innerHTML = '<b>Q'+n+'</b>'
+                  + '<textarea class="qq quiz-paste" rows="5" placeholder="Question — paste here from any source (symbols stay as-is)"></textarea>'
+                  + '<div style="display:grid;grid-template-columns:28px 1fr;gap:6px;align-items:start;margin:6px 0;">'
+                  + '<label style="padding-top:8px;"><input type="radio" class="qcorrect" name="corr'+n+'" value="A" checked> A</label><textarea class="qoA quiz-paste" rows="2" placeholder="Option A — paste OK"></textarea>'
+                  + '<label style="padding-top:8px;"><input type="radio" class="qcorrect" name="corr'+n+'" value="B"> B</label><textarea class="qoB quiz-paste" rows="2" placeholder="Option B — paste OK"></textarea>'
+                  + '<label style="padding-top:8px;"><input type="radio" class="qcorrect" name="corr'+n+'" value="C"> C</label><textarea class="qoC quiz-paste" rows="2" placeholder="Option C — paste OK"></textarea>'
+                  + '<label style="padding-top:8px;"><input type="radio" class="qcorrect" name="corr'+n+'" value="D"> D</label><textarea class="qoD quiz-paste" rows="2" placeholder="Option D — paste OK"></textarea>'
+                  + '</div>'
+                  + '<textarea class="qd quiz-paste" rows="4" placeholder="Full solution / description — paste complete solution (unchanged)"></textarea>';
                 wrap.appendChild(div);
+                div.querySelectorAll('.quiz-paste').forEach(bindPreservePaste);
             };
             addQuizQuestion();
             document.getElementById('quizBuilderForm').addEventListener('submit', function() {
                 const qs = [];
                 document.querySelectorAll('#quizQuestions > div').forEach(div => {
-                    const q = (div.querySelector('.qq').value||'').trim();
-                    const a = (div.querySelector('.qa').value||'').trim();
-                    const d = (div.querySelector('.qd').value||'').trim();
-                    if (q) qs.push({ q: q, a: a, desc: d });
+                    const q = (div.querySelector('.qq').value || '');
+                    if (!q.trim()) return;
+                    const opts = {
+                        A: (div.querySelector('.qoA').value || ''),
+                        B: (div.querySelector('.qoB').value || ''),
+                        C: (div.querySelector('.qoC').value || ''),
+                        D: (div.querySelector('.qoD').value || '')
+                    };
+                    const corrEl = div.querySelector('.qcorrect:checked');
+                    const correct = corrEl ? corrEl.value : 'A';
+                    const d = (div.querySelector('.qd').value || '');
+                    // Keep raw strings — no strip of symbols
+                    qs.push({ q: q, options: opts, a: correct, desc: d, type: 'mcq' });
                 });
                 document.getElementById('questionsJson').value = JSON.stringify(qs);
             });
@@ -270,7 +328,7 @@
         <div class="card">
             <h3>📝 <span class="am">የተማሪዎች የፈቃድ ጥያቄዎች</span><span class="en">Student Absence Requests</span></h3>
             <table>
-                <tr><th>Student</th><th>Date</th><th>Reason</th><th>Feedback</th></tr>
+                <tr id="absences"><th>Student</th><th>Date</th><th>Reason</th><th>Feedback / Reply</th></tr>
                 <%- absRows || '<tr><td colspan="4">ምንም የፈቃድ ጥያቄ የለም። / No requests.</td></tr>' %>
             </table>
         </div>
