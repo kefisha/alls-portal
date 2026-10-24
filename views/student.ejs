@@ -43,7 +43,7 @@
 
     <h2>
         <span><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 8px;">
-            <span class="am"> የተማሪ መቆጣጠሪያ ፖርታል</span><span class="en">🎓 Student Portal</span>
+            <span class="am">🎓 የተማሪ መቆጣጠሪያ ፖርታል</span><span class="en">🎓 Student Portal</span>
         </span>
         <span style="font-size: 14px; background: #eef2f5; padding: 6px 12px; border-radius: 20px; color: #2c3e50;">
             <span class="am">ክፍል:</span><span class="en">Class:</span> <%= student.class_level %>
@@ -115,7 +115,7 @@
                 <% if (typeof studentMsgOptions !== 'undefined' && studentMsgOptions) { %>
                     <%- studentMsgOptions %>
                 <% } else { %>
-                    <option value="ADMIN"> ለአድሚን / ዲሬክተር (To Admin)</option>
+                    <option value="ADMIN">👑 ለአድሚን / ዲሬክተር (To Admin)</option>
                 <% } %>
             </select>
 
@@ -250,6 +250,39 @@
                 body: JSON.stringify({message: msg})
             }).then(r=>r.json()).then(d=>{ if(d.success){ input.value=''; load(); }});
         });
+    })();
+
+
+    // Stay in place after save/send/reply (no jump to top)
+    (function(){
+        const KEY = 'scrollPos_' + location.pathname;
+        const saved = sessionStorage.getItem(KEY);
+        if (saved) {
+            const y = parseInt(saved, 10);
+            if (!isNaN(y)) {
+                requestAnimationFrame(function(){ window.scrollTo(0, y); });
+                setTimeout(function(){ window.scrollTo(0, y); }, 50);
+                setTimeout(function(){ window.scrollTo(0, y); }, 200);
+            }
+            sessionStorage.removeItem(KEY);
+        }
+        function saveScroll(){ sessionStorage.setItem(KEY, String(window.scrollY || window.pageYOffset || 0)); }
+        document.addEventListener('submit', function(e){
+            const f = e.target;
+            if (!f || f.tagName !== 'FORM') return;
+            // AJAX forms handle themselves
+            if (f.classList.contains('ajax-grade-form') || f.id === 'studentChatForm' || f.id === 'chatForm') return;
+            saveScroll();
+        }, true);
+        document.addEventListener('click', function(e){
+            const a = e.target.closest && e.target.closest('a[href]');
+            if (!a) return;
+            const href = a.getAttribute('href') || '';
+            if (href.indexOf('/admin/approve/') === 0 || href.indexOf('/admin/reject/') === 0 ||
+                href.indexOf('/delete-notification/') === 0 || href.indexOf('/edit-notification/') === 0) {
+                saveScroll();
+            }
+        }, true);
     })();
 
 </script>
