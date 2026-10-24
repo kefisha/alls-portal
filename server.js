@@ -871,7 +871,21 @@ app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 },
     try {
         let { name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, year_level, payment_type, txn_id } = req.body;
         name = xss(name); mother_name = xss(mother_name); phone = xss(phone);
-        
+        const normPhone = (p) => String(p || '').replace(/[\s\-\(\)]/g, '').replace(/^\+251/, '0');
+        const pCheck = normPhone(phone);
+
+        // Prevent double registration (same phone or same name+mother in students or pending)
+        db.get(`SELECT student_id FROM students WHERE REPLACE(REPLACE(phone,' ',''),'+251','0') = ? OR (LOWER(name)=LOWER(?) AND LOWER(COALESCE(mother_name,''))=LOWER(?)) LIMIT 1`,
+            [pCheck, name, mother_name || ''], (e1, existSt) => {
+            if (existSt) {
+                return res.send(`<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:40px;"><h2 style="color:#c0392b;">❌ አስቀድሞ ተመዝግበዋል</h2><p>This student is already registered (ID: ${existSt.student_id}).</p><a href="/">Back</a></body></html>`);
+            }
+            db.get(`SELECT student_id FROM pending_students WHERE REPLACE(REPLACE(phone,' ',''),'+251','0') = ? OR (LOWER(name)=LOWER(?) AND LOWER(COALESCE(mother_name,''))=LOWER(?)) LIMIT 1`,
+                [pCheck, name, mother_name || ''], (e2, existP) => {
+                if (existP) {
+                    return res.send(`<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:40px;"><h2 style="color:#c0392b;">❌ በመጠባበቅ ላይ ነው</h2><p>Already pending approval (ID: ${existP.student_id}). Wait for director.</p><a href="/">Back</a></body></html>`);
+                }
+
         let autoID = generateStudentID(); 
         let autoPIN = generateStrong4DigitPIN();
         let hashedPIN = bcrypt.hashSync(autoPIN, 10); 
@@ -889,6 +903,8 @@ app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 },
             [autoID, hashedPIN, name, mother_name || '', gender || '', age || null, phone || '', emergency_phone || '', region || '', zone || '', woreda || '', kebele || '', assignedSection, payment_type, slipPath, photoPath], function(err) {
                 if (err) return res.redirect(`/student-register?lang=${lang}&error=db`);
                 res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gradient-to-br from-blue-900 to-slate-900 flex items-center justify-center min-h-screen p-4"><div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md text-center border-t-8 border-amber-500"><h2 class="text-2xl font-bold text-green-600 mb-2">ምዝገባ ተልኳል (Pending)</h2><p class="text-gray-600 text-sm mb-2">የክፍያ transaction/ደረሰኝ ወደ ዳይሬክተር ተልኳል።</p><p class="text-amber-700 text-sm font-bold mb-6">⚠️ ዳይሬክተር ክፍያ እስኪያረጋግጥ ድረስ Registered አይደሉም — Login አይችሉም። ID እና PIN ይያዙ፦</p><div class="bg-slate-50 p-5 rounded-xl border-2 border-blue-100 mb-6 space-y-4"><div><div class="text-xs text-gray-500 font-bold uppercase">መታወቂያ / ID</div><div class="text-3xl font-extrabold text-blue-700 tracking-wide">${autoID}</div></div><div><div class="text-xs text-gray-500 font-bold uppercase">የይለፍ ቃል / PIN</div><div class="text-3xl font-extrabold text-red-600 tracking-widest">${autoPIN}</div></div></div><a href="/?lang=${lang}" class="block w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 rounded-xl">⬅️ ወደ መግቢያ ተመለስ</a></div></body></html>`);
+            });
+        });
             });
         });
     } catch (error) {
@@ -3015,41 +3031,181 @@ app.get('/api/homework', (req, res) => {
     });
 });
 
-// 3 Online Quiz
+// 3 Online Quiz — Telegram-style (one-by-one) + formulas + answer description
 app.post('/teacher/quiz', (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
-    const { title, class_level, q1, a1, q2, a2, q3, a3 } = req.body;
-    const questions = [
-        { q: q1 || '', a: (a1 || '').toLowerCase().trim() },
-        { q: q2 || '', a: (a2 || '').toLowerCase().trim() },
-        { q: q3 || '', a: (a3 || '').toLowerCase().trim() }
-    ].filter(x => x.q);
+    // questions_json can be sent as JSON string from multi-question builder
+    let questions = [];
+    try {
+        if (req.body.questions_json) {
+            questions = JSON.parse(req.body.questions_json);
+        } else {
+            // fallback q1..q20 style
+            for (let i = 1; i <= 20; i++) {
+                const q = req.body['q' + i];
+                const a = req.body['a' + i];
+                const d = req.body['d' + i] || '';
+                if (q && String(q).trim()) {
+                    questions.push({
+                        q: String(q),
+                        a: String(a || '').trim(),
+                        desc: String(d || ''),
+                        // keep original casing for symbols; compare case-insensitive later
+                    });
+                }
+            }
+        }
+    } catch (e) { questions = []; }
+    questions = (questions || []).filter(x => x && x.q);
+    if (!questions.length) return res.redirect('/teacher-dashboard#quiz');
+    const title = req.body.title || 'Quiz';
+    const class_level = req.body.class_level || '';
     db.get(`SELECT name FROM teachers WHERE id=?`, [req.session.teacherId], (e, t) => {
         db.run(`INSERT INTO quizzes (teacher_id, teacher_name, class_level, title, questions_json, created_at) VALUES (?,?,?,?,?,?)`,
-            [req.session.teacherId, t ? t.name : '', class_level || '', title || 'Quiz', JSON.stringify(questions), getFormattedTimestamp()],
+            [req.session.teacherId, t ? t.name : '', class_level, title, JSON.stringify(questions), getFormattedTimestamp()],
             () => res.redirect('/teacher-dashboard#quiz'));
     });
 });
+// List quizzes (questions without answers for students)
 app.get('/api/quizzes', (req, res) => {
-    db.all(`SELECT id, teacher_name, class_level, title, questions_json, created_at FROM quizzes ORDER BY id DESC LIMIT 30`, [], (e, rows) => {
-        res.json({ rows: (rows || []).map(r => ({ ...r, questions: JSON.parse(r.questions_json || '[]').map(q => ({ q: q.q })) })) });
+    db.all(`SELECT id, teacher_name, class_level, title, questions_json, created_at FROM quizzes ORDER BY id DESC LIMIT 40`, [], (e, rows) => {
+        res.json({
+            rows: (rows || []).map(r => {
+                let qs = [];
+                try { qs = JSON.parse(r.questions_json || '[]'); } catch (e) {}
+                return {
+                    id: r.id, teacher_name: r.teacher_name, class_level: r.class_level,
+                    title: r.title, created_at: r.created_at,
+                    count: qs.length,
+                    questions: qs.map(q => ({ q: q.q })) // no answers
+                };
+            })
+        });
+    });
+});
+// Full quiz for taking (student gets questions only)
+app.get('/api/quiz/:id', (req, res) => {
+    db.get(`SELECT id, title, class_level, teacher_name, questions_json FROM quizzes WHERE id=?`, [req.params.id], (e, quiz) => {
+        if (!quiz) return res.json({ success: false });
+        let qs = [];
+        try { qs = JSON.parse(quiz.questions_json || '[]'); } catch (e) {}
+        res.json({
+            success: true,
+            id: quiz.id, title: quiz.title, class_level: quiz.class_level, teacher_name: quiz.teacher_name,
+            questions: qs.map(q => ({ q: q.q })) // hide answers + desc until end
+        });
     });
 });
 app.post('/student/quiz-attempt', (req, res) => {
-    if (!req.session.studentId) return res.json({ success: false });
+    if (!req.session.studentId) return res.json({ success: false, error: 'login' });
     const { quiz_id, answers } = req.body;
     db.get(`SELECT * FROM quizzes WHERE id=?`, [quiz_id], (e, quiz) => {
         if (!quiz) return res.json({ success: false });
-        const qs = JSON.parse(quiz.questions_json || '[]');
+        let qs = [];
+        try { qs = JSON.parse(quiz.questions_json || '[]'); } catch (e) {}
         const ans = answers || [];
         let score = 0;
-        qs.forEach((q, i) => { if (String(ans[i] || '').toLowerCase().trim() === q.a) score++; });
+        const review = qs.map((q, i) => {
+            const given = String(ans[i] || '').trim();
+            const correct = String(q.a || '').trim();
+            const ok = given.toLowerCase() === correct.toLowerCase();
+            if (ok) score++;
+            return {
+                q: q.q,
+                your: given,
+                correct: correct,
+                desc: q.desc || '',
+                ok
+            };
+        });
+        const total = qs.length || 1;
+        const percent = Math.round((score / total) * 100);
         db.get(`SELECT name FROM students WHERE student_id=?`, [req.session.studentId], (e2, s) => {
             db.run(`INSERT INTO quiz_attempts (quiz_id, student_id, student_name, answers_json, score, total, created_at) VALUES (?,?,?,?,?,?,?)`,
-                [quiz_id, req.session.studentId, s ? s.name : '', JSON.stringify(ans), score, qs.length, getFormattedTimestamp()],
-                () => res.json({ success: true, score, total: qs.length }));
+                [quiz_id, req.session.studentId, s ? s.name : '', JSON.stringify(ans), score, total, getFormattedTimestamp()],
+                () => res.json({ success: true, score, total, percent, review }));
         });
     });
+});
+
+// Telegram-style quiz page
+app.get('/quiz/:id', (req, res) => {
+    if (!req.session.studentId && !req.session.teacherId && !req.session.isAdmin) return res.redirect('/');
+    const qid = req.params.id;
+    res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quiz</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<style>
+body{font-family:Segoe UI,sans-serif;background:linear-gradient(135deg,#1f4e79,#0d2b45);min-height:100vh;margin:0;padding:16px;color:#333}
+.card{background:#fff;max-width:480px;margin:20px auto;border-radius:16px;padding:22px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+h2{color:#1f4e79;margin:0 0 8px;font-size:20px}
+.progress{height:8px;background:#e2e8f0;border-radius:8px;overflow:hidden;margin:12px 0 18px}
+.bar{height:100%;background:#27ae60;width:0%;transition:.3s}
+.qbox{font-size:17px;line-height:1.55;margin-bottom:14px;min-height:60px;white-space:pre-wrap}
+input[type=text]{width:100%;padding:14px;border:2px solid #cbd5e1;border-radius:10px;font-size:16px;box-sizing:border-box}
+button{width:100%;padding:14px;margin-top:12px;border:none;border-radius:10px;font-weight:bold;font-size:16px;cursor:pointer;background:#2980b9;color:#fff}
+button.sec{background:#64748b}
+.meta{font-size:13px;color:#64748b}
+.review{text-align:left;font-size:14px}
+.ok{color:#16a34a}.bad{color:#dc2626}
+.score{font-size:42px;font-weight:800;color:#1f4e79;text-align:center}
+</style></head><body>
+<div class="card" id="app"><p class="meta">Loading quiz...</p></div>
+<script>
+const quizId=${JSON.stringify(String(qid))};
+let questions=[], idx=0, answers=[];
+function renderMath(el){
+  if(window.renderMathInElement){
+    try{ renderMathInElement(el,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false},{left:'\\\\(',right:'\\\\)',display:false},{left:'\\\\[',right:'\\\\]',display:true}],throwOnError:false}); }catch(e){}
+  }
+}
+function showQ(){
+  const app=document.getElementById('app');
+  if(idx>=questions.length){ return finish(); }
+  const pct=Math.round((idx/questions.length)*100);
+  app.innerHTML='<h2 id="title"></h2><div class="meta">Question '+(idx+1)+' / '+questions.length+'</div><div class="progress"><div class="bar" style="width:'+pct+'%"></div></div><div class="qbox" id="qtext"></div><input type="text" id="ans" placeholder="Your answer..." autocomplete="off"><button type="button" id="nextBtn">'+(idx===questions.length-1?'Finish ✅':'Next ➡️')+'</button><button type="button" class="sec" onclick="location.href=\\'/learning-hub\\'">Exit</button>';
+  document.getElementById('title').textContent=window._quizTitle||'Quiz';
+  const qt=document.getElementById('qtext');
+  qt.textContent=questions[idx].q;
+  renderMath(qt);
+  document.getElementById('ans').focus();
+  document.getElementById('nextBtn').onclick=()=>{
+    answers[idx]=document.getElementById('ans').value;
+    idx++;
+    showQ();
+  };
+}
+function finish(){
+  fetch('/student/quiz-attempt',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({quiz_id:quizId,answers})})
+  .then(r=>r.json()).then(d=>{
+    const app=document.getElementById('app');
+    if(!d.success){ app.innerHTML='<p>Error submitting</p>'; return; }
+    let html='<div class="score">'+d.percent+'%</div><p style="text-align:center;font-weight:bold">'+d.score+' / '+d.total+' correct</p><div class="progress"><div class="bar" style="width:'+d.percent+'%"></div></div><div class="review">';
+    (d.review||[]).forEach((r,i)=>{
+      html+='<div style="border-top:1px solid #eee;padding:10px 0"><b>Q'+(i+1)+'.</b> <span class="qpart"></span><br>';
+      html+=(r.ok?'<span class="ok">✅ Correct</span>':'<span class="bad">❌ Wrong</span>');
+      html+='<br>Your: <b>'+(r.your||'-')+'</b><br>Answer: <b>'+(r.correct||'-')+'</b>';
+      if(r.desc) html+='<br><small style="color:#555">'+r.desc+'</small>';
+      html+='</div>';
+    });
+    html+='</div><button onclick="location.href=\\'/learning-hub\\'">Back to Hub</button>';
+    app.innerHTML=html;
+    app.querySelectorAll('.review > div').forEach((div,i)=>{
+      const sp=div.querySelector('.qpart');
+      if(sp && d.review[i]) { sp.textContent=d.review[i].q; renderMath(sp); }
+    });
+  });
+}
+fetch('/api/quiz/'+encodeURIComponent(quizId),{credentials:'same-origin'}).then(r=>r.json()).then(d=>{
+  if(!d.success){ document.getElementById('app').innerHTML='Quiz not found'; return; }
+  window._quizTitle=d.title;
+  questions=d.questions||[];
+  if(!questions.length){ document.getElementById('app').innerHTML='No questions'; return; }
+  showQ();
+});
+</script></body></html>`);
 });
 
 // 5 Lesson plan
@@ -3121,7 +3277,9 @@ app.get('/api/fees', (req, res) => {
     }
 });
 
-// 10 Timetable
+// 10 Timetable — Excel-like Mon–Fri periods 1–6 (40 min) + 15 min break 4:00–4:15
+// Period times: 1=8:00-8:40, 2=8:40-9:20, 3=9:20-10:00, 4=10:00-10:40, 5=10:40-11:20, 6=11:20-12:00
+// Afternoon example can use same 1-6 labels; break note stored in UI
 app.post('/admin/timetable', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const { class_level, day_of_week, period_no, subject, teacher_name, room } = req.body;
@@ -3129,12 +3287,51 @@ app.post('/admin/timetable', (req, res) => {
         [class_level || '', day_of_week || '', parseInt(period_no) || 1, subject || '', teacher_name || '', room || ''],
         () => res.redirect('/admin#timetable'));
 });
+// Save full grid for one class: body.grid = { Monday: {1:{subject,teacher,room},...}, ... }
+app.post('/admin/timetable-grid', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ success: false });
+    const class_level = (req.body.class_level || '').trim();
+    const grid = req.body.grid || {};
+    if (!class_level) return res.json({ success: false, error: 'class required' });
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    db.run(`DELETE FROM timetable WHERE class_level = ?`, [class_level], () => {
+        const jobs = [];
+        days.forEach(day => {
+            for (let p = 1; p <= 6; p++) {
+                const cell = (grid[day] && grid[day][p]) ? grid[day][p] : {};
+                const subject = (cell.subject || '').trim();
+                if (!subject) continue;
+                jobs.push([class_level, day, p, subject, cell.teacher || '', cell.room || '']);
+            }
+        });
+        let i = 0;
+        const next = () => {
+            if (i >= jobs.length) return res.json({ success: true, saved: jobs.length });
+            const j = jobs[i++];
+            db.run(`INSERT INTO timetable (class_level, day_of_week, period_no, subject, teacher_name, room) VALUES (?,?,?,?,?,?)`, j, next);
+        };
+        next();
+    });
+});
 app.get('/api/timetable', (req, res) => {
     const cls = req.query.class || '';
     db.all(`SELECT * FROM timetable ORDER BY day_of_week, period_no`, [], (e, rows) => {
         rows = rows || [];
         if (cls) rows = rows.filter(r => !r.class_level || r.class_level === cls || isClassMatch(r.class_level, cls));
-        res.json({ rows });
+        // Also return grid shape for Excel UI
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+        const grid = {};
+        days.forEach(d => { grid[d] = {}; for (let p = 1; p <= 6; p++) grid[d][p] = { subject: '', teacher: '', room: '' }; });
+        rows.forEach(r => {
+            if (grid[r.day_of_week] && r.period_no >= 1 && r.period_no <= 6) {
+                grid[r.day_of_week][r.period_no] = { subject: r.subject || '', teacher: r.teacher_name || '', room: r.room || '' };
+            }
+        });
+        const periodTimes = {
+            1: '8:00–8:40', 2: '8:40–9:20', 3: '9:20–10:00',
+            4: '10:00–10:40', 5: '10:40–11:20', 6: '11:20–12:00'
+        };
+        res.json({ rows, grid, periodTimes, breakNote: 'Break 4:00–4:15 (15 min) for afternoon sessions' });
     });
 });
 
@@ -3263,21 +3460,10 @@ fetch('/api/homework').then(r=>r.json()).then(d=>{
 });
 fetch('/api/quizzes').then(r=>r.json()).then(d=>{
   const box=document.getElementById('quizList');
-  box.innerHTML=(d.rows||[]).map(q=>{
-    const qs=q.questions||[];
-    return '<div style="padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:10px"><b>'+q.title+'</b> ('+q.class_level+')<form onsubmit="return takeQuiz(event,'+q.id+','+qs.length+')">'
-      +qs.map((qq,i)=>'<label>'+qq.q+'<input name="a'+i+'" required></label>').join('')
-      +'<button type="submit">Submit Quiz</button></form><div id="qres'+q.id+'"></div></div>';
-  }).join('')||'No quizzes';
+  box.innerHTML=(d.rows||[]).map(q=>
+    '<div style="padding:12px;border:1px solid #ddd;border-radius:8px;margin-bottom:10px"><b>'+q.title+'</b> · '+q.class_level+' · '+q.count+' questions<br><small>'+(q.teacher_name||'')+'</small><br><a href="/quiz/'+q.id+'" style="display:inline-block;margin-top:8px;background:#2980b9;color:#fff;padding:8px 14px;border-radius:8px;text-decoration:none;font-weight:bold;">Start Quiz ▶️</a></div>'
+  ).join('')||'No quizzes';
 });
-function takeQuiz(e,id,n){
-  e.preventDefault();
-  const fd=new FormData(e.target);
-  const answers=[]; for(let i=0;i<n;i++) answers.push(fd.get('a'+i));
-  fetch('/student/quiz-attempt',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({quiz_id:id,answers})})
-    .then(r=>r.json()).then(d=>{ document.getElementById('qres'+id).textContent=d.success?('Score: '+d.score+'/'+d.total):'Error'; });
-  return false;
-}
 fetch('/api/timetable').then(r=>r.json()).then(d=>{
   document.getElementById('ttList').innerHTML='<table><tr><th>Day</th><th>Period</th><th>Subject</th><th>Teacher</th><th>Room</th><th>Class</th></tr>'
     +(d.rows||[]).map(r=>'<tr><td>'+r.day_of_week+'</td><td>'+r.period_no+'</td><td>'+r.subject+'</td><td>'+r.teacher_name+'</td><td>'+r.room+'</td><td>'+r.class_level+'</td></tr>').join('')
