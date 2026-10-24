@@ -72,6 +72,9 @@
 </head>
 <body class="lang-am">
     <div class="container">
+        <div id="topLogout" style="display:flex;justify-content:flex-end;margin-bottom:12px;gap:8px;flex-wrap:wrap;">
+            <a href="/logout" class="logout-btn" style="margin:0;">🚪 Logout / ውጣ</a>
+        </div>
         <div class="top-bar">
             <div>
                 <h2 style="margin:0; color:#1f4e79;">👩‍🏫 <span class="am">የመምህራን መቆጣጠሪያ ገጽ</span><span class="en">Teacher Portal Dashboard</span></h2>
@@ -204,15 +207,50 @@
                   + '</div>'
                   + '<input type="file" class="qimg" name="qimg_'+n+'" accept="image/*" style="display:none;">'
                   + '<textarea class="qq quiz-paste" rows="2" placeholder="Optional: question text (if no image)" style="margin-top:8px;"></textarea>'
-                  + '<div style="display:grid;grid-template-columns:28px 1fr;gap:6px;align-items:start;margin:8px 0;">'
-                  + '<label style="padding-top:8px;"><input type="radio" class="qcorrect" name="corr'+n+'" value="A" checked> A</label><textarea class="qoA quiz-paste" rows="2" placeholder="Option A"></textarea>'
-                  + '<label style="padding-top:8px;"><input type="radio" class="qcorrect" name="corr'+n+'" value="B"> B</label><textarea class="qoB quiz-paste" rows="2" placeholder="Option B"></textarea>'
-                  + '<label style="padding-top:8px;"><input type="radio" class="qcorrect" name="corr'+n+'" value="C"> C</label><textarea class="qoC quiz-paste" rows="2" placeholder="Option C"></textarea>'
-                  + '<label style="padding-top:8px;"><input type="radio" class="qcorrect" name="corr'+n+'" value="D"> D</label><textarea class="qoD quiz-paste" rows="2" placeholder="Option D"></textarea>'
+                  + '<div class="opt-grid" style="margin:8px 0;">'
+                  + ['A','B','C','D'].map(function(L,i){
+                      var chk = i===0 ? ' checked' : '';
+                      return '<div class="opt-row" data-opt="'+L+'" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px;margin:6px 0;background:#fff;">'
+                        + '<label style="font-weight:bold;"><input type="radio" class="qcorrect" name="corr'+n+'" value="'+L+'"'+chk+'> '+L+'</label>'
+                        + '<textarea class="qo'+L+' quiz-paste" rows="2" placeholder="Option '+L+' text (optional if image)" style="width:100%;margin:4px 0;"></textarea>'
+                        + '<div class="opt-paste paste-zone" data-opt="'+L+'" style="min-height:56px;padding:8px;margin:4px 0;">'
+                        +   '<div class="pz-hint" style="font-size:12px;">📷 '+L+' image Paste / click</div>'
+                        +   '<img class="opt-img-'+L+'" style="display:none;max-height:120px;border-radius:6px;">'
+                        + '</div>'
+                        + '<input type="file" class="oimg'+L+'" name="oimg_'+n+'_'+L+'" accept="image/*" style="display:none;">'
+                        + '</div>';
+                    }).join('')
                   + '</div>'
                   + '<textarea class="qd quiz-paste" rows="2" placeholder="Solution / explanation (optional text)"></textarea>';
                 wrap.appendChild(div);
                 bindPasteZone(div);
+                // Option A-D image paste
+                div.querySelectorAll('.opt-row').forEach(function(row) {
+                    var L = row.getAttribute('data-opt');
+                    var zone = row.querySelector('.opt-paste');
+                    var fileInp = row.querySelector('.oimg'+L);
+                    var img = row.querySelector('.opt-img-'+L);
+                    function setOptImg(file) {
+                        if (!file || !file.type || file.type.indexOf('image/') !== 0) return;
+                        img.src = URL.createObjectURL(file);
+                        img.style.display = 'block';
+                        try { var dt=new DataTransfer(); dt.items.add(file); fileInp.files=dt.files; } catch(e){}
+                    }
+                    zone.addEventListener('click', function(){ fileInp.click(); });
+                    zone.addEventListener('paste', function(e){
+                        var cd=e.clipboardData; if(!cd||!cd.items) return;
+                        for (var i=0;i<cd.items.length;i++){
+                            if(cd.items[i].type.indexOf('image/')===0){
+                                e.preventDefault();
+                                setOptImg(cd.items[i].getAsFile());
+                                return;
+                            }
+                        }
+                    });
+                    fileInp.addEventListener('change', function(){
+                        if(fileInp.files&&fileInp.files[0]) setOptImg(fileInp.files[0]);
+                    });
+                });
             };
             addQuizQuestion();
             document.getElementById('quizBuilderForm').addEventListener('submit', function() {
@@ -237,7 +275,8 @@
                         a: correct,
                         desc: d,
                         type: 'mcq',
-                        imageField: 'qimg_' + (i + 1)
+                        imageField: 'qimg_' + (i + 1),
+                        optImageFields: { A: 'oimg_'+(i+1)+'_A', B: 'oimg_'+(i+1)+'_B', C: 'oimg_'+(i+1)+'_C', D: 'oimg_'+(i+1)+'_D' }
                     });
                 });
                 document.getElementById('questionsJson').value = JSON.stringify(qs);
