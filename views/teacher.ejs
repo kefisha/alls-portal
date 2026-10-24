@@ -92,17 +92,41 @@
             <input type="date" name="due_date">
             <button type="submit">📝 Assign Homework</button>
         </form>
-        <form action="/teacher/quiz" method="POST" style="margin-bottom:14px;border-top:1px solid #ddd;padding-top:12px;">
+        <form id="quizBuilderForm" action="/teacher/quiz" method="POST" style="margin-bottom:14px;border-top:1px solid #ddd;padding-top:12px;">
+            <p style="font-size:12px;color:#666;">Telegram-style quiz · Formulas: use $x^2$ or $$\\frac{a}{b}$$ · Copy-paste OK · Symbols preserved</p>
             <input type="text" name="title" placeholder="Quiz title" required>
             <input type="text" name="class_level" placeholder="Class" value="<%= typeof selectedClass !== 'undefined' ? selectedClass : '' %>">
-            <input type="text" name="q1" placeholder="Question 1" required>
-            <input type="text" name="a1" placeholder="Answer 1" required>
-            <input type="text" name="q2" placeholder="Question 2">
-            <input type="text" name="a2" placeholder="Answer 2">
-            <input type="text" name="q3" placeholder="Question 3">
-            <input type="text" name="a3" placeholder="Answer 3">
-            <button type="submit">❓ Create Quiz</button>
+            <input type="hidden" name="questions_json" id="questionsJson">
+            <div id="quizQuestions"></div>
+            <button type="button" onclick="addQuizQuestion()" style="background:#8e44ad;margin-top:8px;">➕ Add Question</button>
+            <button type="submit" style="margin-top:8px;">❓ Publish Quiz</button>
         </form>
+        <script>
+        (function(){
+            let n = 0;
+            window.addQuizQuestion = function() {
+                n++;
+                const wrap = document.getElementById('quizQuestions');
+                const div = document.createElement('div');
+                div.style.cssText = 'border:1px solid #ddd;border-radius:8px;padding:10px;margin:8px 0;background:#f8fafc;';
+                div.innerHTML = '<b>Q'+n+'</b><textarea class="qq" rows="2" placeholder="Question (write / paste / formulas $E=mc^2$)" style="width:100%;margin:6px 0;"></textarea>'
+                  +'<input class="qa" placeholder="Correct answer" style="width:100%;margin:4px 0;">'
+                  +'<textarea class="qd" rows="2" placeholder="Answer description / explanation (optional)" style="width:100%;margin:4px 0;"></textarea>';
+                wrap.appendChild(div);
+            };
+            addQuizQuestion();
+            document.getElementById('quizBuilderForm').addEventListener('submit', function() {
+                const qs = [];
+                document.querySelectorAll('#quizQuestions > div').forEach(div => {
+                    const q = (div.querySelector('.qq').value||'').trim();
+                    const a = (div.querySelector('.qa').value||'').trim();
+                    const d = (div.querySelector('.qd').value||'').trim();
+                    if (q) qs.push({ q: q, a: a, desc: d });
+                });
+                document.getElementById('questionsJson').value = JSON.stringify(qs);
+            });
+        })();
+        </script>
         <form action="/teacher/lesson-plan" method="POST" style="margin-bottom:14px;border-top:1px solid #ddd;padding-top:12px;">
             <input type="text" name="week_label" placeholder="Week e.g. Week 12" required>
             <input type="text" name="class_level" placeholder="Class">
