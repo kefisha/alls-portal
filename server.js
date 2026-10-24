@@ -16,6 +16,13 @@ process.on('uncaughtException', (err) => { console.error('CRITICAL ERROR:', err)
 process.on('unhandledRejection', (reason, p) => { console.error('UNHANDLED REJECTION:', reason); });
 
 const app = express();
+let io = null;
+try {
+    // optional realtime — only if socket.io installed
+    const http = require('http');
+    // will attach after listen via patch below
+} catch (e) {}
+
 app.set('trust proxy', 1); 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -268,6 +275,11 @@ async function initDB() {
             id SERIAL PRIMARY KEY, title TEXT, body TEXT, audience TEXT DEFAULT 'ALL',
             created_by TEXT, created_at TEXT
         )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS exam_schedule (
+            id SERIAL PRIMARY KEY, class_level TEXT, subject TEXT, exam_date TEXT,
+            exam_time TEXT, room TEXT, notes TEXT, created_at TEXT
+        )`);
+
 
 
         let tRes = await pool.query("SELECT COUNT(*) as count FROM teachers");
@@ -624,9 +636,9 @@ app.get('/sw.js', (req, res) => {
     res.setHeader('Content-Type', 'application/javascript');
     res.setHeader('Service-Worker-Allowed', '/');
     res.send(`
-const CACHE = 'alls-v2';
+const CACHE = 'alls-v3';
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(['/','/manifest.json']).catch(()=>{})));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(['/','/manifest.json','/login']).catch(()=>{})));
   self.skipWaiting();
 });
 self.addEventListener('activate', (e) => { e.waitUntil(self.clients.claim()); });
@@ -638,7 +650,7 @@ self.addEventListener('fetch', (e) => {
         caches.open(CACHE).then(c => c.put(e.request, copy)).catch(()=>{});
       }
       return r;
-    }).catch(() => caches.match(e.request).then(r => r || new Response('<h2>Offline — ALLS Portal</h2><p>Reconnect to continue.</p>',{headers:{'Content-Type':'text/html'}})))
+    }).catch(() => caches.match(e.request).then(r => r || new Response('<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Offline</title></head><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0f172a;color:#e2e8f0"><h2>📡 Offline</h2><p>ALLS Portal — reconnect to continue.</p><button onclick="location.reload()" style="padding:12px 20px;border:none;border-radius:8px;background:#2980b9;color:#fff;font-weight:bold">Retry</button></body></html>',{headers:{'Content-Type':'text/html; charset=utf-8'}})))
   );
 });
 `);
@@ -3629,6 +3641,7 @@ a{color:#2980b9}
 <button type="button" data-t="quiz">❓ Quiz</button>
 <button type="button" data-t="tt">📅 Timetable</button>
 <button type="button" data-t="prog">📈 Progress</button>
+<button type="button" data-t="exam">📝 Exams</button>
 </div>
 <div class="card panel" id="ann"><h3>Announcements</h3><div id="annList">Loading...</div></div>
 <div class="card panel hidden" id="lib"><h3>Digital Library</h3><div id="libList">Loading...</div></div>
@@ -3636,7 +3649,9 @@ a{color:#2980b9}
 <div class="card panel hidden" id="quiz"><h3>Quizzes</h3><div id="quizList">Loading...</div></div>
 <div class="card panel hidden" id="tt"><h3>Timetable</h3><div id="ttList">Loading...</div></div>
 <div class="card panel hidden" id="prog"><h3>Progress</h3><canvas id="progChart" height="180"></canvas></div>
+<div class="card panel hidden" id="exam"><h3>Exam Schedule</h3><div id="examHubList">Loading...</div></div>
 </div>
+<script src="/socket.io/socket.io.js"></script>
 <script>
 window.STUDENT_ID=${JSON.stringify(hubSid)};
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
@@ -3660,6 +3675,10 @@ fetch('/api/quizzes').then(r=>r.json()).then(d=>{
     '<div style="padding:12px;border:1px solid #ddd;border-radius:8px;margin-bottom:10px"><b>'+q.title+'</b> · '+q.class_level+' · '+q.count+' questions<br><small>'+(q.teacher_name||'')+'</small><br><a href="/quiz/'+q.id+'" style="display:inline-block;margin-top:8px;background:#2980b9;color:#fff;padding:8px 14px;border-radius:8px;text-decoration:none;font-weight:bold;">Start Quiz ▶️</a></div>'
   ).join('')||'No quizzes';
 });
+fetch('/api/exam-schedule').then(r=>r.json()).then(d=>{
+  document.getElementById('examHubList').innerHTML='<table><tr><th>Date</th><th>Time</th><th>Class</th><th>Subject</th><th>Room</th></tr>'
+    +(d.rows||[]).map(x=>'<tr><td>'+(x.exam_date||'')+'</td><td>'+(x.exam_time||'')+'</td><td>'+(x.class_level||'')+'</td><td>'+(x.subject||'')+'</td><td>'+(x.room||'')+'</td></tr>').join('')+'</table>';
+}).catch(()=>{});
 fetch('/api/timetable').then(r=>r.json()).then(d=>{
   document.getElementById('ttList').innerHTML='<table><tr><th>Day</th><th>Period</th><th>Subject</th><th>Teacher</th><th>Room</th><th>Class</th></tr>'
     +(d.rows||[]).map(r=>'<tr><td>'+r.day_of_week+'</td><td>'+r.period_no+'</td><td>'+r.subject+'</td><td>'+r.teacher_name+'</td><td>'+r.room+'</td><td>'+r.class_level+'</td></tr>').join('')
@@ -3672,4 +3691,209 @@ fetch('/api/student-progress/'+encodeURIComponent((window.STUDENT_ID||''))).then
 </script></body></html>`);
 });
 
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+
+// ===== Features: Attendance report, Homework grade, Exam schedule, Restore, Certificate, Backup cron =====
+
+// 2 Attendance report
+app.get('/admin/attendance-report', (req, res) => {
+    if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
+    const cls = (req.query.class || '').trim();
+    const month = (req.query.month || new Date().toISOString().slice(0, 7)).trim(); // YYYY-MM
+    db.all(`SELECT * FROM daily_attendance ORDER BY date DESC LIMIT 5000`, [], (e, rows) => {
+        rows = rows || [];
+        if (cls) rows = rows.filter(r => isClassMatch(r.class_level, cls) || String(r.class_level||'').includes(cls));
+        if (month) rows = rows.filter(r => String(r.date||'').startsWith(month) || String(r.created_at||'').includes(month));
+        // aggregate by student
+        const map = {};
+        rows.forEach(r => {
+            const id = r.student_id || r.student_name || '?';
+            if (!map[id]) map[id] = { student_id: r.student_id, name: r.student_name, class_level: r.class_level, present: 0, absent: 0, total: 0 };
+            map[id].total++;
+            if (String(r.status||'').toLowerCase().includes('present')) map[id].present++;
+            else map[id].absent++;
+        });
+        const list = Object.values(map).sort((a,b) => (a.name||'').localeCompare(b.name||''));
+        const tr = list.map(s => `<tr><td>${s.student_id||''}</td><td>${s.name||''}</td><td>${s.class_level||''}</td><td>${s.present}</td><td>${s.absent}</td><td>${s.total}</td><td>${s.total?Math.round(s.present/s.total*100):0}%</td></tr>`).join('')
+            || '<tr><td colspan="7">No attendance data</td></tr>';
+        res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Attendance Report</title>
+<style>body{font-family:Segoe UI,sans-serif;padding:16px;background:#eef2f5}table{width:100%;border-collapse:collapse;background:#fff}th,td{border:1px solid #ddd;padding:8px;font-size:13px}th{background:#1f4e79;color:#fff}
+.card{background:#fff;padding:16px;border-radius:12px;max-width:960px;margin:auto}input,button{padding:8px;margin:4px}</style></head><body>
+<div class="card"><h2>📋 Attendance Report</h2>
+<form method="GET" action="/admin/attendance-report" style="margin-bottom:12px;">
+<input name="class" placeholder="Class e.g. Grade 5A" value="${cls}">
+<input name="month" type="month" value="${month}">
+<button type="submit">Filter</button>
+<a href="/admin">Admin</a> | <a href="/teacher-dashboard">Teacher</a>
+</form>
+<table><tr><th>ID</th><th>Name</th><th>Class</th><th>Present</th><th>Absent</th><th>Total</th><th>%</th></tr>${tr}</table>
+</div></body></html>`);
+    });
+});
+
+// 3 Homework grade
+app.post('/teacher/homework-grade', (req, res) => {
+    if (!req.session.teacherId) return res.redirect('/');
+    const { id, score, status } = req.body;
+    db.run(`UPDATE homework_submissions SET score = ?, status = ? WHERE id = ?`,
+        [parseFloat(score) || 0, status || 'graded', id],
+        () => res.redirect('/teacher-dashboard#homework'));
+});
+app.get('/api/homework-submissions', (req, res) => {
+    if (!req.session.teacherId && !req.session.isAdmin) return res.status(401).json({ rows: [] });
+    db.all(`SELECT * FROM homework_submissions ORDER BY id DESC LIMIT 100`, [], (e, rows) => res.json({ rows: rows || [] }));
+});
+
+// 4 Exam schedule
+app.post('/admin/exam-schedule', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    const { class_level, subject, exam_date, exam_time, room, notes } = req.body;
+    db.run(`INSERT INTO exam_schedule (class_level, subject, exam_date, exam_time, room, notes, created_at) VALUES (?,?,?,?,?,?,?)`,
+        [class_level||'', subject||'', exam_date||'', exam_time||'', room||'', notes||'', getFormattedTimestamp()],
+        () => res.redirect('/admin#examSchedule'));
+});
+app.get('/api/exam-schedule', (req, res) => {
+    db.all(`SELECT * FROM exam_schedule ORDER BY exam_date ASC, exam_time ASC LIMIT 100`, [], (e, rows) => res.json({ rows: rows || [] }));
+});
+
+// 8 Restore from backup
+app.post('/admin/backup-restore', upload.single('backup'), (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    if (!req.file) return res.send('<h3>No file</h3><a href="/admin">Back</a>');
+    const fs = require('fs');
+    let data;
+    try {
+        data = JSON.parse(fs.readFileSync(req.file.path, 'utf8'));
+    } catch (e) {
+        return res.send('<h3>Invalid JSON backup</h3><a href="/admin">Back</a>');
+    }
+    const skip = new Set(['meta']);
+    const tables = Object.keys(data).filter(k => !skip.has(k) && Array.isArray(data[k]));
+    let ti = 0;
+    const nextTable = () => {
+        if (ti >= tables.length) {
+            logActivity('Admin', 'Director', 'BACKUP_RESTORE', 'tables=' + tables.length);
+            return res.send(`<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:40px;"><h2>✅ Restore finished</h2><p>${tables.length} tables processed</p><a href="/admin">Admin</a></body></html>`);
+        }
+        const table = tables[ti++];
+        const rows = data[table] || [];
+        if (!rows.length || rows.error) return nextTable();
+        // Insert row by row (best-effort; skip on error)
+        let ri = 0;
+        const nextRow = () => {
+            if (ri >= rows.length) return nextTable();
+            const row = rows[ri++];
+            if (!row || typeof row !== 'object') return nextRow();
+            const cols = Object.keys(row).filter(c => c !== 'id');
+            if (!cols.length) return nextRow();
+            const placeholders = cols.map(() => '?').join(',');
+            const sql = `INSERT INTO ${table} (${cols.join(',')}) VALUES (${placeholders})`;
+            db.run(sql, cols.map(c => row[c]), () => nextRow());
+        };
+        nextRow();
+    };
+    nextTable();
+});
+
+// 10 Certificate generator
+app.get('/admin/certificate', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    const sid = (req.query.student_id || '').trim();
+    const title = (req.query.title || 'Certificate of Completion').trim();
+    if (!sid) {
+        return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Certificate</title></head><body style="font-family:serif;padding:20px;">
+<h2>🎓 Certificate Generator</h2>
+<form method="GET" action="/admin/certificate">
+<input name="student_id" placeholder="Student ID" required>
+<input name="title" value="Certificate of Completion" style="width:280px;">
+<button type="submit">Generate</button>
+</form>
+<a href="/admin">Back</a></body></html>`);
+    }
+    db.get(`SELECT * FROM students WHERE UPPER(student_id)=UPPER(?)`, [sid], (e, st) => {
+        if (!st) return res.send('<h3>Student not found</h3><a href="/admin/certificate">Back</a>');
+        res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>Certificate - ${st.name}</title>
+<style>
+@page{size:A4 landscape;margin:0}
+body{font-family:Georgia,serif;background:#f5f5f5;margin:0;padding:20px;}
+.cert{width:297mm;max-width:100%;min-height:180mm;margin:auto;background:linear-gradient(135deg,#fff,#f8fafc);border:12px solid #1f4e79;padding:40px;box-sizing:border-box;text-align:center;position:relative;}
+h1{color:#1f4e79;font-size:36px;margin:10px 0}
+.name{font-size:32px;color:#c9a227;margin:20px 0;font-weight:bold;}
+.meta{color:#555;font-size:14px;}
+@media print{body{background:#fff;padding:0}.no-print{display:none}}
+</style></head><body>
+<p class="no-print" style="text-align:center;"><button onclick="window.print()">🖨️ Print</button> <a href="/admin">Admin</a></p>
+<div class="cert">
+<div style="font-size:18px;letter-spacing:4px;color:#64748b;">AMANUEL LIGHT & LIFE SCHOOL</div>
+<h1>${title}</h1>
+<p>This is to certify that</p>
+<div class="name">${st.name}</div>
+<p>Student ID: <b>${st.student_id}</b> · Class: <b>${st.class_level||''}</b></p>
+<p class="meta">has successfully completed the academic requirements.</p>
+<p class="meta" style="margin-top:40px;">Date: ${getFormattedTimestamp()}</p>
+<div style="display:flex;justify-content:space-around;margin-top:50px;">
+<div><div style="border-top:1px solid #333;width:160px;margin:auto;"></div>Director</div>
+<div><div style="border-top:1px solid #333;width:160px;margin:auto;"></div>School Stamp</div>
+</div>
+</div></body></html>`);
+    });
+});
+
+// 12 Auto daily backup to folder (runs every 24h after start)
+const fsBackup = require('fs');
+const pathBackup = require('path');
+const BACKUP_DIR = pathBackup.join(__dirname, 'backups');
+try { if (!fsBackup.existsSync(BACKUP_DIR)) fsBackup.mkdirSync(BACKUP_DIR, { recursive: true }); } catch (e) {}
+function runDailyBackup() {
+    const tables = ['students','teachers','courses','sections','course_assessments','notifications','fee_ledger','timetable','announcements','pending_students'];
+    const out = { meta: { exported_at: new Date().toISOString(), auto: true } };
+    let i = 0;
+    const next = () => {
+        if (i >= tables.length) {
+            try {
+                const fname = 'auto_' + new Date().toISOString().slice(0,10) + '.json';
+                fsBackup.writeFileSync(pathBackup.join(BACKUP_DIR, fname), JSON.stringify(out, null, 2));
+                // keep last 14 files
+                const files = fsBackup.readdirSync(BACKUP_DIR).filter(f => f.startsWith('auto_')).sort();
+                while (files.length > 14) {
+                    try { fsBackup.unlinkSync(pathBackup.join(BACKUP_DIR, files.shift())); } catch(e){}
+                }
+            } catch (e) { console.error('auto backup', e.message); }
+            return;
+        }
+        const t = tables[i++];
+        db.all(`SELECT * FROM ${t}`, [], (e, rows) => { out[t] = e ? [] : (rows||[]); next(); });
+    };
+    next();
+}
+setTimeout(runDailyBackup, 30 * 1000);
+setInterval(runDailyBackup, 24 * 60 * 60 * 1000);
+
+
+const httpServer = require('http').createServer(app);
+try {
+    const { Server } = require('socket.io');
+    io = new Server(httpServer, { cors: { origin: false } });
+    io.on('connection', (socket) => {
+        socket.on('join', (room) => { if (room) socket.join(String(room)); });
+        socket.on('chat', (msg) => {
+            if (!msg || !msg.room) return;
+            const payload = {
+                room: String(msg.room),
+                text: String(msg.text || '').slice(0, 2000),
+                from: String(msg.from || 'user').slice(0, 80),
+                at: new Date().toISOString()
+            };
+            db.run(`INSERT INTO chat_messages (room, sender_role, sender_name, message, created_at) VALUES (?,?,?,?,?)`,
+                [payload.room, 'user', payload.from, payload.text, getFormattedTimestamp()], () => {
+                    io.to(payload.room).emit('chat', payload);
+                });
+        });
+    });
+    console.log('Socket.io ready');
+} catch (e) {
+    console.log('Socket.io not installed — chat uses polling. npm i socket.io');
+}
+httpServer.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
