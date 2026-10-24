@@ -278,17 +278,20 @@
                 </form>
                 <div id="feeList" style="margin-top:10px;font-size:13px;"></div>
             </div>
-            <div class="card" id="timetable">
-                <h3>📅 Timetable</h3>
-                <form action="/admin/timetable" method="POST">
-                    <input type="text" name="class_level" placeholder="Class e.g. Grade 5A" required>
-                    <select name="day_of_week"><option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option></select>
-                    <input type="number" name="period_no" placeholder="Period #" value="1" min="1" max="10">
-                    <input type="text" name="subject" placeholder="Subject" required>
-                    <input type="text" name="teacher_name" placeholder="Teacher">
-                    <input type="text" name="room" placeholder="Room">
-                    <button type="submit">➕ Add Slot</button>
-                </form>
+            <div class="card" id="timetable" style="grid-column: 1 / -1;">
+                <h3>📅 Timetable (Excel-style) Mon–Fri · Periods 1–6 · 40 min each</h3>
+                <p style="font-size:12px;color:var(--text2);">P1 8:00–8:40 · P2 8:40–9:20 · P3 9:20–10:00 · P4 10:00–10:40 · P5 10:40–11:20 · P6 11:20–12:00 · <b>Break 4:00–4:15 (15 min)</b></p>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+                    <input type="text" id="ttClass" placeholder="Section e.g. Grade 5A" style="max-width:200px;">
+                    <button type="button" onclick="loadTTGrid()">📂 Load</button>
+                    <button type="button" class="btn-green" onclick="saveTTGrid()">💾 Save Grid</button>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table id="ttGrid" style="font-size:12px;min-width:700px;">
+                        <thead><tr><th>Period</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
             </div>
         </div>
         <div class="card">
