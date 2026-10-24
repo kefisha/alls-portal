@@ -93,10 +93,13 @@
             <button type="submit">📝 Assign Homework</button>
         </form>
         <form id="quizBuilderForm" action="/teacher/quiz" method="POST" enctype="multipart/form-data" style="margin-bottom:14px;border-top:1px solid #ddd;padding-top:12px;">
-            <p style="font-size:12px;color:#666;">A–D · Paste LaTeX → <b>preview</b> below · Or <b>upload image</b> of the question · Symbols kept</p>
-            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-            <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-            <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+            <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px;margin-bottom:12px;font-size:13px;line-height:1.5;">
+                <b>📌 ቀመር እንደ ፎቶ ለማስቀመጥ (ምርጥ መንገድ):</b><br>
+                1) ጥያቄውን Screenshot ያድርጉ ወይም ፎቶ Copy<br>
+                2) ከታች ባለው <b>ጫማ ሳጥን</b> ላይ ጠቅ ያድርጉና <b>Paste (Ctrl+V / long-press Paste)</b><br>
+                3) ፎቶው ይታያል → A B C D ይሙሉ → Publish<br>
+                <span style="color:#666;">ጽሁፍ ብቻ paste ካደረጉ ቀመር ሊበላሽ ይችላል — ፎቶ ሁልጊዜ ይቀራል።</span>
+            </div>
             <input type="text" name="title" placeholder="Quiz title" required>
             <input type="text" name="class_level" placeholder="Class" value="<%= typeof selectedClass !== 'undefined' ? selectedClass : '' %>">
             <input type="hidden" name="questions_json" id="questionsJson">
@@ -105,103 +108,85 @@
             <button type="submit" style="margin-top:8px;">❓ Publish Quiz</button>
         </form>
         <style>
-            .quiz-paste {
-                width: 100%; box-sizing: border-box;
-                font-family: "Segoe UI", "Noto Sans Math", "Cambria Math", sans-serif;
-                font-size: 15px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+            .quiz-paste { width:100%; box-sizing:border-box; font-size:15px; line-height:1.5; white-space:pre-wrap; }
+            .paste-zone {
+                border: 2px dashed #2980b9; border-radius: 12px; padding: 16px; text-align: center;
+                background: #eef6fc; cursor: pointer; margin: 8px 0; min-height: 90px;
             }
-            .katex-preview {
-                background: #0f172a; color: #e2e8f0; padding: 12px 14px; border-radius: 8px;
-                margin: 6px 0 10px; min-height: 28px; font-size: 16px; overflow-x: auto;
-            }
-            .katex-preview .hint { color: #94a3b8; font-size: 12px; }
-            .q-img-preview { max-width: 100%; max-height: 180px; margin-top: 6px; border-radius: 8px; display: none; }
+            .paste-zone:focus, .paste-zone.active { border-color: #27ae60; background: #e8f8f0; outline: none; }
+            .paste-zone img { max-width: 100%; max-height: 220px; border-radius: 8px; margin-top: 8px; }
+            .paste-zone .pz-hint { color: #1f4e79; font-weight: 600; font-size: 14px; }
+            .paste-zone .pz-sub { color: #64748b; font-size: 12px; margin-top: 4px; }
         </style>
         <script>
         (function(){
-            function bindPreservePaste(el) {
-                if (!el || el._pasteBound) return;
-                el._pasteBound = true;
-                el.addEventListener('paste', function(e) {
-                    e.preventDefault();
-                    var cd = (e.clipboardData || window.clipboardData);
+            function setFileOnInput(fileInput, file) {
+                try {
+                    var dt = new DataTransfer();
+                    dt.items.add(file);
+                    fileInput.files = dt.files;
+                } catch (e) { console.warn(e); }
+            }
+
+            function handleImageFile(div, file) {
+                if (!file || !file.type || file.type.indexOf('image/') !== 0) return false;
+                var img = div.querySelector('.pz-img');
+                var fileInput = div.querySelector('.qimg');
+                var hint = div.querySelector('.pz-hint');
+                img.src = URL.createObjectURL(file);
+                img.style.display = 'block';
+                if (hint) hint.textContent = '✅ ፎቶ ተለጥፏል — አሁን A–D ይሙሉ';
+                setFileOnInput(fileInput, file);
+                return true;
+            }
+
+            function bindPasteZone(div) {
+                var zone = div.querySelector('.paste-zone');
+                var fileInput = div.querySelector('.qimg');
+                zone.addEventListener('click', function() { fileInput.click(); });
+                zone.tabIndex = 0;
+                zone.addEventListener('paste', function(e) {
+                    var cd = e.clipboardData || window.clipboardData;
                     if (!cd) return;
-                    var text = cd.getData('text/plain');
-                    if (text == null || text === '') {
-                        var html = cd.getData('text/html') || '';
-                        if (html) {
-                            var tmp = document.createElement('div');
-                            tmp.innerHTML = html;
-                            text = tmp.innerText || tmp.textContent || '';
+                    // Prefer image from clipboard
+                    if (cd.items) {
+                        for (var i = 0; i < cd.items.length; i++) {
+                            if (cd.items[i].type.indexOf('image/') === 0) {
+                                e.preventDefault();
+                                var f = cd.items[i].getAsFile();
+                                if (f) handleImageFile(div, f);
+                                return;
+                            }
                         }
                     }
-                    text = String(text).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-                    var start = el.selectionStart, end = el.selectionEnd;
-                    var val = el.value || '';
-                    el.value = val.slice(0, start) + text + val.slice(end);
-                    el.selectionStart = el.selectionEnd = start + text.length;
-                    el.dispatchEvent(new Event('input', { bubbles: true }));
-                });
-            }
-
-            // Auto-wrap LaTeX-looking text for KaTeX if no $ present
-            function prepareForKatex(src) {
-                var s = String(src || '');
-                if (!s.trim()) return '';
-                if (s.indexOf('$') !== -1 || s.indexOf('\\\\(') !== -1) return s;
-                // If contains latex commands, wrap in $$ ... $$
-                if (/\\(lim|frac|sum|int|sqrt|to|infty|partial|sin|cos|tan|log|ln|left|right)/.test(s)) {
-                    return '$$' + s + '$$';
-                }
-                return s;
-            }
-
-            function updatePreview(textarea, previewEl) {
-                var raw = textarea.value || '';
-                previewEl.innerHTML = '';
-                if (!raw.trim()) {
-                    previewEl.innerHTML = '<span class="hint">Preview — paste or type formula…</span>';
-                    return;
-                }
-                var prepared = prepareForKatex(raw);
-                // Show text + try render math inside
-                var wrap = document.createElement('div');
-                wrap.style.whiteSpace = 'pre-wrap';
-                wrap.textContent = raw;
-                previewEl.appendChild(wrap);
-                if (window.renderMathInElement) {
-                    try {
-                        // Render on a copy with $ wrappers if needed
-                        if (prepared !== raw && raw.indexOf('$') === -1) {
-                            wrap.textContent = '';
-                            wrap.innerHTML = '';
-                            // use katex on full prepared
-                            if (window.katex) {
-                                try {
-                                    katex.render(raw.replace(/^\$+|\$+$/g,''), wrap, { throwOnError: false, displayMode: true });
-                                } catch (e) {
-                                    wrap.textContent = raw;
-                                    renderMathInElement(wrap, { delimiters: [
-                                        {left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false},
-                                        {left:'\\\\(',right:'\\\\)',display:false},{left:'\\\\[',right:'\\\\]',display:true}
-                                    ], throwOnError: false });
-                                }
+                    if (cd.files && cd.files.length) {
+                        for (var j = 0; j < cd.files.length; j++) {
+                            if (cd.files[j].type.indexOf('image/') === 0) {
+                                e.preventDefault();
+                                handleImageFile(div, cd.files[j]);
+                                return;
                             }
-                        } else {
-                            renderMathInElement(wrap, { delimiters: [
-                                {left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false},
-                                {left:'\\\\(',right:'\\\\)',display:false},{left:'\\\\[',right:'\\\\]',display:true}
-                            ], throwOnError: false });
                         }
-                    } catch (e) {}
-                }
-            }
-
-            function bindPreview(textarea, previewEl) {
-                var run = function(){ updatePreview(textarea, previewEl); };
-                textarea.addEventListener('input', run);
-                textarea.addEventListener('change', run);
-                run();
+                    }
+                });
+                // Also allow paste image while focused on any field in this question block
+                div.addEventListener('paste', function(e) {
+                    var cd = e.clipboardData || window.clipboardData;
+                    if (!cd || !cd.items) return;
+                    for (var i = 0; i < cd.items.length; i++) {
+                        if (cd.items[i].type.indexOf('image/') === 0) {
+                            e.preventDefault();
+                            var f = cd.items[i].getAsFile();
+                            if (f) handleImageFile(div, f);
+                            return;
+                        }
+                    }
+                });
+                fileInput.addEventListener('change', function() {
+                    if (fileInput.files && fileInput.files[0]) {
+                        handleImageFile(div, fileInput.files[0]);
+                    }
+                });
             }
 
             let n = 0;
@@ -212,32 +197,22 @@
                 div.className = 'qblock';
                 div.style.cssText = 'border:1px solid #ddd;border-radius:8px;padding:12px;margin:10px 0;background:#f8fafc;';
                 div.innerHTML = '<b>Q'+n+'</b>'
-                  + '<textarea class="qq quiz-paste" rows="4" placeholder="Question text or LaTeX e.g. \\\\lim_{x \\\\to 3} \\\\frac{x^2-9}{x-3}"></textarea>'
-                  + '<div class="katex-preview qq-prev"><span class="hint">Preview…</span></div>'
-                  + '<label style="font-size:13px;display:block;margin:6px 0;">📷 Or upload question image: <input type="file" class="qimg" name="qimg_'+n+'" accept="image/*"></label>'
-                  + '<img class="q-img-preview qimg-prev" alt="preview">'
-                  + '<div style="display:grid;grid-template-columns:28px 1fr;gap:6px;align-items:start;margin:6px 0;">'
+                  + '<div class="paste-zone" title="Click or Paste image here">'
+                  +   '<div class="pz-hint">📷 ፎቶ እዚህ Paste ያድርጉ (Ctrl+V) ወይም ጠቅ በማድረግ ይምረጡ</div>'
+                  +   '<div class="pz-sub">Screenshot of formula → Copy → Paste here</div>'
+                  +   '<img class="pz-img" style="display:none;" alt="Question image">'
+                  + '</div>'
+                  + '<input type="file" class="qimg" name="qimg_'+n+'" accept="image/*" style="display:none;">'
+                  + '<textarea class="qq quiz-paste" rows="2" placeholder="Optional: question text (if no image)" style="margin-top:8px;"></textarea>'
+                  + '<div style="display:grid;grid-template-columns:28px 1fr;gap:6px;align-items:start;margin:8px 0;">'
                   + '<label style="padding-top:8px;"><input type="radio" class="qcorrect" name="corr'+n+'" value="A" checked> A</label><textarea class="qoA quiz-paste" rows="2" placeholder="Option A"></textarea>'
                   + '<label style="padding-top:8px;"><input type="radio" class="qcorrect" name="corr'+n+'" value="B"> B</label><textarea class="qoB quiz-paste" rows="2" placeholder="Option B"></textarea>'
                   + '<label style="padding-top:8px;"><input type="radio" class="qcorrect" name="corr'+n+'" value="C"> C</label><textarea class="qoC quiz-paste" rows="2" placeholder="Option C"></textarea>'
                   + '<label style="padding-top:8px;"><input type="radio" class="qcorrect" name="corr'+n+'" value="D"> D</label><textarea class="qoD quiz-paste" rows="2" placeholder="Option D"></textarea>'
                   + '</div>'
-                  + '<textarea class="qd quiz-paste" rows="3" placeholder="Solution / description (LaTeX or text)"></textarea>'
-                  + '<div class="katex-preview qd-prev"><span class="hint">Solution preview…</span></div>';
+                  + '<textarea class="qd quiz-paste" rows="2" placeholder="Solution / explanation (optional text)"></textarea>';
                 wrap.appendChild(div);
-                div.querySelectorAll('.quiz-paste').forEach(bindPreservePaste);
-                bindPreview(div.querySelector('.qq'), div.querySelector('.qq-prev'));
-                bindPreview(div.querySelector('.qd'), div.querySelector('.qd-prev'));
-                var fileInp = div.querySelector('.qimg');
-                var imgPrev = div.querySelector('.qimg-prev');
-                fileInp.addEventListener('change', function() {
-                    if (fileInp.files && fileInp.files[0]) {
-                        imgPrev.src = URL.createObjectURL(fileInp.files[0]);
-                        imgPrev.style.display = 'block';
-                    } else {
-                        imgPrev.style.display = 'none';
-                    }
-                });
+                bindPasteZone(div);
             };
             addQuizQuestion();
             document.getElementById('quizBuilderForm').addEventListener('submit', function() {
