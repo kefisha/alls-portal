@@ -76,6 +76,13 @@ function generateStrong4DigitPIN() {
     return pin;
 }
 
+function logActivity(role, name, action, details) {
+    try {
+        db.run(`INSERT INTO activity_log (actor_role, actor_name, action, details, created_at) VALUES (?,?,?,?,?)`,
+            [role || '', name || '', action || '', details || '', getFormattedTimestamp()]);
+    } catch (e) {}
+}
+
 function getFormattedTimestamp() {
     const now = new Date();
     // Exact: Weekday, Day Month Year | HH:MM:SS
@@ -212,6 +219,15 @@ async function initDB() {
             message TEXT,
             channel TEXT DEFAULT 'sms',
             status TEXT DEFAULT 'queued',
+            created_at TEXT
+        )`);
+
+        await pool.query(`CREATE TABLE IF NOT EXISTS activity_log (
+            id SERIAL PRIMARY KEY,
+            actor_role TEXT,
+            actor_name TEXT,
+            action TEXT,
+            details TEXT,
             created_at TEXT
         )`);
 
@@ -569,7 +585,7 @@ app.get('/sw.js', (req, res) => {
     res.setHeader('Content-Type', 'application/javascript');
     res.setHeader('Service-Worker-Allowed', '/');
     res.send(`
-const CACHE = 'alls-v1';
+const CACHE = 'alls-v2';
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(['/','/manifest.json']).catch(()=>{})));
   self.skipWaiting();
@@ -583,7 +599,7 @@ self.addEventListener('fetch', (e) => {
         caches.open(CACHE).then(c => c.put(e.request, copy)).catch(()=>{});
       }
       return r;
-    }).catch(() => caches.match(e.request))
+    }).catch(() => caches.match(e.request).then(r => r || new Response('<h2>Offline — ALLS Portal</h2><p>Reconnect to continue.</p>',{headers:{'Content-Type':'text/html'}})))
   );
 });
 `);
@@ -1518,6 +1534,7 @@ app.get('/admin/approve/:id', (req, res) => {
         if (!st) return res.redirect('/admin');
         db.run(`INSERT INTO students (student_id, password, name, mother_name, gender, age, phone, emergency_phone, region, zone, woreda, kebele, class_level, payment_type, bank_slip_val, photo, status, admin_message) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [st.student_id, st.password, st.name, st.mother_name, st.gender, st.age, st.phone, st.emergency_phone, st.region, st.zone, st.woreda, st.kebele, st.class_level, st.payment_type, st.bank_slip_val, st.photo, 'Approved', '🎉 Your registration is approved!'], () => {
+            logActivity('Admin', 'Director', 'APPROVE_STUDENT', st.student_id + ' ' + (st.name||''));
             db.run(`DELETE FROM pending_students WHERE id = ?`, [req.params.id], () => res.redirect('/admin#pending-approvals'));
         });
     });
@@ -1526,6 +1543,7 @@ app.get('/admin/approve/:id', (req, res) => {
 // ❌ Reject pending student (delete after payment check fails)
 app.get('/admin/reject/:id', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
+    logActivity('Admin', 'Director', 'REJECT_STUDENT', 'pending id=' + req.params.id);
     db.run(`DELETE FROM pending_students WHERE id = ?`, [req.params.id], () => res.redirect('/admin#pending-approvals'));
 });
 
@@ -2825,6 +2843,77 @@ app.post('/admin/promote-students', (req, res) => {
             }
         });
         res.redirect('/admin');
+    });
+});
+
+
+// ===== QR Attendance =====
+app.get('/qr-scan', (req, res) => {
+    if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
+    res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QR Attendance</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+body{font-family:Segoe UI,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:16px;text-align:center}
+.card{background:#1e293b;border-radius:16px;padding:20px;max-width:420px;margin:0 auto 16px}
+#reader{width:100%;max-width:360px;margin:0 auto;border-radius:12px;overflow:hidden}
+.ok{background:#14532d;color:#bbf7d0;padding:12px;border-radius:8px;margin-top:12px;display:none}
+.err{background:#7f1d1d;color:#fecaca;padding:12px;border-radius:8px;margin-top:12px;display:none}
+input,button{width:100%;padding:12px;margin:8px 0;border-radius:8px;border:none;font-size:15px;box-sizing:border-box}
+button{background:#2980b9;color:#fff;font-weight:bold;cursor:pointer}
+a{color:#60a5fa}
+</style></head><body>
+<div class="card"><h2>📷 QR Attendance</h2>
+<p style="font-size:13px;color:#94a3b8">Scan student ID QR or type ID manually</p>
+<div id="reader"></div>
+<div id="ok" class="ok"></div><div id="err" class="err"></div>
+<input id="manualId" placeholder="Or type Student ID e.g. ALLS-1234">
+<button onclick="markManual()">✅ Mark Present</button>
+<p style="margin-top:16px"><a href="javascript:history.back()">⬅️ Back</a></p>
+</div>
+<script>
+function showOk(t){const e=document.getElementById('ok');e.style.display='block';e.textContent=t;document.getElementById('err').style.display='none';}
+function showErr(t){const e=document.getElementById('err');e.style.display='block';e.textContent=t;document.getElementById('ok').style.display='none';}
+function mark(id){
+  fetch('/api/qr-attendance',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({student_id:id})})
+  .then(r=>r.json()).then(d=>{ if(d.success) showOk('✅ '+d.name+' — Present ('+d.date+')'); else showErr('❌ '+(d.error||'Failed')); })
+  .catch(()=>showErr('Network error'));
+}
+function markManual(){ const id=document.getElementById('manualId').value.trim(); if(id) mark(id); }
+const scanner=new Html5Qrcode('reader');
+Html5Qrcode.getCameras().then(cams=>{
+  if(!cams.length){ showErr('No camera'); return; }
+  scanner.start(cams[0].id,{fps:8,qrbox:220}, (text)=>{ mark(text.trim()); }, ()=>{});
+}).catch(()=>showErr('Camera permission needed — use manual ID'));
+</script></body></html>`);
+});
+
+app.post('/api/qr-attendance', (req, res) => {
+    if (!req.session.isAdmin && !req.session.teacherId) return res.status(401).json({ success: false, error: 'login' });
+    const sid = String((req.body && req.body.student_id) || '').trim();
+    if (!sid) return res.json({ success: false, error: 'No student ID' });
+    const today = new Date().toISOString().slice(0, 10);
+    db.get(`SELECT * FROM students WHERE UPPER(student_id)=UPPER(?)`, [sid], (err, st) => {
+        if (!st) return res.json({ success: false, error: 'Student not found' });
+        db.get(`SELECT id FROM daily_attendance WHERE student_id=? AND date=?`, [st.student_id, today], (e2, row) => {
+            const done = () => {
+                logActivity(req.session.isAdmin ? 'Admin' : 'Teacher', req.session.isAdmin ? 'Director' : (req.session.teacherId||''), 'QR_ATTENDANCE', st.student_id);
+                res.json({ success: true, name: st.name, date: today });
+            };
+            if (row) {
+                db.run(`UPDATE daily_attendance SET status=? WHERE id=?`, ['Present', row.id], done);
+            } else {
+                db.run(`INSERT INTO daily_attendance (student_id, student_name, class_level, date, status) VALUES (?,?,?,?,?)`,
+                    [st.student_id, st.name, st.class_level || '', today, 'Present'], done);
+            }
+        });
+    });
+});
+
+app.get('/api/activity-log', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ rows: [] });
+    db.all(`SELECT * FROM activity_log ORDER BY id DESC LIMIT 50`, [], (err, rows) => {
+        res.json({ rows: rows || [] });
     });
 });
 
