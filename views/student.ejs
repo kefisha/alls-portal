@@ -193,6 +193,21 @@
         <%- myAbsRows || '<p style="color: #777; font-size: 13px;">ምንም የቀረበ ጥያቄ የለም / No requests</p>' %>
     </div>
 
+    
+    <div class="card" id="homework">
+        <h3>📚 <span class="am">የትምህርት ማዕከል</span><span class="en">Learning Hub</span></h3>
+        <p><a href="/learning-hub" style="background:#8e44ad;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block;">Open Library · Homework · Quiz · Timetable</a></p>
+        <p style="margin-top:10px;"><a href="/report-card/<%= student.student_id %>" style="background:#27ae60;color:#fff;padding:8px 14px;border-radius:6px;text-decoration:none;font-weight:bold;">📄 Download Report Card PDF</a></p>
+        <canvas id="studentProgressChart" height="160" style="margin-top:12px;"></canvas>
+        <form action="/student/homework-submit" method="POST" enctype="multipart/form-data" style="margin-top:14px;border-top:1px solid #ddd;padding-top:12px;">
+            <label>Submit homework</label>
+            <input type="number" name="homework_id" placeholder="Homework ID #" required>
+            <textarea name="note" rows="2" placeholder="Note (optional)"></textarea>
+            <input type="file" name="file">
+            <button type="submit">📤 Submit</button>
+        </form>
+    </div>
+
     <!-- Student Live Chat -->
     <div class="card" style="border-top:4px solid #8e44ad;">
         <h3>💬 <span class="am">ከትምህርት ቤት ጋር ውይይት</span><span class="en">Chat with School</span></h3>
@@ -396,6 +411,13 @@
         });
     })();
 
+
+    fetch('/api/student-progress/<%= student.student_id %>').then(r=>r.json()).then(d=>{
+        if (!d.labels || !d.labels.length) return;
+        const ctx = document.getElementById('studentProgressChart');
+        if (!ctx || typeof Chart === 'undefined') return;
+        new Chart(ctx, { type: 'bar', data: { labels: d.labels, datasets: [{ label: 'Total', data: d.data, backgroundColor: '#2980b9' }] }, options: { scales: { y: { beginAtZero: true, max: 100 } } } });
+    }).catch(()=>{});
 </script>
 </body>
 </html>
