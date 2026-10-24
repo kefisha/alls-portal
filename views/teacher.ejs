@@ -339,6 +339,39 @@
                 });
             });
         });
-    </script>
+    
+    // Stay in place after save/send/reply (no jump to top)
+    (function(){
+        const KEY = 'scrollPos_' + location.pathname;
+        const saved = sessionStorage.getItem(KEY);
+        if (saved) {
+            const y = parseInt(saved, 10);
+            if (!isNaN(y)) {
+                requestAnimationFrame(function(){ window.scrollTo(0, y); });
+                setTimeout(function(){ window.scrollTo(0, y); }, 50);
+                setTimeout(function(){ window.scrollTo(0, y); }, 200);
+            }
+            sessionStorage.removeItem(KEY);
+        }
+        function saveScroll(){ sessionStorage.setItem(KEY, String(window.scrollY || window.pageYOffset || 0)); }
+        document.addEventListener('submit', function(e){
+            const f = e.target;
+            if (!f || f.tagName !== 'FORM') return;
+            // AJAX forms handle themselves
+            if (f.classList.contains('ajax-grade-form') || f.id === 'studentChatForm' || f.id === 'chatForm') return;
+            saveScroll();
+        }, true);
+        document.addEventListener('click', function(e){
+            const a = e.target.closest && e.target.closest('a[href]');
+            if (!a) return;
+            const href = a.getAttribute('href') || '';
+            if (href.indexOf('/admin/approve/') === 0 || href.indexOf('/admin/reject/') === 0 ||
+                href.indexOf('/delete-notification/') === 0 || href.indexOf('/edit-notification/') === 0) {
+                saveScroll();
+            }
+        }, true);
+    })();
+
+</script>
 </body>
 </html>
