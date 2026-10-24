@@ -3116,7 +3116,11 @@ app.get('/api/quiz/:id', (req, res) => {
         res.json({
             success: true,
             id: quiz.id, title: quiz.title, class_level: quiz.class_level, teacher_name: quiz.teacher_name,
-            questions: qs.map(q => ({ q: q.q })) // hide answers + desc until end
+            questions: qs.map(q => ({
+                q: q.q,
+                type: q.type || (q.options ? 'mcq' : 'text'),
+                options: q.options || null
+            }))
         });
     });
 });
@@ -3134,10 +3138,18 @@ app.post('/student/quiz-attempt', (req, res) => {
             const correct = String(q.a || '').trim();
             const ok = given.toLowerCase() === correct.toLowerCase();
             if (ok) score++;
+            let correctLabel = correct;
+            if (q.options && q.options[correct]) {
+                correctLabel = correct + ') ' + q.options[correct];
+            }
+            let yourLabel = given;
+            if (q.options && q.options[given]) {
+                yourLabel = given + ') ' + q.options[given];
+            }
             return {
                 q: q.q,
-                your: given,
-                correct: correct,
+                your: yourLabel,
+                correct: correctLabel,
                 desc: q.desc || '',
                 ok
             };
@@ -3163,23 +3175,27 @@ app.get('/quiz/:id', (req, res) => {
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 <style>
 body{font-family:Segoe UI,sans-serif;background:linear-gradient(135deg,#1f4e79,#0d2b45);min-height:100vh;margin:0;padding:16px;color:#333}
-.card{background:#fff;max-width:480px;margin:20px auto;border-radius:16px;padding:22px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+.card{background:#fff;max-width:520px;margin:20px auto;border-radius:16px;padding:22px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
 h2{color:#1f4e79;margin:0 0 8px;font-size:20px}
 .progress{height:8px;background:#e2e8f0;border-radius:8px;overflow:hidden;margin:12px 0 18px}
 .bar{height:100%;background:#27ae60;width:0%;transition:.3s}
-.qbox{font-size:17px;line-height:1.55;margin-bottom:14px;min-height:60px;white-space:pre-wrap}
-input[type=text]{width:100%;padding:14px;border:2px solid #cbd5e1;border-radius:10px;font-size:16px;box-sizing:border-box}
+.qbox{font-size:16px;line-height:1.6;margin-bottom:14px;min-height:50px;white-space:pre-wrap;word-break:break-word}
+.opt{display:block;width:100%;text-align:left;padding:12px 14px;margin:8px 0;border:2px solid #cbd5e1;border-radius:10px;background:#f8fafc;font-size:15px;cursor:pointer;box-sizing:border-box}
+.opt.selected{border-color:#2980b9;background:#e8f4fd}
+.opt:hover{border-color:#94a3b8}
 button{width:100%;padding:14px;margin-top:12px;border:none;border-radius:10px;font-weight:bold;font-size:16px;cursor:pointer;background:#2980b9;color:#fff}
+button:disabled{opacity:.5;cursor:not-allowed}
 button.sec{background:#64748b}
 .meta{font-size:13px;color:#64748b}
 .review{text-align:left;font-size:14px}
 .ok{color:#16a34a}.bad{color:#dc2626}
 .score{font-size:42px;font-weight:800;color:#1f4e79;text-align:center}
+.desc{white-space:pre-wrap;background:#f1f5f9;padding:10px;border-radius:8px;margin-top:6px;font-size:13px}
 </style></head><body>
 <div class="card" id="app"><p class="meta">Loading quiz...</p></div>
 <script>
 const quizId=${JSON.stringify(String(qid))};
-let questions=[], idx=0, answers=[];
+let questions=[], idx=0, answers=[], selected=null;
 function renderMath(el){
   if(window.renderMathInElement){
     try{ renderMathInElement(el,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false},{left:'\\\\(',right:'\\\\)',display:false},{left:'\\\\[',right:'\\\\]',display:true}],throwOnError:false}); }catch(e){}
@@ -3188,37 +3204,74 @@ function renderMath(el){
 function showQ(){
   const app=document.getElementById('app');
   if(idx>=questions.length){ return finish(); }
+  selected=null;
+  const q=questions[idx];
   const pct=Math.round((idx/questions.length)*100);
-  app.innerHTML='<h2 id="title"></h2><div class="meta">Question '+(idx+1)+' / '+questions.length+'</div><div class="progress"><div class="bar" style="width:'+pct+'%"></div></div><div class="qbox" id="qtext"></div><input type="text" id="ans" placeholder="Your answer..." autocomplete="off"><button type="button" id="nextBtn">'+(idx===questions.length-1?'Finish ✅':'Next ➡️')+'</button><button type="button" class="sec" onclick="location.href=\\'/learning-hub\\'">Exit</button>';
+  let optsHtml='';
+  if(q.options){
+    ['A','B','C','D'].forEach(function(L){
+      const t=q.options[L];
+      if(t===undefined||t===null||t==='') return;
+      optsHtml+='<button type="button" class="opt" data-val="'+L+'"><b>'+L+'.</b> <span class="opttext"></span></button>';
+    });
+  } else {
+    optsHtml='<input type="text" id="ans" placeholder="Your answer..." style="width:100%;padding:14px;border:2px solid #cbd5e1;border-radius:10px;font-size:16px;box-sizing:border-box;">';
+  }
+  app.innerHTML='<h2 id="title"></h2><div class="meta">Question '+(idx+1)+' / '+questions.length+'</div><div class="progress"><div class="bar" style="width:'+pct+'%"></div></div><div class="qbox" id="qtext"></div>'+optsHtml+'<button type="button" id="nextBtn" disabled>'+(idx===questions.length-1?'Finish ✅':'Next ➡️')+'</button><button type="button" class="sec" onclick="location.href=\\'/learning-hub\\'">Exit</button>';
   document.getElementById('title').textContent=window._quizTitle||'Quiz';
   const qt=document.getElementById('qtext');
-  qt.textContent=questions[idx].q;
+  qt.textContent=q.q||'';
   renderMath(qt);
-  document.getElementById('ans').focus();
-  document.getElementById('nextBtn').onclick=()=>{
-    answers[idx]=document.getElementById('ans').value;
+  if(q.options){
+    const buttons=app.querySelectorAll('.opt');
+    let oi=0;
+    ['A','B','C','D'].forEach(function(L){
+      const t=q.options[L];
+      if(t===undefined||t===null||t==='') return;
+      const btn=buttons[oi++];
+      const sp=btn.querySelector('.opttext');
+      sp.textContent=t;
+      renderMath(sp);
+      btn.onclick=function(){
+        buttons.forEach(b=>b.classList.remove('selected'));
+        btn.classList.add('selected');
+        selected=L;
+        document.getElementById('nextBtn').disabled=false;
+      };
+    });
+  } else {
+    const inp=document.getElementById('ans');
+    inp.oninput=function(){ document.getElementById('nextBtn').disabled=!inp.value.trim(); };
+    inp.focus();
+  }
+  document.getElementById('nextBtn').onclick=function(){
+    if(q.options){ answers[idx]=selected; }
+    else { answers[idx]=document.getElementById('ans').value; }
     idx++;
     showQ();
   };
 }
 function finish(){
-  fetch('/student/quiz-attempt',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({quiz_id:quizId,answers})})
+  fetch('/student/quiz-attempt',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({quiz_id:quizId,answers:answers})})
   .then(r=>r.json()).then(d=>{
     const app=document.getElementById('app');
     if(!d.success){ app.innerHTML='<p>Error submitting</p>'; return; }
     let html='<div class="score">'+d.percent+'%</div><p style="text-align:center;font-weight:bold">'+d.score+' / '+d.total+' correct</p><div class="progress"><div class="bar" style="width:'+d.percent+'%"></div></div><div class="review">';
-    (d.review||[]).forEach((r,i)=>{
+    (d.review||[]).forEach(function(r,i){
       html+='<div style="border-top:1px solid #eee;padding:10px 0"><b>Q'+(i+1)+'.</b> <span class="qpart"></span><br>';
       html+=(r.ok?'<span class="ok">✅ Correct</span>':'<span class="bad">❌ Wrong</span>');
-      html+='<br>Your: <b>'+(r.your||'-')+'</b><br>Answer: <b>'+(r.correct||'-')+'</b>';
-      if(r.desc) html+='<br><small style="color:#555">'+r.desc+'</small>';
+      html+='<br>Your: <b class="yourpart"></b><br>Answer: <b class="corrpart"></b>';
+      if(r.desc) html+='<div class="desc descp"></div>';
       html+='</div>';
     });
     html+='</div><button onclick="location.href=\\'/learning-hub\\'">Back to Hub</button>';
     app.innerHTML=html;
-    app.querySelectorAll('.review > div').forEach((div,i)=>{
-      const sp=div.querySelector('.qpart');
-      if(sp && d.review[i]) { sp.textContent=d.review[i].q; renderMath(sp); }
+    app.querySelectorAll('.review > div').forEach(function(div,i){
+      const r=d.review[i]; if(!r) return;
+      const qp=div.querySelector('.qpart'); if(qp){ qp.textContent=r.q; renderMath(qp); }
+      const yp=div.querySelector('.yourpart'); if(yp){ yp.textContent=r.your||'-'; renderMath(yp); }
+      const cp=div.querySelector('.corrpart'); if(cp){ cp.textContent=r.correct||'-'; renderMath(cp); }
+      const dp=div.querySelector('.descp'); if(dp&&r.desc){ dp.textContent=r.desc; renderMath(dp); }
     });
   });
 }
@@ -3231,6 +3284,7 @@ fetch('/api/quiz/'+encodeURIComponent(quizId),{credentials:'same-origin'}).then(
 });
 </script></body></html>`);
 });
+
 
 // 5 Lesson plan
 app.post('/teacher/lesson-plan', (req, res) => {
