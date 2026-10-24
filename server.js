@@ -2059,11 +2059,16 @@ app.get('/teacher-dashboard', (req, res) => {
                                                 <button type="submit" style="background:#27ae60;color:#fff;border:none;padding:6px 10px;border-radius:6px;font-weight:bold;cursor:pointer;font-size:12px;">💬 Reply</button>
                                             </form>`;
                                     }
+                                    const delBtn = `<form action="/teacher/delete-absence" method="POST" style="margin-top:6px;" onsubmit="return confirm('Delete this request?');">
+                                            <input type="hidden" name="id" value="${ab.id}">
+                                            <input type="hidden" name="cls" value="${selectedClass || ''}">
+                                            <button type="submit" style="background:#e74c3c;color:#fff;border:none;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;">🗑️ Delete</button>
+                                        </form>`;
                                     return `<tr>
                                         <td style="text-align:left;">${ab.student_name || ''}</td>
                                         <td>${ab.date || ab.created_at || ''}</td>
                                         <td style="text-align:left;">${ab.reason || ''}${ab.attachment ? `<br><a href="/uploads/${ab.attachment}" target="_blank">📎</a>` : ''}</td>
-                                        <td>${feedbackCell}</td>
+                                        <td>${feedbackCell}${delBtn}</td>
                                     </tr>`;
                                 }).join('');
                                 
@@ -2151,6 +2156,16 @@ app.post('/teacher/send-notification', upload.single('attachment'), (req, res) =
     });
 });
 
+
+
+app.post('/teacher/delete-absence', (req, res) => {
+    if (!req.session.teacherId) return res.redirect('/');
+    const id = req.body.id;
+    const cls = req.body.cls || '';
+    db.run(`DELETE FROM absence_requests WHERE id = ?`, [id], () => {
+        res.redirect(cls ? `/teacher-dashboard?cls=${encodeURIComponent(cls)}` : '/teacher-dashboard');
+    });
+});
 
 app.post('/teacher/absence-feedback', (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
@@ -2488,15 +2503,17 @@ app.get('/api/admin/roster-summary', (req, res) => {
 
 app.get('/admin/student-report-card', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
-    const studentId = (req.query.student_id || '').trim().toUpperCase();
+    // support ?name= as well as student_id
+    let studentId = (req.query.student_id || '').trim().toUpperCase();
+    const studentName = (req.query.name || '').trim();
     const academicYear = (req.query.year || '2019 E.C').trim();
 
-    if (!studentId) return res.send('<h3 style="text-align:center;color:red;margin-top:40px;">እባክዎ የተማሪውን መታወቂያ (ID) ያስገቡ!</h3>');
+    if (!studentId && !studentName) return res.send('<h3 style="text-align:center;color:red;margin-top:40px;">ID ወይም ስም ያስገቡ!</h3>');
 
-    db.get(`SELECT * FROM students WHERE UPPER(student_id) = ?`, [studentId], (err, student) => {
+    const runWithStudent = (student) => {
         if (!student) {
             return res.send(`<div style="font-family:sans-serif;text-align:center;padding:50px;">
-                <h2 style="color:#e74c3c;">❌ ተማሪው አልተገኘም! (${studentId})</h2>
+                <h2 style="color:#e74c3c;">❌ ተማሪው አልተገኘም!</h2>
                 <a href="/admin" style="background:#2980b9;color:white;padding:10px 20px;text-decoration:none;border-radius:6px;">⬅️ ወደ አድሚን ተመለስ</a>
             </div>`);
         }
@@ -2672,7 +2689,17 @@ app.get('/admin/student-report-card', (req, res) => {
                 });
             });
         });
-    });
+    }; // end runWithStudent
+
+    if (studentId) {
+        db.get(`SELECT * FROM students WHERE UPPER(student_id) = ?`, [studentId], (err, student) => {
+            runWithStudent(student);
+        });
+    } else {
+        db.get(`SELECT * FROM students WHERE LOWER(name) LIKE ? LIMIT 1`, ['%' + studentName.toLowerCase() + '%'], (err, student) => {
+            runWithStudent(student);
+        });
+    }
 });
 
 app.get('/admin/master-roster/:year/:className', (req, res) => {
@@ -2963,7 +2990,8 @@ function markManual(){ const id=document.getElementById('manualId').value.trim()
 const scanner=new Html5Qrcode('reader');
 Html5Qrcode.getCameras().then(cams=>{
   if(!cams.length){ showErr('No camera'); return; }
-  scanner.start(cams[0].id,{fps:8,qrbox:220}, (text)=>{ mark(text.trim()); }, ()=>{});
+  const back = cams.find(c => /back|rear|environment/i.test(c.label)) || cams[cams.length-1] || cams[0];
+  scanner.start(back.id,{fps:8,qrbox:220,videoConstraints:{facingMode:{ideal:'environment'}}}, (text)=>{ mark(text.trim()); }, ()=>{});
 }).catch(()=>showErr('Camera permission needed — use manual ID'));
 </script></body></html>`);
 });
@@ -3108,6 +3136,14 @@ app.post('/teacher/quiz', upload.any(), (req, res) => {
             q.image = fileMap[q.imageField];
         }
         delete q.imageField;
+        if (q.optImageFields) {
+            q.optImages = {};
+            ['A','B','C','D'].forEach(L => {
+                const fn = q.optImageFields[L];
+                if (fn && fileMap[fn]) q.optImages[L] = fileMap[fn];
+            });
+            delete q.optImageFields;
+        }
         return q;
     });
     if (!questions.length) return res.redirect('/teacher-dashboard#quiz');
@@ -3149,7 +3185,8 @@ app.get('/api/quiz/:id', (req, res) => {
                 q: q.q,
                 type: q.type || (q.options ? 'mcq' : 'text'),
                 options: q.options || null,
-                image: q.image || null
+                image: q.image || null,
+                optImages: q.optImages || null
             }))
         });
     });
@@ -3238,11 +3275,12 @@ function showQ(){
   const q=questions[idx];
   const pct=Math.round((idx/questions.length)*100);
   let optsHtml='';
-  if(q.options){
+  if(q.options || q.optImages){
     ['A','B','C','D'].forEach(function(L){
-      const t=q.options[L];
-      if(t===undefined||t===null||t==='') return;
-      optsHtml+='<button type="button" class="opt" data-val="'+L+'"><b>'+L+'.</b> <span class="opttext"></span></button>';
+      const t=(q.options&&q.options[L])?q.options[L]:'';
+      const im=(q.optImages&&q.optImages[L])?q.optImages[L]:'';
+      if(!t && !im) return;
+      optsHtml+='<button type="button" class="opt" data-val="'+L+'"><b>'+L+'.</b> <span class="opttext"></span>'+(im?'<img src="/uploads/'+im+'" style="max-width:100%;max-height:120px;display:block;margin-top:6px;border-radius:6px;">':'')+'</button>';
     });
   } else {
     optsHtml='<input type="text" id="ans" placeholder="Your answer..." style="width:100%;padding:14px;border:2px solid #cbd5e1;border-radius:10px;font-size:16px;box-sizing:border-box;">';
@@ -3259,16 +3297,17 @@ function showQ(){
     qt.textContent=qraw;
     renderMath(qt);
   }
-  if(q.options){
+  if(q.options || q.optImages){
     const buttons=app.querySelectorAll('.opt');
     let oi=0;
     ['A','B','C','D'].forEach(function(L){
-      const t=q.options[L];
-      if(t===undefined||t===null||t==='') return;
+      const t=(q.options&&q.options[L])?q.options[L]:'';
+      const im=(q.optImages&&q.optImages[L])?q.optImages[L]:'';
+      if(!t && !im) return;
       const btn=buttons[oi++];
       const sp=btn.querySelector('.opttext');
-      sp.textContent=t;
-      renderMath(sp);
+      sp.textContent=t||'';
+      if(t) renderMath(sp);
       btn.onclick=function(){
         buttons.forEach(b=>b.classList.remove('selected'));
         btn.classList.add('selected');
@@ -3382,6 +3421,20 @@ app.post('/admin/fee', (req, res) => {
             () => res.redirect('/admin#fees'));
     });
 });
+
+app.get('/api/search-students', (req, res) => {
+    if (!req.session.isAdmin && !req.session.teacherId) return res.status(401).json({ rows: [] });
+    const q = String(req.query.q || '').trim().toLowerCase();
+    if (!q) return res.json({ rows: [] });
+    db.all(`SELECT student_id, name, class_level FROM students ORDER BY name LIMIT 300`, [], (e, rows) => {
+        rows = (rows || []).filter(s =>
+            String(s.name||'').toLowerCase().includes(q) ||
+            String(s.student_id||'').toLowerCase().includes(q)
+        ).slice(0, 20);
+        res.json({ rows });
+    });
+});
+
 app.get('/api/fees', (req, res) => {
     const sid = req.query.student_id;
     if (sid) {
@@ -3393,7 +3446,7 @@ app.get('/api/fees', (req, res) => {
 });
 
 // 10 Timetable — Excel-like Mon–Fri periods 1–6 (40 min) + 15 min break 4:00–4:15
-// Period times: 1=8:00-8:40, 2=8:40-9:20, 3=9:20-10:00, 4=10:00-10:40, 5=10:40-11:20, 6=11:20-12:00
+// Period times: 1=8:00-8:45, 2=8:45-9:30, 3=9:30-10:15, 4=10:15-11:00, 5=11:00-11:45, 6=11:45-12:30
 // Afternoon example can use same 1-6 labels; break note stored in UI
 app.post('/admin/timetable', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
@@ -3443,8 +3496,8 @@ app.get('/api/timetable', (req, res) => {
             }
         });
         const periodTimes = {
-            1: '8:00–8:40', 2: '8:40–9:20', 3: '9:20–10:00',
-            4: '10:00–10:40', 5: '10:40–11:20', 6: '11:20–12:00'
+            1: '8:00–8:45', 2: '8:45–9:30', 3: '9:30–10:15',
+            4: '10:15–11:00', 5: '11:00–11:45', 6: '11:45–12:30'
         };
         res.json({ rows, grid, periodTimes, breakNote: 'Break 4:00–4:15 (15 min) for afternoon sessions' });
     });
@@ -3521,6 +3574,7 @@ app.get('/api/student-progress/:id', (req, res) => {
 // Learning hub page (shared)
 app.get('/learning-hub', (req, res) => {
     if (!req.session.isAdmin && !req.session.teacherId && !req.session.studentId && !req.session.parentStudentId) return res.redirect('/');
+    const hubSid = req.session.studentId || req.session.parentStudentId || '';
     res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Learning Hub - ALLS</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -3558,6 +3612,7 @@ a{color:#2980b9}
 <div class="card panel hidden" id="prog"><h3>Progress</h3><canvas id="progChart" height="180"></canvas></div>
 </div>
 <script>
+window.STUDENT_ID=${JSON.stringify(hubSid)};
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));
   b.classList.add('on');
@@ -3584,7 +3639,6 @@ fetch('/api/timetable').then(r=>r.json()).then(d=>{
     +(d.rows||[]).map(r=>'<tr><td>'+r.day_of_week+'</td><td>'+r.period_no+'</td><td>'+r.subject+'</td><td>'+r.teacher_name+'</td><td>'+r.room+'</td><td>'+r.class_level+'</td></tr>').join('')
     +'</table>';
 });
-const sid=document.cookie; // progress loaded if student session via separate call
 fetch('/api/student-progress/'+encodeURIComponent((window.STUDENT_ID||''))).then(r=>r.json()).then(d=>{
   if(!d.labels||!d.labels.length) return;
   new Chart(document.getElementById('progChart'),{type:'bar',data:{labels:d.labels,datasets:[{label:'Total',data:d.data,backgroundColor:'#2980b9'}]},options:{scales:{y:{beginAtZero:true,max:100}}}});
