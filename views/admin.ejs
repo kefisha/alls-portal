@@ -999,6 +999,69 @@
               +(d.rows||[]).slice(0,15).map(f=>'<tr><td>'+f.student_id+'</td><td>'+f.student_name+'</td><td>'+f.amount+'</td><td>'+f.paid+'</td><td>'+f.status+'</td></tr>').join('')
               +'</table>';
         }).catch(()=>{});
+
+        // ===== Timetable Excel Grid =====
+        window._ttDays = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
+        window._ttTimes = {1:'8:00–8:40',2:'8:40–9:20',3:'9:20–10:00',4:'10:00–10:40',5:'10:40–11:20',6:'11:20–12:00'};
+        window.buildTTGrid = function(grid) {
+            const tb = document.querySelector('#ttGrid tbody');
+            if (!tb) return;
+            tb.innerHTML = '';
+            for (let p = 1; p <= 6; p++) {
+                const tr = document.createElement('tr');
+                let html = '<td style="white-space:nowrap;vertical-align:top;"><b>P'+p+'</b><br><small style="color:#64748b">'+(window._ttTimes[p]||'')+'</small></td>';
+                window._ttDays.forEach(function(day) {
+                    const c = (grid && grid[day] && grid[day][p]) ? grid[day][p] : {subject:'',teacher:'',room:''};
+                    const esc = function(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); };
+                    html += '<td style="min-width:110px;vertical-align:top;">'
+                      + '<input data-day="'+day+'" data-p="'+p+'" data-f="subject" placeholder="Subject" value="'+esc(c.subject)+'" style="width:100%;margin:2px 0;padding:6px;font-size:12px;box-sizing:border-box;">'
+                      + '<input data-day="'+day+'" data-p="'+p+'" data-f="teacher" placeholder="Teacher" value="'+esc(c.teacher)+'" style="width:100%;margin:2px 0;padding:6px;font-size:12px;box-sizing:border-box;">'
+                      + '<input data-day="'+day+'" data-p="'+p+'" data-f="room" placeholder="Room" value="'+esc(c.room)+'" style="width:100%;margin:2px 0;padding:6px;font-size:12px;box-sizing:border-box;">'
+                      + '</td>';
+                });
+                tr.innerHTML = html;
+                tb.appendChild(tr);
+            }
+        };
+        window.loadTTGrid = function() {
+            const cls = (document.getElementById('ttClass').value || '').trim();
+            if (!cls) { if (window.showToast) showToast('Section ያስገቡ e.g. Grade 5A', 'err'); else alert('Enter section'); return; }
+            fetch('/api/timetable?class=' + encodeURIComponent(cls), { credentials: 'same-origin' })
+              .then(function(r){ return r.json(); })
+              .then(function(d){
+                  window.buildTTGrid(d.grid || {});
+                  if (window.showToast) showToast('Timetable loaded', 'info');
+              })
+              .catch(function(){ if (window.showToast) showToast('Load failed', 'err'); });
+        };
+        window.saveTTGrid = function() {
+            const cls = (document.getElementById('ttClass').value || '').trim();
+            if (!cls) { if (window.showToast) showToast('Section ያስገቡ', 'err'); else alert('Enter section'); return; }
+            const grid = {};
+            window._ttDays.forEach(function(d){ grid[d] = {}; });
+            document.querySelectorAll('#ttGrid input').forEach(function(inp) {
+                const day = inp.getAttribute('data-day');
+                const p = inp.getAttribute('data-p');
+                const f = inp.getAttribute('data-f');
+                if (!grid[day][p]) grid[day][p] = { subject: '', teacher: '', room: '' };
+                grid[day][p][f] = inp.value;
+            });
+            fetch('/admin/timetable-grid', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ class_level: cls, grid: grid })
+            })
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+                if (d.success) { if (window.showToast) showToast('✅ Saved ('+d.saved+' slots)'); else alert('Saved'); }
+                else { if (window.showToast) showToast('Save failed', 'err'); else alert('Failed'); }
+            })
+            .catch(function(){ if (window.showToast) showToast('Network error', 'err'); });
+        };
+        // Build empty grid on page load so cells are visible
+        window.buildTTGrid({});
+
     })();
 
 </script>
