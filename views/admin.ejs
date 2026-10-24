@@ -102,7 +102,10 @@
         .sec-chk-label input { width: 16px; height: 16px; margin: 0; cursor: pointer; }
         .compact-applicants-card { padding: 15px !important; max-height: 320px !important; overflow-y: auto !important; }
         .expanded-subjects-card { grid-column: 1 / -1 !important; padding: 28px !important; border-width: 4px !important; }
-    </style>
+    
+        .admin-tools-panel { display: none; }
+        .admin-tools-panel.open { display: block; }
+        </style>
 </head>
 <body class="lang-am">
     <div class="container">
@@ -150,22 +153,24 @@
                     🔍 <span class="am">1. በተማሪ ID ወይም ስም ሙሉ ውጤት ካርድ</span>
                     <span class="en">1. Search Student by ID or Name & Print Report Card</span>
                 </h4>
-                <form action="/admin/student-report-card" method="GET" target="_blank" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; align-items: end;">
+                <form id="reportCardForm" action="/admin/student-report-card" method="GET" target="_blank" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; align-items: end;">
                     <div>
                         <label style="font-weight:bold; font-size:13px; color:#1f4e79;">🆔 <span class="am">ID</span><span class="en">Student ID</span></label>
-                        <input type="text" name="student_id" placeholder="ALLS-4821" style="margin-bottom:0; font-weight:bold;">
+                        <input type="text" name="student_id" id="rcStudentId" placeholder="ALLS-4821" style="margin-bottom:0; font-weight:bold;">
+                    </div>
+                    <div style="grid-column: 1 / -1;">
+                        <label style="font-weight:bold; font-size:13px; color:#1f4e79;">👤 <span class="am">ስም ይጻፉ → ከዝርዝር ይምረጡ</span><span class="en">Type name → select from list</span></label>
+                        <input type="text" id="rcNameSearch" placeholder="Student name..." autocomplete="off" style="margin-bottom:0;">
+                        <div id="rcNameResults" style="max-height:180px;overflow-y:auto;margin-top:6px;border:1px solid #e2e8f0;border-radius:8px;display:none;"></div>
+                        <input type="hidden" name="name" id="rcNameHidden" value="">
                     </div>
                     <div>
-                        <label style="font-weight:bold; font-size:13px; color:#1f4e79;">👤 <span class="am">ወይም ስም</span><span class="en">Or Name</span></label>
-                        <input type="text" name="name" placeholder="Student name..." style="margin-bottom:0;">
-                    </div>
-                    <div>
-                        <label style="font-weight:bold; font-size:13px; color:#1f4e79;">📅 <span class="am">ዓመተ ምህረት (Academic Year)</span><span class="en">Academic Year</span></label>
+                        <label style="font-weight:bold; font-size:13px; color:#1f4e79;">📅 <span class="am">ዓመተ ምህረት</span><span class="en">Academic Year</span></label>
                         <input type="text" name="year" value="2019 E.C" required style="margin-bottom:0;">
                     </div>
                     <div>
-                        <button type="submit" style="width:100%; background:#2980b9; color:white; padding:11px; border:none; border-radius:6px; font-weight:bold; font-size:15px;">
-                            📄 <span class="am">የተማሪውን ሙሉ ካርድ አውጣ (View & Print PDF)</span><span class="en">Generate 1-Page Report Card</span>
+                        <button type="submit" id="rcSubmitBtn" style="width:100%; background:#2980b9; color:white; padding:11px; border:none; border-radius:6px; font-weight:bold; font-size:15px;">
+                            📄 <span class="am">ካርድ አውጣ</span><span class="en">Generate Report Card</span>
                         </button>
                     </div>
                 </form>
@@ -271,7 +276,7 @@
             </form>
         </div>
         <div class="grid-2">
-            <div class="card" id="fees">
+            <div class="card admin-tools-panel" id="fees">
                 <h3>💰 Fee Ledger</h3>
                 <form action="/admin/fee" method="POST">
                     <input type="text" name="student_id" id="feeStudentId" placeholder="Student ID" required>
@@ -284,7 +289,7 @@
                 </form>
                 <div id="feeList" style="margin-top:10px;font-size:13px;"></div>
             </div>
-            <div class="card" id="timetable" style="grid-column: 1 / -1;">
+            <div class="card admin-tools-panel" id="timetable" style="grid-column: 1 / -1;">
                 <h3>📅 Timetable (Excel-style) Mon–Fri · Periods 1–6 · 45 min each</h3>
                 <p style="font-size:12px;color:var(--text2);">P1 8:00–8:45 · P2 8:45–9:30 · P3 9:30–10:15 · P4 10:15–11:00 · P5 11:00–11:45 · P6 11:45–12:30 · <b>Break 4:00–4:15 (15 min)</b></p>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
@@ -300,8 +305,8 @@
                 </div>
             </div>
         </div>
-        <div class="card">
-            <h3 id="librarySection">📖 Library upload · 📦 Backup</h3>
+        <div class="card admin-tools-panel" id="librarySection">
+            <h3>📖 Library upload · 📦 Backup</h3>
             <form action="/library/upload" method="POST" enctype="multipart/form-data" style="margin-bottom:12px;">
                 <input type="text" name="title" placeholder="Resource title" required>
                 <input type="text" name="category" placeholder="Category">
@@ -1079,6 +1084,81 @@
         };
         // Build empty grid on page load so cells are visible
         window.buildTTGrid({});
+
+        // Report card: name search → select → then open
+        (function(){
+            var inp = document.getElementById('rcNameSearch');
+            var box = document.getElementById('rcNameResults');
+            var idInp = document.getElementById('rcStudentId');
+            var nameHid = document.getElementById('rcNameHidden');
+            if (!inp || !box) return;
+            var timer = null;
+            inp.addEventListener('input', function(){
+                clearTimeout(timer);
+                nameHid.value = '';
+                timer = setTimeout(function(){
+                    var q = (inp.value||'').trim();
+                    if (q.length < 2) { box.style.display='none'; box.innerHTML=''; return; }
+                    fetch('/api/search-students?q='+encodeURIComponent(q), {credentials:'same-origin'})
+                      .then(function(r){ return r.json(); })
+                      .then(function(d){
+                        var rows = d.rows || [];
+                        if (!rows.length) {
+                            box.style.display='block';
+                            box.innerHTML='<div style="padding:10px;color:#999;">No match</div>';
+                            return;
+                        }
+                        box.style.display='block';
+                        box.innerHTML = rows.map(function(s){
+                            return '<button type="button" class="rc-pick" data-id="'+s.student_id+'" data-name="'+(s.name||'').replace(/"/g,'&quot;')+'" style="display:block;width:100%;text-align:left;padding:10px 12px;border:none;border-bottom:1px solid #eee;background:#fff;cursor:pointer;font-size:13px;">'
+                              +'<b>'+(s.name||'')+'</b> <span style="color:#64748b;">('+(s.student_id||'')+')</span> '
+                              +'<small style="color:#94a3b8;">'+(s.class_level||'')+'</small></button>';
+                        }).join('');
+                        box.querySelectorAll('.rc-pick').forEach(function(btn){
+                            btn.addEventListener('click', function(){
+                                idInp.value = btn.getAttribute('data-id') || '';
+                                nameHid.value = btn.getAttribute('data-name') || '';
+                                inp.value = btn.getAttribute('data-name') || '';
+                                box.style.display='none';
+                                box.innerHTML='';
+                                if (window.showToast) showToast('Selected: '+idInp.value, 'info');
+                            });
+                        });
+                      }).catch(function(){});
+                }, 280);
+            });
+            var form = document.getElementById('reportCardForm');
+            if (form) {
+                form.addEventListener('submit', function(e){
+                    if (!(idInp.value||'').trim() && !(nameHid.value||'').trim()) {
+                        e.preventDefault();
+                        if (window.showToast) showToast('ስም ይምረጡ ወይም ID ያስገቡ', 'err');
+                        else alert('Select a student or enter ID');
+                    }
+                });
+            }
+        })();
+
+
+        // Quick Links: show only the target panel
+        function openAdminPanel(id) {
+            document.querySelectorAll('.admin-tools-panel').forEach(function(p){ p.classList.remove('open'); });
+            var el = document.getElementById(id);
+            if (el) {
+                el.classList.add('open');
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+        document.querySelectorAll('a[href="#timetable"], a[href="#fees"], a[href="#librarySection"]').forEach(function(a) {
+            a.addEventListener('click', function(e) {
+                var id = (a.getAttribute('href') || '').replace('#','');
+                if (id) { e.preventDefault(); openAdminPanel(id); history.replaceState(null,'','#'+id); }
+            });
+        });
+        if (location.hash === '#timetable' || location.hash === '#fees' || location.hash === '#librarySection') {
+            openAdminPanel(location.hash.replace('#',''));
+        }
+
         // Fee name search
         (function(){
             var inp = document.getElementById('feeSearchName');
