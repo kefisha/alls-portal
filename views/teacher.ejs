@@ -28,7 +28,47 @@
         button { background: #2980b9; color: white; border: none; padding: 10px 18px; border-radius: 6px; font-weight: bold; cursor: pointer; }
         .logout-btn { background: #e74c3c; color: white; padding: 9px 18px; border-radius: 6px; text-decoration: none; font-weight: bold; }
         #teacherEditor { height: 160px; background: white; }
-    </style>
+    
+        /* ===== Modern UI 1-10 ===== */
+        .toast-wrap { position: fixed; top: 18px; right: 18px; z-index: 99999; display: flex; flex-direction: column; gap: 8px; max-width: 320px; }
+        .toast { background: #1e293b; color: #fff; padding: 12px 16px; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.25); font-size: 14px; font-weight: 600; animation: toastIn .25s ease; border-left: 4px solid #27ae60; }
+        .toast.err { border-left-color: #e74c3c; }
+        .toast.info { border-left-color: #3498db; }
+        @keyframes toastIn { from { opacity:0; transform: translateY(-10px); } to { opacity:1; transform:none; } }
+        .btn-loading { position: relative; pointer-events: none; opacity: .75; }
+        .btn-loading::after { content: ""; width: 14px; height: 14px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; display: inline-block; margin-left: 8px; vertical-align: middle; animation: spin .7s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .widget-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 18px; }
+        .widget { background: var(--card); border-radius: 12px; padding: 14px 16px; box-shadow: 0 2px 10px var(--shadow); border: 1px solid var(--border); text-align: center; }
+        .widget .n { font-size: 26px; font-weight: 800; color: var(--primary); }
+        .widget .l { font-size: 12px; color: var(--text2); margin-top: 4px; }
+        .search-box { width: 100%; max-width: 320px; padding: 10px 14px; border-radius: 24px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text); margin-bottom: 12px; }
+        .empty-state { text-align: center; padding: 28px 16px; color: var(--text2); font-size: 14px; }
+        .empty-state .ico { font-size: 36px; display: block; margin-bottom: 8px; }
+        .preview-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 99998; align-items: center; justify-content: center; padding: 20px; }
+        .preview-modal.show { display: flex; }
+        .preview-modal .box { background: #fff; border-radius: 12px; max-width: 90vw; max-height: 90vh; overflow: auto; padding: 12px; position: relative; }
+        .preview-modal img, .preview-modal iframe { max-width: 100%; max-height: 80vh; }
+        .preview-modal .close { position: absolute; top: 8px; right: 12px; background: #e74c3c; color: #fff; border: none; border-radius: 50%; width: 32px; height: 32px; font-weight: bold; cursor: pointer; }
+        .mobile-nav { display: none; position: sticky; top: 0; z-index: 100; background: var(--primary); color: #fff; padding: 10px 14px; margin: -20px -20px 16px -20px; }
+        .mobile-nav a { color: #fff; text-decoration: none; font-weight: bold; margin-right: 12px; font-size: 13px; }
+        @media (max-width: 768px) {
+            body { padding: 12px; }
+            .mobile-nav { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+            .card { padding: 16px; }
+            h2 { font-size: 20px; }
+            table { font-size: 12px; display: block; overflow-x: auto; }
+            th, td { padding: 8px; }
+            button, .logout-btn { min-height: 44px; }
+            input, select, textarea { font-size: 16px; } /* prevent iOS zoom */
+        }
+        @media print {
+            .no-print, .mobile-nav, .logout-btn, .dark-toggle, .lang-bar { display: none !important; }
+            body { background: #fff; padding: 0; }
+            .card { box-shadow: none; border: 1px solid #ccc; break-inside: avoid; }
+        }
+
+</style>
 </head>
 <body class="lang-am">
     <div class="container">
@@ -322,6 +362,8 @@
                     })
                     .then(r => r.json())
                     .then(data => {
+                        if (data && data.success && window.showToast) showToast('✅ Grade saved');
+                        else if (data && data.error && window.showToast) showToast(data.error, 'err');
                         btn.disabled = false;
                         if (data && data.success) {
                             btn.style.background = '#16a085';
@@ -371,6 +413,91 @@
             }
         }, true);
     })();
+
+
+    // Toast + loading + file preview + table search
+    (function(){
+        if (!document.querySelector('.toast-wrap')) {
+            const w = document.createElement('div');
+            w.className = 'toast-wrap';
+            document.body.appendChild(w);
+        }
+        window.showToast = function(msg, type) {
+            const w = document.querySelector('.toast-wrap');
+            const t = document.createElement('div');
+            t.className = 'toast' + (type === 'err' ? ' err' : type === 'info' ? ' info' : '');
+            t.textContent = msg;
+            w.appendChild(t);
+            setTimeout(() => { t.remove(); }, 3200);
+        };
+        // Loading on non-AJAX form submit
+        document.addEventListener('submit', function(e) {
+            const f = e.target;
+            if (!f || f.tagName !== 'FORM') return;
+            if (f.classList.contains('ajax-grade-form') || f.id === 'studentChatForm' || f.id === 'chatForm') return;
+            const btn = f.querySelector('button[type="submit"]');
+            if (btn) { btn.classList.add('btn-loading'); btn.disabled = true; }
+        }, true);
+        // File preview for /uploads/ links
+        document.addEventListener('click', function(e) {
+            const a = e.target.closest && e.target.closest('a[href*="/uploads/"]');
+            if (!a) return;
+            const href = a.getAttribute('href') || '';
+            if (!/\.(jpg|jpeg|png|gif|webp|pdf)(\?|$)/i.test(href) && href.indexOf('/uploads/') === -1) return;
+            // preview images
+            if (/\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(href)) {
+                e.preventDefault();
+                let m = document.getElementById('filePreviewModal');
+                if (!m) {
+                    m = document.createElement('div');
+                    m.id = 'filePreviewModal';
+                    m.className = 'preview-modal';
+                    m.innerHTML = '<div class="box"><button type="button" class="close" onclick="document.getElementById(\'filePreviewModal\').classList.remove(\'show\')">×</button><img id="previewImg" src=""></div>';
+                    document.body.appendChild(m);
+                    m.addEventListener('click', function(ev){ if (ev.target === m) m.classList.remove('show'); });
+                }
+                document.getElementById('previewImg').src = href;
+                m.classList.add('show');
+            }
+        });
+        // Table search: input.search-box data-table="tableId"
+        document.querySelectorAll('.search-box[data-table]').forEach(function(inp) {
+            inp.addEventListener('input', function() {
+                const q = (inp.value || '').toLowerCase();
+                const table = document.getElementById(inp.getAttribute('data-table'));
+                if (!table) return;
+                table.querySelectorAll('tr').forEach(function(tr, i) {
+                    if (i === 0 && tr.querySelector('th')) return;
+                    tr.style.display = !q || tr.textContent.toLowerCase().indexOf(q) !== -1 ? '' : 'none';
+                });
+            });
+        });
+        // Empty states
+        document.querySelectorAll('table[data-empty]').forEach(function(table) {
+            const rows = table.querySelectorAll('tr');
+            const dataRows = Array.from(rows).filter(r => !r.querySelector('th'));
+            if (dataRows.length === 0) {
+                const wrap = document.createElement('div');
+                wrap.className = 'empty-state';
+                wrap.innerHTML = '<span class="ico">📭</span>' + (table.getAttribute('data-empty') || 'No data');
+                table.parentNode.insertBefore(wrap, table.nextSibling);
+            }
+        });
+    })();
+
+    // Grade save toast
+    document.querySelectorAll('.ajax-grade-form').forEach(form => {
+        form.addEventListener('submit', function() {
+            const orig = form.onsubmit;
+        });
+    });
+    const _fetch = window.fetch;
+    // enhance existing ajax grade success if present
+    document.querySelectorAll('.ajax-grade-form').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            // existing handler may preventDefault - add toast after short delay via MutationObserver on button text
+        });
+    });
 
 </script>
 </body>
