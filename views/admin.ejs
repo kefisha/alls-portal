@@ -574,35 +574,46 @@
                     🔄 <span class="am">2. ለመምህር ብዙ ክፍሎች መመደቢያ / መምህር በመምህር መተኪያ</span>
                     <span class="en">2. Assign Multiple Sections / Teacher Handover</span>
                 </h4>
-                <form action="/admin/handover-section" method="POST">
-                    <label style="font-weight:bold; font-size:13px; color:#1f4e79; display:block; margin-bottom:6px;">
-                        🏫 <span class="am">ክፍሎች እና ሴክሽኖች ይምረጡ (1 ወይም ብዙ መምረጥ ይችላሉ) *</span>
+                <form action="/admin/handover-section" method="POST" id="handoverForm" style="background:#eef7fa;padding:18px;border-radius:12px;border:2px solid #3498db;">
+                    <h4 style="margin:0 0 12px;color:#1f4e79;">
+                        🔄 <span class="am">2. ለመምህር ብዙ ክፍሎች መመደቢያ / መተኪያ</span>
+                        <span class="en">2. Assign Multiple Sections / Teacher Handover</span>
+                    </h4>
+
+                    <label style="font-weight:bold;font-size:13px;color:#1f4e79;display:block;margin-bottom:6px;">
+                        🏫 <span class="am">ክፍሎች / ሴክሽኖች ይምረጡ (አንድ ወይም ብዙ) *</span>
                         <span class="en">Select Class & Sections (One or Multiple) *</span>
                     </label>
-                    <div id="handoverSectionCheckboxes" class="multi-sec-grid"></div>
-                    <input type="hidden" name="section_name" id="handoverSectionsInput" required>
+                    <div id="handoverSectionCheckboxes" class="multi-sec-grid" style="min-height:80px;background:#fff;border:1px solid #94a3b8;"></div>
+                    <p id="handoverSecHint" style="font-size:12px;color:#64748b;margin:4px 0 8px;">Selected: <b id="handoverSecCount">0</b></p>
+                    <input type="hidden" name="section_name" id="handoverSectionsInput" value="">
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;">
                         <div>
-                            <label style="font-weight:bold; font-size:13px; color:#c0392b;">
-                                <span class="am">📤 የሚለቀው መምህር (የሚተካ ከሆነ ብቻ)</span><span class="en">📤 Leaving Teacher (If replacing)</span>
+                            <label style="font-weight:bold;font-size:13px;color:#c0392b;display:block;margin-bottom:4px;">
+                                <span class="am">📤 የሚለቀው መምህር (መተኪያ ከሆነ)</span>
+                                <span class="en">📤 Leaving Teacher (If replacing)</span>
                             </label>
-                            <select name="old_teacher_id" id="oldTeacherSelect">
-                                <option value="">-- የለም (ተጨማሪ ምደባ) / None --</option>
+                            <select name="old_teacher_id" id="oldTeacherSelect" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1;">
+                                <option value="">-- የለም / None --</option>
+                                <%- typeof teacherOptions !== 'undefined' ? teacherOptions : '' %>
                             </select>
                         </div>
                         <div>
-                            <label style="font-weight:bold; font-size:13.5px; color:#27ae60;">
-                                <span class="am">📥 የሚመደበው / ተተኪው መምህር *</span><span class="en">📥 Assigned / Incoming Teacher *</span>
+                            <label style="font-weight:bold;font-size:13px;color:#16a34a;display:block;margin-bottom:4px;">
+                                <span class="am">📥 የሚመደበው / አዲስ መምህር *</span>
+                                <span class="en">📥 Assigned / Incoming Teacher *</span>
                             </label>
-                            <select name="new_teacher_id" id="newTeacherSelect" required>
+                            <select name="new_teacher_id" id="newTeacherSelect" required style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1;">
                                 <option value="">መምህር ይምረጡ / Select Teacher</option>
+                                <%- typeof teacherOptions !== 'undefined' ? teacherOptions : '' %>
                             </select>
                         </div>
                     </div>
 
-                    <button type="submit" style="width: 100%; background: #2980b9; color:white; border:none; border-radius:6px; font-weight:bold; padding: 12px; margin-top: 8px; cursor:pointer;">
-                        🔄 <span class="am">የተመረጡትን ክፍሎች ለመምህሩ መድብ / አስተላልፍ</span><span class="en">Assign / Handover Selected Sections</span>
+                    <button type="submit" style="width:100%;background:#2980b9;color:#fff;border:none;border-radius:8px;font-weight:bold;padding:14px;margin-top:14px;cursor:pointer;font-size:15px;">
+                        🔄 <span class="am">የተመረጡትን ክፍሎች መድብ / አስተላልፍ</span>
+                        <span class="en">Assign / Handover Selected Sections</span>
                     </button>
                 </form>
             </div>
@@ -903,49 +914,96 @@
             const regInput = document.getElementById("regAssignedSectionsInput");
             const handInput = document.getElementById("handoverSectionsInput");
 
+            function addSecCheckbox(grid, cls, val, text) {
+                if (!grid || !val) return;
+                var lab = document.createElement('label');
+                lab.className = 'sec-chk-label';
+                lab.style.cssText = 'display:flex;align-items:center;gap:6px;padding:8px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;';
+                lab.innerHTML = '<input type="checkbox" class="'+cls+'" value="'+val.replace(/"/g,'&quot;')+'"> <span>'+text+'</span>';
+                grid.appendChild(lab);
+            }
+
+            function syncHandSections() {
+                if (!handInput) return;
+                var selected = Array.from(document.querySelectorAll('.hand-sec-chk:checked')).map(function(c){ return c.value; });
+                handInput.value = selected.join(',');
+                var cnt = document.getElementById('handoverSecCount');
+                if (cnt) cnt.textContent = String(selected.length);
+            }
+            function syncRegSections() {
+                if (!regInput) return;
+                var selected = Array.from(document.querySelectorAll('.reg-sec-chk:checked')).map(function(c){ return c.value; });
+                regInput.value = selected.join(', ');
+            }
+
+            var sectionVals = [];
             if (rawSelect) {
-                Array.from(rawSelect.options).forEach(opt => {
-                    const val = opt.value.trim();
-                    const text = opt.textContent.trim();
+                Array.from(rawSelect.options).forEach(function(opt) {
+                    var val = (opt.value || '').trim();
+                    var text = (opt.textContent || '').trim();
                     if (!val) return;
-
-                    if (regGrid) {
-                        regGrid.innerHTML += `<label class="sec-chk-label"><input type="checkbox" class="reg-sec-chk" value="${val}"> <span>${text}</span></label>`;
-                    }
-                    if (handGrid) {
-                        handGrid.innerHTML += `<label class="sec-chk-label"><input type="checkbox" class="hand-sec-chk" value="${val}"> <span>${text}</span></label>`;
-                    }
+                    sectionVals.push({val: val, text: text || val});
+                    addSecCheckbox(regGrid, 'reg-sec-chk', val, text || val);
+                    addSecCheckbox(handGrid, 'hand-sec-chk', val, text || val);
                 });
-
-                document.querySelectorAll(".reg-sec-chk").forEach(chk => {
-                    chk.addEventListener("change", () => {
-                        const selected = Array.from(document.querySelectorAll(".reg-sec-chk:checked")).map(c => c.value);
-                        regInput.value = selected.join(", ");
+            }
+            // Fallback: fetch sections if empty
+            if (!sectionVals.length && handGrid) {
+                handGrid.innerHTML = '<span style="color:#888;padding:8px;">Loading sections...</span>';
+                fetch('/api/sections-list', {credentials:'same-origin'}).then(function(r){ return r.json(); }).then(function(d){
+                    handGrid.innerHTML = '';
+                    if (regGrid) regGrid.innerHTML = '';
+                    (d.rows || []).forEach(function(s){
+                        var name = s.name || s;
+                        addSecCheckbox(regGrid, 'reg-sec-chk', name, name);
+                        addSecCheckbox(handGrid, 'hand-sec-chk', name, name);
                     });
-                });
-
-                document.querySelectorAll(".hand-sec-chk").forEach(chk => {
-                    chk.addEventListener("change", () => {
-                        const selected = Array.from(document.querySelectorAll(".hand-sec-chk:checked")).map(c => c.value);
-                        handInput.value = selected.join(", ");
-                    });
+                    document.querySelectorAll('.hand-sec-chk').forEach(function(chk){ chk.addEventListener('change', syncHandSections); });
+                    document.querySelectorAll('.reg-sec-chk').forEach(function(chk){ chk.addEventListener('change', syncRegSections); });
+                    if (!(d.rows||[]).length) handGrid.innerHTML = '<span style="color:#c00;padding:8px;">No sections. Add Class Sections first.</span>';
+                }).catch(function(){
+                    handGrid.innerHTML = '<span style="color:#c00;padding:8px;">Could not load sections</span>';
                 });
             }
 
-            const table = document.getElementById("teachersListTable");
-            const oldSel = document.getElementById("oldTeacherSelect");
-            const newSel = document.getElementById("newTeacherSelect");
+            document.querySelectorAll('.reg-sec-chk').forEach(function(chk){ chk.addEventListener('change', syncRegSections); });
+            document.querySelectorAll('.hand-sec-chk').forEach(function(chk){ chk.addEventListener('change', syncHandSections); });
+
+            // Teachers into selects if not already filled by EJS
+            var oldSel = document.getElementById('oldTeacherSelect');
+            var newSel = document.getElementById('newTeacherSelect');
+            var table = document.getElementById('teachersListTable');
             if (table && oldSel && newSel) {
-                table.querySelectorAll("tr").forEach((row, index) => {
-                    if (index === 0) return;
-                    const cells = row.querySelectorAll("td");
-                    if (cells.length >= 2) {
-                        const tId = cells[0].innerText.trim();
-                        const tName = cells[1].innerText.trim();
-                        if (tId && !tId.includes("ምንም")) {
-                            oldSel.innerHTML += `<option value="${tId}">${tName} (${tId})</option>`;
-                            newSel.innerHTML += `<option value="${tId}">${tName} (${tId})</option>`;
+                var hasOpts = oldSel.options.length > 1;
+                if (!hasOpts) {
+                    table.querySelectorAll('tr').forEach(function(row, index) {
+                        if (index === 0) return;
+                        var cells = row.querySelectorAll('td');
+                        if (cells.length >= 2) {
+                            var tId = cells[0].innerText.trim();
+                            var tName = cells[1].innerText.trim();
+                            if (tId && tId.indexOf('ምንም') === -1) {
+                                oldSel.innerHTML += '<option value="'+tId+'">'+tName+' ('+tId+')</option>';
+                                newSel.innerHTML += '<option value="'+tId+'">'+tName+' ('+tId+')</option>';
+                            }
                         }
+                    });
+                }
+            }
+
+            var handForm = document.getElementById('handoverForm');
+            if (handForm) {
+                handForm.addEventListener('submit', function(e) {
+                    syncHandSections();
+                    if (!handInput || !(handInput.value || '').trim()) {
+                        e.preventDefault();
+                        alert('ቢያንስ አንድ ክፍል/ሴክሽን ይምረጡ / Select at least one section');
+                        return false;
+                    }
+                    if (!newSel || !newSel.value) {
+                        e.preventDefault();
+                        alert('አዲስ መምህር ይምረጡ / Select incoming teacher');
+                        return false;
                     }
                 });
             }
