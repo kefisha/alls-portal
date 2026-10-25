@@ -103,7 +103,7 @@
         .compact-applicants-card { padding: 15px !important; max-height: 320px !important; overflow-y: auto !important; }
         .expanded-subjects-card { grid-column: 1 / -1 !important; padding: 28px !important; border-width: 4px !important; }
     
-        .admin-tools-panel { display: none; }
+        .admin-tools-panel { display: block; }
         .admin-tools-panel.open { display: block; }
         </style>
 </head>
@@ -693,7 +693,8 @@
             }
 
             // ========== LIVE SEARCH FOR TEACHER / STUDENT ==========
-            const peopleData = <%- searchPeopleData || '{"teachers":[],"students":[]}' %>;
+            let peopleData = {teachers:[], students:[]};
+            try { peopleData = <%- searchPeopleData || '{"teachers":[],"students":[]}' %>; } catch(e) { peopleData = {teachers:[], students:[]}; }
             const searchInput = document.getElementById('peopleSearchInput');
             const resultsBox = document.getElementById('searchResultsBox');
             const selectedBox = document.getElementById('selectedPersonBox');
