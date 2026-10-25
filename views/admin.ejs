@@ -29,6 +29,10 @@
         body.lang-am .am { display: inline !important; }
         body.lang-en .am { display: none !important; }
         body.lang-en .en { display: inline !important; }
+        /* block-level bilingual */
+        p .am, h2 .am, h3 .am, h4 .am, label .am, button .am, span.am { }
+        body.lang-am span.en, body.lang-am label .en, body.lang-am h3 .en, body.lang-am h2 .en, body.lang-am h4 .en, body.lang-am button .en, body.lang-am p .en { display: none !important; }
+        body.lang-en span.am, body.lang-en label .am, body.lang-en h3 .am, body.lang-en h2 .am, body.lang-en h4 .am, body.lang-en button .am, body.lang-en p .am { display: none !important; }
 
         h2 { color: var(--primary); text-align: center; margin-bottom: 30px; font-size: 28px; }
         .card { background: var(--card); padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px var(--shadow); margin-bottom: 25px; border-top: 4px solid var(--accent); color: var(--text); }
@@ -116,20 +120,25 @@
                 </style>
 <script>
         window.openAdminPanel = function(id) {
+            var host = document.getElementById('toolsWorkspace');
             document.querySelectorAll('.admin-tools-panel').forEach(function(p) {
                 p.classList.remove('is-open');
                 p.style.setProperty('display', 'none', 'important');
             });
             var el = document.getElementById(id);
             if (!el) { console.warn('panel missing', id); return; }
+            // Always show under Quick Links (bottom workspace)
+            if (host) {
+                host.appendChild(el);
+                host.style.display = 'block';
+            }
             el.classList.add('is-open');
             el.style.setProperty('display', 'block', 'important');
-            // if inside hidden grid, show parent
-            var parent = el.parentElement;
-            if (parent && parent.classList.contains('grid-2')) {
-                parent.style.setProperty('display', 'grid', 'important');
-            }
-            setTimeout(function(){ el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30);
+            var hint = document.getElementById('toolsWorkspaceHint');
+            if (hint) hint.style.display = 'none';
+            setTimeout(function(){
+                (host || el).scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 40);
         };
         </script>
 </head>
@@ -365,7 +374,13 @@
             </div></div>
         </div>
 
-        
+        <div id="toolsWorkspace" style="margin-top:8px;">
+            <p id="toolsWorkspaceHint" style="text-align:center;color:#64748b;font-size:13px;padding:8px;">
+                <span class="am">⬆️ ከላይ Quick Links ይጫኑ — ይዘቱ እዚህ ይከፈታል</span>
+                <span class="en">⬆️ Click a Quick Link above — content opens here</span>
+            </p>
+        </div>
+
         <div class="card admin-tools-panel" id="examSchedule">
             <h3>📝 Exam Schedule (Calendar)</h3>
             <div style="display:grid;grid-template-columns:1fr 1.2fr;gap:16px;">
@@ -664,7 +679,7 @@
     </div>
 
     <script>
-        function setLang(lang) {
+        window.setLang = function setLang(lang) {
             const cleanLang = (lang === 'en') ? 'en' : 'am';
             document.body.className = 'lang-' + cleanLang;
             localStorage.setItem('prefLang', cleanLang);
@@ -1233,27 +1248,33 @@
                 var cal=document.getElementById('examCalendar');
                 var el=document.getElementById('examList');
                 var rows=d.rows||[];
-                if(cal){
-                    if(!rows.length) cal.innerHTML='<div style="color:#888;padding:12px;">No exams yet</div>';
-                    else cal.innerHTML=rows.map(function(x){
-                        return '<div style="background:#fff;border-left:5px solid #7c3aed;border-radius:10px;padding:12px 14px;box-shadow:0 2px 8px rgba(0,0,0,.06);">'
-                          +'<div style="font-size:12px;color:#7c3aed;font-weight:bold;">📅 '+(x.exam_date||'')+' · ⏰ '+(x.exam_time||'')+'</div>'
-                          +'<div style="font-size:16px;font-weight:800;color:#1e293b;margin:4px 0;">'+(x.subject||'')+'</div>'
-                          +'<div style="font-size:13px;color:#64748b;">'+(x.class_level||'')+(x.notes?(' · '+x.notes):'')+'</div>'
-                          +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">'
-                          +'<form action="/admin/exam-edit" method="POST" style="display:flex;flex-wrap:wrap;gap:4px;flex:1;">'
+                var table = '<div style="overflow-x:auto;"><table style="font-size:13px;width:100%;min-width:640px;"><thead><tr>'
+                  +'<th>Date</th><th>Time</th><th>Class</th><th>Subject</th><th>Notes</th><th>Edit / Delete</th></tr></thead><tbody>';
+                if(!rows.length){
+                    table += '<tr><td colspan="6">No exams yet</td></tr>';
+                } else {
+                    rows.forEach(function(x){
+                        table += '<tr>'
+                          +'<td colspan="6" style="padding:0;border:none;">'
+                          +'<form action="/admin/exam-edit" method="POST" style="display:grid;grid-template-columns:110px 90px 1fr 1fr 1fr auto auto;gap:6px;align-items:center;padding:8px;border-bottom:1px solid #e2e8f0;">'
                           +'<input type="hidden" name="id" value="'+x.id+'">'
-                          +'<input name="exam_date" value="'+(x.exam_date||'')+'" type="date" style="width:auto;padding:4px;font-size:11px;">'
-                          +'<input name="exam_time" value="'+(x.exam_time||'')+'" style="width:90px;padding:4px;font-size:11px;">'
-                          +'<input name="class_level" value="'+(x.class_level||'')+'" style="width:100px;padding:4px;font-size:11px;">'
-                          +'<input name="subject" value="'+(x.subject||'')+'" style="width:100px;padding:4px;font-size:11px;">'
-                          +'<input name="notes" value="'+(x.notes||'')+'" style="width:100px;padding:4px;font-size:11px;">'
-                          +'<button type="submit" style="padding:4px 8px;font-size:11px;background:#2980b9;">✏️ Save</button></form>'
-                          +'<form action="/admin/exam-delete" method="POST" onsubmit="return confirm(\'Delete?');"><input type="hidden" name="id" value="'+x.id+'"><button type="submit" style="padding:4px 8px;font-size:11px;background:#e74c3c;">🗑️</button></form>'
-                          +'</div></div>';
-                    }).join('');
+                          +'<input name="exam_date" type="date" value="'+(x.exam_date||'')+'" style="padding:6px;font-size:12px;">'
+                          +'<input name="exam_time" value="'+(x.exam_time||'')+'" style="padding:6px;font-size:12px;">'
+                          +'<input name="class_level" value="'+(x.class_level||'')+'" style="padding:6px;font-size:12px;">'
+                          +'<input name="subject" value="'+(x.subject||'')+'" style="padding:6px;font-size:12px;">'
+                          +'<input name="notes" value="'+(x.notes||'')+'" style="padding:6px;font-size:12px;">'
+                          +'<button type="submit" style="padding:6px 10px;font-size:12px;background:#2980b9;color:#fff;border:none;border-radius:6px;">✏️ Update</button>'
+                          +'</form></td></tr>'
+                          +'<tr><td colspan="6" style="padding:0 8px 8px;border:none;text-align:right;">'
+                          +'<form action="/admin/exam-delete" method="POST" style="display:inline;" onsubmit="return confirm(\'Delete?\');">'
+                          +'<input type="hidden" name="id" value="'+x.id+'">'
+                          +'<button type="submit" style="padding:4px 10px;font-size:11px;background:#e74c3c;color:#fff;border:none;border-radius:6px;">🗑️ Delete</button></form>'
+                          +'</td></tr>';
+                    });
                 }
-                if(el) el.innerHTML='';
+                table += '</tbody></table></div>';
+                if(cal) cal.innerHTML = table;
+                if(el) el.innerHTML = '';
             }).catch(function(){});
         };
         loadExamCalendar();
