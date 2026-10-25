@@ -57,6 +57,12 @@
         .ql-editor { min-height: 130px; }
         .admin-tools-panel { display: none !important; }
         .admin-tools-panel.is-open { display: block !important; }
+        /* Always-visible schedule panels at bottom */
+        #bottomScheduleWrap .admin-tools-panel,
+        #bottomScheduleWrap #timetable,
+        #bottomScheduleWrap #examSchedule {
+            display: block !important;
+        }
         #toolsHost { min-height: 0; }
         #toolsWorkspace { margin-top: 12px; }
         .cal-day { background:#fff; border-radius:12px; border:1px solid #e2e8f0; padding:12px; box-shadow:0 2px 8px rgba(0,0,0,.05); }
@@ -163,8 +169,21 @@
         } catch(e) {}
         window.openAdminPanel = function(id) {
             try {
+                // Timetable / Exam → always at bottom wrap
+                if (id === 'timetable' || id === 'examSchedule') {
+                    var bsw = document.getElementById('bottomScheduleWrap');
+                    var el2 = document.getElementById(id);
+                    if (el2) {
+                        el2.classList.add('is-open');
+                        el2.style.setProperty('display', 'block', 'important');
+                        if (bsw) bsw.appendChild(el2);
+                        setTimeout(function(){ (bsw || el2).scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 80);
+                    }
+                    return false;
+                }
                 var host = document.getElementById('toolsWorkspace');
                 document.querySelectorAll('.admin-tools-panel').forEach(function(p) {
+                    if (p.id === 'timetable' || p.id === 'examSchedule') return; // keep schedules visible
                     p.classList.remove('is-open');
                     p.style.setProperty('display', 'none', 'important');
                 });
@@ -175,9 +194,7 @@
                 el.style.setProperty('display', 'block', 'important');
                 var hint = document.getElementById('toolsWorkspaceHint');
                 if (hint) hint.style.display = 'none';
-                setTimeout(function(){
-                    (host || el).scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 80);
+                setTimeout(function(){ (host || el).scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 80);
                 return false;
             } catch (err) {
                 console.error(err);
@@ -630,6 +647,7 @@ try{
                                 <%- typeof teacherOptions !== 'undefined' ? teacherOptions : '' %>
                             </select>
                             <p id="leavingTeacherHint" style="font-size:12px;color:#64748b;margin:6px 0 0;"></p>
+                            <div id="leavingTeacherSectionsBox" style="margin-top:10px;padding:12px;background:#f0f9ff;border:1px dashed #3498db;border-radius:10px;"></div>
                             <p style="font-size:11px;color:#94a3b8;margin:4px 0 0;">
                                 <span class="am">ምሳሌ፦ መምህር 4A,4B,3A,3B ካስተማረ 4B ብቻ ለመቀየር — Leaving ይምረጡ፣ 4B ብቻ checkbox ይተው።</span>
                                 <span class="en">Example: Teacher has 4A,4B,3A,3B — to replace only 4B, pick Leaving teacher then keep only 4B checked.</span>
@@ -726,6 +744,14 @@ try{
         </div>
 
     
+        
+        <div id="bottomScheduleWrap" style="margin-top:20px;">
+            <h3 style="text-align:center;color:var(--primary);margin-bottom:12px;">
+                <span class="am">📅 የሳምንት ሰዓት ሰንጠረዥ + የፈተና ሰንጠረዥ (Table)</span>
+                <span class="en">📅 Weekly Timetable + Exam Schedule (Tables)</span>
+            </h3>
+        </div>
+
         <!-- Academic Year - bottom -->
         <!-- Academic Year (bottom) -->
         <!-- Academic Year -->
@@ -1027,7 +1053,7 @@ try{
             }
 
             
-            // Teacher -> sections map from table (for partial replace)
+            // Teacher -> sections map (from table)
             window._teacherSections = {};
             (function(){
                 var table = document.getElementById('teachersListTable');
@@ -1045,35 +1071,91 @@ try{
                 });
             })();
 
+            function renderLeavingSectionOptions(secs) {
+                var box = document.getElementById('leavingTeacherSectionsBox');
+                if (!box) return;
+                if (!secs || !secs.length) {
+                    box.innerHTML = '<span style="color:#94a3b8;font-size:13px;">No sections for this teacher</span>';
+                    return;
+                }
+                // Clickable options — only this teacher's classes
+                box.innerHTML = '<p style="margin:0 0 8px;font-size:13px;font-weight:bold;color:#1f4e79;">' +
+                    '<span class="am">የሚወጡ/የሚተኩ ክፍሎች ይምረጡ (click):</span>' +
+                    '<span class="en">Select classes to hand over (click):</span></p>' +
+                    secs.map(function(s) {
+                        return '<label class="leave-sec-opt" style="display:inline-flex;align-items:center;gap:6px;padding:8px 12px;margin:4px;border:2px solid #3498db;border-radius:8px;background:#fff;cursor:pointer;font-weight:600;font-size:14px;">' +
+                            '<input type="checkbox" class="leave-sec-chk" value="'+s.replace(/"/g,'&quot;')+'" checked style="width:18px;height:18px;"> ' + s +
+                            '</label>';
+                    }).join('') +
+                    '<p style="font-size:12px;color:#64748b;margin:8px 0 0;">' +
+                    '<span class="am">ምሳሌ፦ 3A ብቻ ከሄደ 3A ብቻ ይተው · 3A እና 4A ከሄዱ ሁለቱንም ይጫኑ</span>' +
+                    '<span class="en">Example: only 3A leaving → keep only 3A checked · 3A+4A → check both</span></p>';
+
+                // Sync to main hand-sec-chk list + hidden input
+                function syncFromLeaveOpts() {
+                    var chosen = Array.from(document.querySelectorAll('.leave-sec-chk:checked')).map(function(c){ return c.value; });
+                    // Uncheck all main grid, then check chosen
+                    document.querySelectorAll('.hand-sec-chk').forEach(function(chk) {
+                        chk.checked = chosen.indexOf(chk.value) !== -1;
+                    });
+                    // Ensure chosen exist even if not in main grid
+                    var handInput = document.getElementById('handoverSectionsInput');
+                    if (handInput) handInput.value = chosen.join(',');
+                    var cnt = document.getElementById('handoverSecCount');
+                    if (cnt) cnt.textContent = String(chosen.length);
+                    // Highlight
+                    document.querySelectorAll('.leave-sec-opt').forEach(function(lab) {
+                        var chk = lab.querySelector('input');
+                        if (chk && chk.checked) {
+                            lab.style.background = '#dbeafe';
+                            lab.style.borderColor = '#2563eb';
+                        } else {
+                            lab.style.background = '#f8fafc';
+                            lab.style.borderColor = '#cbd5e1';
+                        }
+                    });
+                }
+                document.querySelectorAll('.leave-sec-chk').forEach(function(chk) {
+                    chk.addEventListener('change', syncFromLeaveOpts);
+                });
+                syncFromLeaveOpts();
+            }
+
             var oldSelEl = document.getElementById('oldTeacherSelect');
             if (oldSelEl) {
                 oldSelEl.addEventListener('change', function() {
                     var tid = oldSelEl.value;
-                    var secs = window._teacherSections[tid] || [];
-                    // Uncheck all first
-                    document.querySelectorAll('.hand-sec-chk').forEach(function(chk) {
-                        chk.checked = false;
-                    });
-                    if (tid && secs.length) {
-                        // Check only sections this teacher currently has
-                        document.querySelectorAll('.hand-sec-chk').forEach(function(chk) {
-                            if (secs.indexOf(chk.value) !== -1) chk.checked = true;
-                        });
-                    }
-                    if (typeof syncHandSections === 'function') syncHandSections();
+                    var opt = oldSelEl.options[oldSelEl.selectedIndex];
+                    var secsStr = (opt && opt.getAttribute('data-sections')) || '';
+                    var secs = secsStr ? secsStr.split(/[,;]+/).map(function(s){ return s.trim(); }).filter(Boolean) : (window._teacherSections[tid] || []);
+                    // Also try from table map
+                    if (!secs.length && window._teacherSections[tid]) secs = window._teacherSections[tid];
                     var hint = document.getElementById('leavingTeacherHint');
-                    if (hint) {
-                        if (!tid) hint.textContent = '';
-                        else if (!secs.length) hint.textContent = 'This teacher has no assigned sections listed.';
-                        else hint.innerHTML = 'Sections of leaving teacher: <b>' + secs.join(', ') + '</b> — unchecked ones stay with them; checked ones move to incoming teacher.';
+                    var box = document.getElementById('leavingTeacherSectionsBox');
+                    if (!tid) {
+                        if (hint) hint.textContent = '';
+                        if (box) box.innerHTML = '';
+                        return;
                     }
+                    if (hint) {
+                        hint.innerHTML = secs.length
+                            ? ('<span class="am">ክፍሎች፦</span><span class="en">Classes:</span> <b>' + secs.join(', ') + '</b>')
+                            : '<span style="color:#c00;">No sections for this teacher</span>';
+                    }
+                    renderLeavingSectionOptions(secs);
                 });
             }
 
             var handForm = document.getElementById('handoverForm');
             if (handForm) {
                 handForm.addEventListener('submit', function(e) {
-                    syncHandSections();
+                    var leaveChks = document.querySelectorAll('.leave-sec-chk');
+                    if (leaveChks.length) {
+                        var chosen = Array.from(leaveChks).filter(function(c){ return c.checked; }).map(function(c){ return c.value; });
+                        if (handInput) handInput.value = chosen.join(',');
+                    } else {
+                        syncHandSections();
+                    }
                     if (!handInput || !(handInput.value || '').trim()) {
                         e.preventDefault();
                         alert('ቢያንስ አንድ ክፍል/ሴክሽን ይምረጡ / Select at least one section');
@@ -1656,6 +1738,35 @@ document.addEventListener('DOMContentLoaded', function() {
             var ff = document.getElementById('finalTargetAudience');
             if (ff) ff.value = quickSel.value;
         });
+    }
+});
+</script>
+
+
+<script>
+// Place Timetable + Exam always visible at bottom
+document.addEventListener('DOMContentLoaded', function() {
+    var wrap = document.getElementById('bottomScheduleWrap');
+    if (!wrap) return;
+    ['timetable', 'examSchedule'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) {
+            el.classList.add('is-open');
+            el.style.setProperty('display', 'block', 'important');
+            wrap.appendChild(el);
+        }
+    });
+    // Build timetable grid if function exists
+    if (typeof window.buildTTGrid === 'function') {
+        try { window.buildTTGrid({}); } catch(e) {}
+        // load saved
+        var clsInp = document.getElementById('ttClass');
+        if (clsInp && clsInp.value) {
+            // trigger load if button exists
+        }
+    }
+    if (typeof window.loadExamCalendar === 'function') {
+        try { window.loadExamCalendar(); } catch(e) {}
     }
 });
 </script>
