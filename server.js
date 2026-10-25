@@ -1067,7 +1067,10 @@ app.get('/admin', (req, res) => {
                                     </a>
                                 `).join('') || `<span style="color:#7f8c8d;">ምንም የተመዘገበ ሴክሽን የለም።</span>`;
 
-                                let teacherOptions = teachers.map(tc => `<option value="${tc.id}">${tc.name} — ${(tc.assigned_sections||'no sections').substring(0,40)}</option>`).join('');
+                                let teacherOptions = teachers.map(tc => {
+                                    const secs = (tc.assigned_sections || '').replace(/"/g, '');
+                                    return `<option value="${tc.id}" data-sections="${secs}">${tc.name} — ${secs || 'no sections'}</option>`;
+                                }).join('');
                                 let gradeCheckboxes = ''; for(let i=1; i<=12; i++) gradeCheckboxes += `<label style="margin-right:8px;"><input type="checkbox" name="grades" value="Grade ${i}"> Grade ${i}</label>`;
                                 let cRows = courses.map(c => `<tr><td>${c.code}</td><td>${c.title}</td><td style="display:none;">0</td><td>${c.class_level}</td><td>${c.teacher_name||'-'}</td><td><a href="/admin/delete-course/${c.id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td></tr>`).join('');
                                 
