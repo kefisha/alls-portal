@@ -1716,6 +1716,11 @@ app.get('/admin/teacher-id/:id', (req, res) => {
     });
 });
 
+app.get('/api/sections-list', (req, res) => {
+    if (!req.session.isAdmin && !req.session.teacherId) return res.status(401).json({ rows: [] });
+    db.all(`SELECT name FROM sections ORDER BY name`, [], (e, rows) => res.json({ rows: rows || [] }));
+});
+
 app.post('/admin/handover-section', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const { section_name, old_teacher_id, new_teacher_id } = req.body;
@@ -1750,7 +1755,7 @@ app.post('/admin/handover-section', (req, res) => {
                         db.run(`UPDATE courses SET teacher_id = ?, teacher_name = ? WHERE class_level = ?`, [new_teacher_id, newT.name, sec], () => {});
                     }
                 });
-                res.redirect('/admin');
+                res.redirect('/admin#teachers');
             });
         });
     });
