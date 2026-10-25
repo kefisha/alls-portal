@@ -3186,20 +3186,35 @@ app.get('/api/quizzes', (req, res) => {
 });
 // Full quiz for taking (student gets questions only)
 app.get('/api/quiz/:id', (req, res) => {
-    db.get(`SELECT id, title, class_level, teacher_name, questions_json FROM quizzes WHERE id=?`, [req.params.id], (e, quiz) => {
-        if (!quiz) return res.json({ success: false });
+    const qid = parseInt(req.params.id, 10) || req.params.id;
+    db.get(`SELECT id, title, class_level, teacher_name, questions_json FROM quizzes WHERE id=?`, [qid], (e, quiz) => {
+        if (e) {
+            console.error('api/quiz error', e);
+            return res.json({ success: false, error: String(e.message || e) });
+        }
+        if (!quiz) return res.json({ success: false, error: 'not found' });
         let qs = [];
-        try { qs = JSON.parse(quiz.questions_json || '[]'); } catch (e) {}
+        try {
+            qs = typeof quiz.questions_json === 'string' ? JSON.parse(quiz.questions_json || '[]') : (quiz.questions_json || []);
+        } catch (err) {
+            console.error('questions_json parse', err);
+            qs = [];
+        }
+        if (!Array.isArray(qs)) qs = [];
+        const questions = qs.map(q => ({
+            q: (q && q.q) ? String(q.q) : '',
+            type: (q && q.type) || (q && q.options ? 'mcq' : 'text'),
+            options: (q && q.options) || null,
+            image: (q && q.image) || null,
+            optImages: (q && q.optImages) || null
+        }));
         res.json({
             success: true,
-            id: quiz.id, title: quiz.title, class_level: quiz.class_level, teacher_name: quiz.teacher_name,
-            questions: qs.map(q => ({
-                q: q.q || '',
-                type: q.type || (q.options ? 'mcq' : 'text'),
-                options: q.options || null,
-                image: q.image || null,
-                optImages: q.optImages || null
-            })).filter(q => q.q || q.image || (q.options && (q.options.A||q.options.B||q.options.C||q.options.D)) || (q.optImages && (q.optImages.A||q.optImages.B)))
+            id: quiz.id,
+            title: quiz.title,
+            class_level: quiz.class_level,
+            teacher_name: quiz.teacher_name,
+            questions: questions
         });
     });
 });
@@ -3433,6 +3448,27 @@ app.post('/teacher/bulk-grades', upload.single('csv'), (req, res) => {
 });
 
 // 9 Fee ledger
+
+app.post('/admin/replace-teacher', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    const oldId = (req.body.old_teacher_id || '').trim();
+    const newId = (req.body.new_teacher_id || '').trim();
+    const sections = String(req.body.sections || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (!oldId || !newId || !sections.length) return res.redirect('/admin#teacherAssign');
+    db.get(`SELECT assigned_sections FROM teachers WHERE id = ?`, [oldId], (e1, oldT) => {
+        let oldSecs = (oldT && oldT.assigned_sections ? oldT.assigned_sections : '').split(',').map(s => s.trim()).filter(s => s && !sections.includes(s));
+        db.run(`UPDATE teachers SET assigned_sections = ? WHERE id = ?`, [oldSecs.join(', '), oldId], () => {
+            db.get(`SELECT assigned_sections FROM teachers WHERE id = ?`, [newId], (e2, newT) => {
+                let newSecs = (newT && newT.assigned_sections ? newT.assigned_sections : '').split(',').map(s => s.trim()).filter(Boolean);
+                sections.forEach(s => { if (!newSecs.includes(s)) newSecs.push(s); });
+                db.run(`UPDATE teachers SET assigned_sections = ? WHERE id = ?`, [newSecs.join(', '), newId], () => {
+                    logActivity('Admin', 'Director', 'TEACHER_REPLACE', oldId + '->' + newId);
+                    res.redirect('/admin#teacherAssign');
+                });
+            });
+        });
+    });
+});
 
 app.post('/admin/fee-delete', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
@@ -3878,9 +3914,18 @@ border:14px solid #1f4e79;outline:6px solid #c9a227;outline-offset:6px;box-shado
 <div class="panel no-print">
 <h3 style="margin-top:0">🎓 Certificate Editor</h3>
 <form method="GET" action="/admin/certificate">
-<label>Student ID</label>
-<input name="student_id" value="${esc(id)}" placeholder="ALLS-1234">
-<button type="submit" class="sec">Load student</button>
+<label>Load person</label>
+<select name="person_type" id="personTypeLoad">
+<option value="student">Student</option>
+<option value="teacher">Teacher</option>
+</select>
+<label>ID</label>
+<input name="student_id" value="${esc(id)}" placeholder="ID">
+<button type="submit" class="sec">Load</button>
+<label>Person type (on cert)</label>
+<select id="fPersonType" onchange="sync()"><option value="Student">Student</option><option value="Teacher">Teacher</option></select>
+<label>Photo URL or /uploads/...</label>
+<input id="fPhoto" value="${student && student.photo ? '/uploads/'+esc(student.photo) : ''}" oninput="sync()" placeholder="/uploads/photo.jpg">
 </form>
 <label>School</label><input id="fSchool" value="AMANUEL LIGHT & LIFE SCHOOL" oninput="sync()">
 <label>Title</label><input id="fTitle" value="Certificate of Completion" oninput="sync()">
@@ -3902,6 +3947,8 @@ border:14px solid #1f4e79;outline:6px solid #c9a227;outline-offset:6px;box-shado
 <div class="school" id="cSchool">AMANUEL LIGHT & LIFE SCHOOL</div>
 <div class="title" id="cTitle">Certificate of Completion</div>
 <div class="subtitle" id="cSub">This is proudly presented to</div>
+<div id="cPhotoWrap" style="margin:10px auto;"><img id="cPhoto" alt="" style="width:90px;height:90px;border-radius:50%;object-fit:cover;border:3px solid #c9a227;display:none;"></div>
+<div class="meta" id="cPersonType">Student</div>
 <div class="name" id="cName">${esc(name)||'Student Name'}</div>
 <div class="body" id="cBody">for successfully completing the academic requirements of class ${esc(cls)||'—'} with dedication and excellence.</div>
 <div class="meta" id="cMeta">Student ID: ${esc(id)||'—'}  ·  Class: ${esc(cls)||'—'}</div>
@@ -3918,6 +3965,15 @@ function sync(){
     var f=document.getElementById('f'+k), el=document.getElementById('c'+k);
     if(f&&el) el.textContent=f.value||(k==='Name'?'Student Name':'');
   });
+  var pt=document.getElementById('fPersonType');
+  var cpt=document.getElementById('cPersonType');
+  if(pt&&cpt) cpt.textContent=pt.value||'Student';
+  var ph=document.getElementById('fPhoto');
+  var img=document.getElementById('cPhoto');
+  if(ph&&img){
+    if(ph.value){ img.src=ph.value; img.style.display='inline-block'; }
+    else { img.style.display='none'; }
+  }
 }
 function downloadPdf(){
   html2pdf().set({margin:4,filename:'Certificate_'+(document.getElementById('fName').value||'student').replace(/\\s+/g,'_')+'.pdf',
@@ -3928,7 +3984,15 @@ sync();
 </script></body></html>`);
     };
     if (!sid) return loadForm(null);
-    db.get(`SELECT * FROM students WHERE UPPER(student_id)=UPPER(?)`, [sid], (e, student) => loadForm(student || null));
+    const ptype = (req.query.person_type || 'student').toLowerCase();
+    if (ptype === 'teacher') {
+        db.get(`SELECT * FROM teachers WHERE UPPER(id)=UPPER(?) OR UPPER(name)=UPPER(?)`, [sid, sid], (e, t) => {
+            if (t) loadForm({ name: t.name, student_id: t.id, class_level: t.subject || 'Teacher', photo: t.photo });
+            else loadForm(null);
+        });
+    } else {
+        db.get(`SELECT * FROM students WHERE UPPER(student_id)=UPPER(?)`, [sid], (e, student) => loadForm(student || null));
+    }
 });
 
 // 12 Auto daily backup to folder (runs every 24h after start)
