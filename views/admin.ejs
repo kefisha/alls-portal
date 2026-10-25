@@ -120,25 +120,30 @@
                 </style>
 <script>
         window.openAdminPanel = function(id) {
-            var host = document.getElementById('toolsWorkspace');
-            document.querySelectorAll('.admin-tools-panel').forEach(function(p) {
-                p.classList.remove('is-open');
-                p.style.setProperty('display', 'none', 'important');
-            });
-            var el = document.getElementById(id);
-            if (!el) { console.warn('panel missing', id); return; }
-            // Always show under Quick Links (bottom workspace)
-            if (host) {
+            try {
+                var host = document.getElementById('toolsWorkspace');
+                if (!host) {
+                    host = document.createElement('div');
+                    host.id = 'toolsWorkspace';
+                    host.style.marginTop = '12px';
+                    var ql = document.getElementById('bottomLinks');
+                    if (ql && ql.parentNode) ql.parentNode.insertBefore(host, ql.nextSibling);
+                    else document.body.appendChild(host);
+                }
+                document.querySelectorAll('.admin-tools-panel').forEach(function(p) {
+                    p.classList.remove('is-open');
+                    p.style.setProperty('display', 'none', 'important');
+                });
+                var el = document.getElementById(id);
+                if (!el) { alert('Not found: ' + id); return; }
                 host.appendChild(el);
                 host.style.display = 'block';
-            }
-            el.classList.add('is-open');
-            el.style.setProperty('display', 'block', 'important');
-            var hint = document.getElementById('toolsWorkspaceHint');
-            if (hint) hint.style.display = 'none';
-            setTimeout(function(){
-                (host || el).scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 40);
+                el.classList.add('is-open');
+                el.style.setProperty('display', 'block', 'important');
+                var hint = document.getElementById('toolsWorkspaceHint');
+                if (hint) hint.style.display = 'none';
+                setTimeout(function(){ host.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
+            } catch (err) { console.error(err); alert(err.message); }
         };
         </script>
 </head>
@@ -150,32 +155,14 @@
             <button type="button" class="dark-toggle" id="darkToggle" onclick="toggleDark()">🌙 Dark</button>
             <div style="background: var(--card); padding: 6px 12px; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow); display: flex; gap: 8px; align-items: center;">
                 <span style="font-size:14px; font-weight:bold; color:var(--text);">🔔 <span id="unreadBadge" class="badge-unread">0</span></span>
-                <button type="button" onclick="setLang('am')" id="btn-am" style="background:#27ae60; color:white; padding:8px 18px; border-radius:6px; border:none; cursor:pointer; font-weight:bold; font-size:14px;">🇪🇹 አማርኛ</button>
-                <button type="button" onclick="setLang('en')" id="btn-en" style="background:transparent; color:var(--text); padding:8px 18px; border-radius:6px; border:none; cursor:pointer; font-weight:bold; font-size:14px;">🇬🇧 English</button>
+                <button type="button" onclick="window.setLang && window.setLang('am')" id="btn-am" style="background:#27ae60; color:white; padding:8px 18px; border-radius:6px; border:none; cursor:pointer; font-weight:bold; font-size:14px;">🇪🇹 አማርኛ</button>
+                <button type="button" onclick="window.setLang && window.setLang('en')" id="btn-en" style="background:transparent; color:var(--text); padding:8px 18px; border-radius:6px; border:none; cursor:pointer; font-weight:bold; font-size:14px;">🇬🇧 English</button>
             </div>
             <a href="/logout" class="logout-btn">🚪 <span class="am">ውጣ</span><span class="en">Logout</span></a>
         </div>
 
         <h2>👑 <span class="am">የዲሬክተር / አድሚን መቆጣጠሪያ</span><span class="en">Director / Admin Dashboard</span></h2>
-
-        <!-- Academic Year -->
-        <div class="card" style="border-color: #f39c12;">
-            <h3 style="color: #d35400; border-bottom-color: #fce8cd;">🎓 <span class="am">የአካዳሚክ ዓመት ማጠቃለያ</span><span class="en">Academic Year-End Actions</span></h3>
-            <p style="font-size: 13px; color: #555;">
-                <span class="am">ማሳሰቢያ፦ እነዚህን ተግባራት ከማድረግዎ በፊት እባክዎ የክፍል ውጤቶችን ዳውንሎድ ማድረጎን ያረጋግጡ።</span>
-                <span class="en">Note: Please ensure you have downloaded all class reports before proceeding.</span>
-            </p>
-            <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 15px;">
-                <form action="/admin/archive-year" method="POST" onsubmit="return confirm('እርግጠኛ ነዎት? / Are you sure?');">
-                    <button type="submit" class="btn-orange">🗂️ <span class="am">1. የዓመቱን ውጤት ቋጥሮ ያዝ</span><span class="en">1. Archive Academic Year</span></button>
-                </form>
-                <form action="/admin/promote-students" method="POST" onsubmit="return confirm('እርግጠኛ ነዎት? / Are you sure?');">
-                    <button type="submit" class="btn-green">🚀 <span class="am">2. ተማሪዎችን ወደ ቀጣይ ክፍል አሳድግ</span><span class="en">2. Promote All Students</span></button>
-                </form>
-            </div>
-        </div>
-
-        <!-- 🏆 Roster & Report Card Center -->
+<!-- 🏆 Roster & Report Card Center -->
         <div class="card" style="border-color: #d35400; background: linear-gradient(to bottom, #ffffff, #fffdf9);">
             <h3 style="color: #d35400; border-bottom-color: #fdebd0;">
                 🏆 <span class="am">የተማሪዎች ውጤት ማስረከቢያ፣ የ1 ገጽ ካርድ እና ጠቅላላ ሮስተር (Roster Center)</span>
@@ -328,7 +315,7 @@
                 <div id="feeList" style="margin-top:10px;font-size:13px;"></div>
             </div>
             <div class="card admin-tools-panel" id="timetable" style="grid-column: 1 / -1;">
-                <h3>📅 Timetable (Excel-style) Mon–Fri · Periods 1–6 · 45 min each</h3>
+                <h3><span class="am">📅 የሰዓት ሰንጠረዥ (Table) ሰኞ–አርብ · 1–6</span><span class="en">📅 Timetable Table Mon–Fri · Periods 1–6</span></h3>
                 <p style="font-size:12px;color:var(--text2);">P1 8:00–8:45 · P2 8:45–9:30 · P3 9:30–10:15 · P4 10:15–11:00 · P5 11:00–11:45 · P6 11:45–12:30 · <b>Break 4:00–4:15 (15 min)</b></p>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
                     <input type="text" id="ttClass" placeholder="Section e.g. Grade 5A" style="max-width:200px;">
@@ -382,7 +369,7 @@
         </div>
 
         <div class="card admin-tools-panel" id="examSchedule">
-            <h3>📝 Exam Schedule (Calendar)</h3>
+            <h3><span class="am">📝 የፈተና ሰንጠረዥ (Table) — ማርትዕ / መሰረዝ</span><span class="en">📝 Exam Schedule Table — Edit / Delete</span></h3>
             <div style="display:grid;grid-template-columns:1fr 1.2fr;gap:16px;">
               <form action="/admin/exam-schedule" method="POST" style="background:linear-gradient(135deg,#f8fafc,#eef2ff);padding:16px;border-radius:12px;border:1px solid #c7d2fe;">
                 <p style="margin:0 0 10px;font-weight:bold;color:#3730a3;">➕ Add exam</p>
@@ -424,6 +411,24 @@
                 <button type="submit" class="btn-green">Apply Replace</button>
             </form>
             <p style="margin-top:14px;font-size:13px;">መምህር Edit → assigned sections checkboxes ከመምህራን ዝርዝር</p>
+        </div>
+
+        <!-- Academic Year (bottom) -->
+        <!-- Academic Year -->
+        <div class="card" style="border-color: #f39c12;">
+            <h3 style="color: #d35400; border-bottom-color: #fce8cd;">🎓 <span class="am">የአካዳሚክ ዓመት ማጠቃለያ</span><span class="en">Academic Year-End Actions</span></h3>
+            <p style="font-size: 13px; color: #555;">
+                <span class="am">ማሳሰቢያ፦ እነዚህን ተግባራት ከማድረግዎ በፊት እባክዎ የክፍል ውጤቶችን ዳውንሎድ ማድረጎን ያረጋግጡ።</span>
+                <span class="en">Note: Please ensure you have downloaded all class reports before proceeding.</span>
+            </p>
+            <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 15px;">
+                <form action="/admin/archive-year" method="POST" onsubmit="return confirm('እርግጠኛ ነዎት? / Are you sure?');">
+                    <button type="submit" class="btn-orange">🗂️ <span class="am">1. የዓመቱን ውጤት ቋጥሮ ያዝ</span><span class="en">1. Archive Academic Year</span></button>
+                </form>
+                <form action="/admin/promote-students" method="POST" onsubmit="return confirm('እርግጠኛ ነዎት? / Are you sure?');">
+                    <button type="submit" class="btn-green">🚀 <span class="am">2. ተማሪዎችን ወደ ቀጣይ ክፍል አሳድግ</span><span class="en">2. Promote All Students</span></button>
+                </form>
+            </div>
         </div>
 
         <!-- Activity Log -->
@@ -1334,14 +1339,6 @@
         })();
 
 
-        window.openAdminPanel = function(id) {
-            document.querySelectorAll('.admin-tools-panel').forEach(function(p){ p.classList.remove('is-open'); });
-            var el = document.getElementById(id);
-            if (el) {
-                el.classList.add('is-open');
-                setTimeout(function(){ el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
-            }
-        };
         document.querySelectorAll('#bottomLinks a[href^="#"]').forEach(function(a) {
             a.addEventListener('click', function(e) {
                 var id = (a.getAttribute('href') || '').replace('#','');
