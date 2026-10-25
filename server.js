@@ -3590,6 +3590,29 @@ app.post('/admin/timetable-grid', (req, res) => {
         next();
     });
 });
+app.get('/admin/timetable-pdf', (req, res) => {
+    if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
+    const cls = (req.query.class || '').trim();
+    db.all(`SELECT * FROM timetable ORDER BY day_of_week, period_no`, [], (e, rows) => {
+        rows = rows || [];
+        if (cls) rows = rows.filter(r => String(r.class_level||'').toLowerCase().includes(cls.toLowerCase()));
+        const seen = {};
+        rows = rows.filter(r => {
+            const k = [r.day_of_week, r.period_no, r.subject, r.class_level].join('|');
+            if (seen[k]) return false; seen[k] = 1; return true;
+        });
+        const tr = rows.map(r => `<tr><td>${r.day_of_week||''}</td><td>${r.period_no||''}</td><td>${r.subject||''}</td><td>${r.teacher_name||''}</td><td>${r.class_level||''}</td></tr>`).join('')
+            || '<tr><td colspan="5">No timetable</td></tr>';
+        res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Timetable PDF</title>
+<style>body{font-family:Segoe UI,sans-serif;padding:24px}h1{color:#1f4e79;text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px;font-size:13px}th{background:#1f4e79;color:#fff}
+@media print{.no-print{display:none}}</style></head><body>
+<p class="no-print" style="text-align:center"><button onclick="window.print()" style="padding:12px 18px;background:#2980b9;color:#fff;border:none;border-radius:8px;font-weight:bold">🖨️ Print / Save PDF</button></p>
+<h1>Weekly Timetable ${cls?('— '+cls):''}</h1>
+<table><tr><th>Day</th><th>Period</th><th>Subject</th><th>Teacher</th><th>Class</th></tr>${tr}</table>
+</body></html>`);
+    });
+});
+
 app.get('/api/timetable', (req, res) => {
     const cls = req.query.class || '';
     db.all(`SELECT * FROM timetable ORDER BY day_of_week, period_no`, [], (e, rows) => {
@@ -3773,12 +3796,17 @@ fetch('/api/quizzes').then(r=>r.json()).then(d=>{
   ).join('')||'No quizzes';
 });
 fetch('/api/exam-schedule').then(r=>r.json()).then(d=>{
-  document.getElementById('examHubList').innerHTML='<table><tr><th>Date</th><th>Time</th><th>Class</th><th>Subject</th><th>Room</th></tr>'
-    +(d.rows||[]).map(x=>'<tr><td>'+(x.exam_date||'')+'</td><td>'+(x.exam_time||'')+'</td><td>'+(x.class_level||'')+'</td><td>'+(x.subject||'')+'</td><td>'+(x.room||'')+'</td></tr>').join('')+'</table>';
+  document.getElementById('examHubList').innerHTML='<table><tr><th>Date</th><th>Time</th><th>Class</th><th>Subject</th><th>Notes</th></tr>'
+    +(d.rows||[]).map(x=>'<tr><td>'+(x.exam_date||'')+'</td><td>'+(x.exam_time||'')+'</td><td>'+(x.class_level||'')+'</td><td>'+(x.subject||'')+'</td><td>'+(x.notes||'')+'</td></tr>').join('')+'</table>';
 }).catch(()=>{});
 fetch('/api/timetable').then(r=>r.json()).then(d=>{
-  document.getElementById('ttList').innerHTML='<table><tr><th>Day</th><th>Period</th><th>Subject</th><th>Teacher</th><th>Room</th><th>Class</th></tr>'
-    +(d.rows||[]).map(r=>'<tr><td>'+r.day_of_week+'</td><td>'+r.period_no+'</td><td>'+r.subject+'</td><td>'+r.teacher_name+'</td><td>'+r.room+'</td><td>'+r.class_level+'</td></tr>').join('')
+  var seen={};
+  var rows=(d.rows||[]).filter(function(r){
+    var k=[r.day_of_week,r.period_no,r.subject,r.class_level].join('|');
+    if(seen[k]) return false; seen[k]=1; return true;
+  });
+  document.getElementById('ttList').innerHTML='<table><tr><th>Day</th><th>Period</th><th>Subject</th><th>Teacher</th><th>Class</th></tr>'
+    +rows.map(r=>'<tr><td>'+(r.day_of_week||'')+'</td><td>'+(r.period_no||'')+'</td><td>'+(r.subject||'')+'</td><td>'+(r.teacher_name||'')+'</td><td>'+(r.class_level||'')+'</td></tr>').join('')
     +'</table>';
 });
 fetch('/api/student-progress/'+encodeURIComponent((window.STUDENT_ID||''))).then(r=>r.json()).then(d=>{
@@ -3860,6 +3888,32 @@ app.post('/admin/exam-schedule', (req, res) => {
         [class_level||'', subject||'', exam_date||'', exam_time||'', room||'', notes||'', getFormattedTimestamp()],
         () => res.redirect('/admin#examSchedule'));
 });
+app.get('/admin/exam-schedule-pdf', (req, res) => {
+    if (!req.session.isAdmin && !req.session.teacherId) return res.redirect('/');
+    db.all(`SELECT * FROM exam_schedule ORDER BY exam_date ASC, exam_time ASC LIMIT 200`, [], (e, rows) => {
+        rows = rows || [];
+        const tr = rows.map(x => `<tr><td>${x.exam_date||''}</td><td>${x.exam_time||''}</td><td>${x.class_level||''}</td><td>${x.subject||''}</td><td>${x.notes||''}</td></tr>`).join('')
+            || '<tr><td colspan="5">No exams</td></tr>';
+        res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Exam Schedule PDF</title>
+<style>
+body{font-family:Segoe UI,sans-serif;padding:24px;color:#111}
+h1{color:#1f4e79;text-align:center;margin:0 0 8px}
+.sub{text-align:center;color:#64748b;margin-bottom:20px}
+table{width:100%;border-collapse:collapse}
+th,td{border:1px solid #cbd5e1;padding:10px;font-size:13px;text-align:left}
+th{background:#1f4e79;color:#fff}
+tr:nth-child(even){background:#f8fafc}
+@media print{.no-print{display:none}}
+</style></head><body>
+<p class="no-print" style="text-align:center"><button onclick="window.print()" style="padding:12px 20px;background:#2980b9;color:#fff;border:none;border-radius:8px;font-weight:bold;font-size:15px">🖨️ Print / Save PDF</button> <a href="/admin">Admin</a></p>
+<h1>Amanuel Light & Life School</h1>
+<div class="sub">Exam Schedule</div>
+<table><tr><th>Date</th><th>Time</th><th>Class</th><th>Subject</th><th>Notes</th></tr>${tr}</table>
+<script>/* auto hint */</script>
+</body></html>`);
+    });
+});
+
 app.get('/api/exam-schedule', (req, res) => {
     db.all(`SELECT * FROM exam_schedule ORDER BY exam_date ASC, exam_time ASC LIMIT 100`, [], (e, rows) => res.json({ rows: rows || [] }));
 });
@@ -4083,4 +4137,26 @@ try {
 } catch (e) {
     console.log('Socket.io not installed — chat uses polling. npm i socket.io');
 }
+
+// Seed demo quiz if none exist
+async function seedDemoQuiz() {
+    try {
+        const r = await pool.query('SELECT COUNT(*)::int AS c FROM quizzes');
+        if ((r.rows[0] && r.rows[0].c) > 0) return;
+        const qs = [
+            { q: 'What is 2 + 2?', type: 'mcq', options: { A: '3', B: '4', C: '5', D: '6' }, a: 'B', desc: '2+2=4' },
+            { q: 'What is 5 × 3?', type: 'mcq', options: { A: '8', B: '15', C: '10', D: '20' }, a: 'B', desc: '5×3=15' },
+            { q: 'What is 10 − 4?', type: 'mcq', options: { A: '5', B: '6', C: '7', D: '8' }, a: 'B', desc: '10−4=6' },
+            { q: 'What is 12 ÷ 3?', type: 'mcq', options: { A: '2', B: '3', C: '4', D: '6' }, a: 'C', desc: '12÷3=4' },
+            { q: 'What is 7 + 8?', type: 'mcq', options: { A: '14', B: '15', C: '16', D: '13' }, a: 'B', desc: '7+8=15' }
+        ];
+        await pool.query(
+            `INSERT INTO quizzes (teacher_id, teacher_name, class_level, title, questions_json, created_at) VALUES ($1,$2,$3,$4,$5,$6)`,
+            ['DEMO', 'System', 'ALL', 'Demo Math Quiz (5 questions)', JSON.stringify(qs), new Date().toISOString()]
+        );
+        console.log('DEMO_MATH_QUIZ seeded');
+    } catch (e) { console.error('seed demo quiz', e.message); }
+}
+
+setTimeout(function(){ seedDemoQuiz(); }, 3000);
 httpServer.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
