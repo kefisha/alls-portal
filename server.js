@@ -1067,7 +1067,7 @@ app.get('/admin', (req, res) => {
                                     </a>
                                 `).join('') || `<span style="color:#7f8c8d;">ምንም የተመዘገበ ሴክሽን የለም።</span>`;
 
-                                let teacherOptions = teachers.map(tc => `<option value="${tc.id}">${tc.name}</option>`).join('');
+                                let teacherOptions = teachers.map(tc => `<option value="${tc.id}">${tc.name} — ${(tc.assigned_sections||'no sections').substring(0,40)}</option>`).join('');
                                 let gradeCheckboxes = ''; for(let i=1; i<=12; i++) gradeCheckboxes += `<label style="margin-right:8px;"><input type="checkbox" name="grades" value="Grade ${i}"> Grade ${i}</label>`;
                                 let cRows = courses.map(c => `<tr><td>${c.code}</td><td>${c.title}</td><td style="display:none;">0</td><td>${c.class_level}</td><td>${c.teacher_name||'-'}</td><td><a href="/admin/delete-course/${c.id}?lang=${lang}" onclick="return confirm('Delete?')" style="color:red; font-weight:bold;">🗑️ Delete</a></td></tr>`).join('');
                                 
@@ -1755,6 +1755,25 @@ app.post('/admin/handover-section', (req, res) => {
                         db.run(`UPDATE courses SET teacher_id = ?, teacher_name = ? WHERE class_level = ?`, [new_teacher_id, newT.name, sec], () => {});
                     }
                 });
+                const secList = selectedSections.join(', ');
+                const ts = getFormattedTimestamp();
+                // Notify incoming teacher which class/sections they received
+                const msgNew = `<p><b>📚 ክፍል ተመድቦሎታል / Class assigned</b></p>
+<p>የተመደቡ ክፍሎች / Sections: <b>${secList}</b></p>
+<p>ሙሉ የተመደቡ ክፍሎችዎ / All your sections: <b>${newSecs.join(', ')}</b></p>
+<p style="color:#64748b;font-size:12px;">${ts}</p>`;
+                db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at) VALUES (?,?,?,?,?)`,
+                    ['Admin', 'Director', 'TEACHER:' + new_teacher_id, msgNew, ts], () => {});
+                // Notify leaving teacher if replace
+                if (old_teacher_id) {
+                    const msgOld = `<p><b>📤 ክፍል ተላልፏል / Sections handed over</b></p>
+<p>የተላለፉ ክፍሎች / Handed over: <b>${secList}</b></p>
+<p>ለ / To: <b>${newT.name}</b> (${new_teacher_id})</p>
+<p style="color:#64748b;font-size:12px;">${ts}</p>`;
+                    db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at) VALUES (?,?,?,?,?)`,
+                        ['Admin', 'Director', 'TEACHER:' + old_teacher_id, msgOld, ts], () => {});
+                }
+                try { logActivity('Admin', 'Director', 'TEACHER_HANDOVER', new_teacher_id + ' <= ' + secList); } catch (e) {}
                 res.redirect('/admin#teachers');
             });
         });
