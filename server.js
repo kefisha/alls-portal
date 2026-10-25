@@ -3501,13 +3501,19 @@ app.post('/admin/fee', (req, res) => {
 app.get('/api/search-students', (req, res) => {
     if (!req.session.isAdmin && !req.session.teacherId) return res.status(401).json({ rows: [] });
     const q = String(req.query.q || '').trim().toLowerCase();
-    if (!q) return res.json({ rows: [] });
-    db.all(`SELECT student_id, name, class_level FROM students ORDER BY name LIMIT 300`, [], (e, rows) => {
+    if (!q) return res.json({ rows: [], teachers: [] });
+    db.all(`SELECT student_id, name, class_level FROM students ORDER BY name LIMIT 500`, [], (e, rows) => {
         rows = (rows || []).filter(s =>
             String(s.name||'').toLowerCase().includes(q) ||
             String(s.student_id||'').toLowerCase().includes(q)
         ).slice(0, 20);
-        res.json({ rows });
+        db.all(`SELECT id, name FROM teachers ORDER BY name LIMIT 200`, [], (e2, trows) => {
+            trows = (trows || []).filter(t =>
+                String(t.name||'').toLowerCase().includes(q) ||
+                String(t.id||'').toLowerCase().includes(q)
+            ).slice(0, 15);
+            res.json({ rows, teachers: trows });
+        });
     });
 });
 
