@@ -3194,17 +3194,17 @@ app.get('/api/quiz/:id', (req, res) => {
             success: true,
             id: quiz.id, title: quiz.title, class_level: quiz.class_level, teacher_name: quiz.teacher_name,
             questions: qs.map(q => ({
-                q: q.q,
+                q: q.q || '',
                 type: q.type || (q.options ? 'mcq' : 'text'),
                 options: q.options || null,
                 image: q.image || null,
                 optImages: q.optImages || null
-            }))
+            })).filter(q => q.q || q.image || (q.options && (q.options.A||q.options.B||q.options.C||q.options.D)) || (q.optImages && (q.optImages.A||q.optImages.B)))
         });
     });
 });
 app.post('/student/quiz-attempt', (req, res) => {
-    if (!req.session.studentId) return res.json({ success: false, error: 'login' });
+    if (!req.session.studentId && !req.session.teacherId && !req.session.isAdmin) return res.json({ success: false, error: 'login' });
     const { quiz_id, answers } = req.body;
     db.get(`SELECT * FROM quizzes WHERE id=?`, [quiz_id], (e, quiz) => {
         if (!quiz) return res.json({ success: false });
@@ -3235,17 +3235,23 @@ app.post('/student/quiz-attempt', (req, res) => {
         });
         const total = qs.length || 1;
         const percent = Math.round((score / total) * 100);
-        db.get(`SELECT name FROM students WHERE student_id=?`, [req.session.studentId], (e2, s) => {
-            db.run(`INSERT INTO quiz_attempts (quiz_id, student_id, student_name, answers_json, score, total, created_at) VALUES (?,?,?,?,?,?,?)`,
-                [quiz_id, req.session.studentId, s ? s.name : '', JSON.stringify(ans), score, total, getFormattedTimestamp()],
-                () => res.json({ success: true, score, total, percent, review }));
+        const sid = req.session.studentId || ('preview-'+(req.session.teacherId||'admin'));
+        db.get(`SELECT name FROM students WHERE student_id=?`, [req.session.studentId||''], (e2, s) => {
+            const sname = s ? s.name : (req.session.teacherId ? 'Teacher' : 'Admin');
+            if (req.session.studentId) {
+                db.run(`INSERT INTO quiz_attempts (quiz_id, student_id, student_name, answers_json, score, total, created_at) VALUES (?,?,?,?,?,?,?)`,
+                    [quiz_id, sid, sname, JSON.stringify(ans), score, total, getFormattedTimestamp()],
+                    () => res.json({ success: true, score, total, percent, review }));
+            } else {
+                res.json({ success: true, score, total, percent, review });
+            }
         });
     });
 });
 
 // Telegram-style quiz page
 app.get('/quiz/:id', (req, res) => {
-    if (!req.session.studentId && !req.session.teacherId && !req.session.isAdmin) return res.redirect('/');
+    if (!req.session.studentId && !req.session.teacherId && !req.session.isAdmin) return res.redirect('/?error=login');
     const qid = req.params.id;
     res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Quiz</title>
@@ -3363,12 +3369,17 @@ function finish(){
     });
   });
 }
-fetch('/api/quiz/'+encodeURIComponent(quizId),{credentials:'same-origin'}).then(r=>r.json()).then(d=>{
-  if(!d.success){ document.getElementById('app').innerHTML='Quiz not found'; return; }
-  window._quizTitle=d.title;
+fetch('/api/quiz/'+encodeURIComponent(quizId),{credentials:'same-origin'})
+.then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+.then(function(d){
+  if(!d || !d.success){ document.getElementById('app').innerHTML='<p>Quiz not found or empty.</p><a href="/learning-hub" style="color:#2980b9">Back</a>'; return; }
+  window._quizTitle=d.title||'Quiz';
   questions=d.questions||[];
-  if(!questions.length){ document.getElementById('app').innerHTML='No questions'; return; }
+  if(!questions.length){ document.getElementById('app').innerHTML='<p>No questions in this quiz.</p><a href="/learning-hub" style="color:#2980b9">Back</a>'; return; }
   showQ();
+})
+.catch(function(err){
+  document.getElementById('app').innerHTML='<p>Failed to load quiz.</p><p class="meta">'+String(err)+'</p><button type="button" onclick="location.reload()">Retry</button>';
 });
 </script></body></html>`);
 });
@@ -3422,6 +3433,23 @@ app.post('/teacher/bulk-grades', upload.single('csv'), (req, res) => {
 });
 
 // 9 Fee ledger
+
+app.post('/admin/fee-delete', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.run(`DELETE FROM fee_ledger WHERE id = ?`, [req.body.id], () => res.redirect('/admin#fees'));
+});
+app.post('/admin/fee-edit', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    const id = req.body.id;
+    const amount = parseFloat(req.body.amount) || 0;
+    const paid = parseFloat(req.body.paid) || 0;
+    const description = req.body.description || '';
+    const status = paid >= amount ? 'paid' : (paid > 0 ? 'partial' : 'unpaid');
+    db.run(`UPDATE fee_ledger SET amount=?, paid=?, description=?, status=?, updated_at=? WHERE id=?`,
+        [amount, paid, description, status, getFormattedTimestamp(), id],
+        () => res.redirect('/admin#fees'));
+});
+
 app.post('/admin/fee', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const { student_id, amount, paid, description } = req.body;
@@ -3745,6 +3773,17 @@ app.get('/api/homework-submissions', (req, res) => {
 });
 
 // 4 Exam schedule
+app.post('/admin/exam-delete', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.run(`DELETE FROM exam_schedule WHERE id = ?`, [req.body.id], () => res.redirect('/admin#examSchedule'));
+});
+app.post('/admin/exam-edit', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    const { id, class_level, subject, exam_date, exam_time, notes } = req.body;
+    db.run(`UPDATE exam_schedule SET class_level=?, subject=?, exam_date=?, exam_time=?, notes=? WHERE id=?`,
+        [class_level||'', subject||'', exam_date||'', exam_time||'', notes||'', id],
+        () => res.redirect('/admin#examSchedule'));
+});
 app.post('/admin/exam-schedule', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const { class_level, subject, exam_date, exam_time, room, notes } = req.body;
@@ -3799,46 +3838,97 @@ app.post('/admin/backup-restore', upload.single('backup'), (req, res) => {
 app.get('/admin/certificate', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const sid = (req.query.student_id || '').trim();
-    const title = (req.query.title || 'Certificate of Completion').trim();
-    if (!sid) {
-        return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Certificate</title></head><body style="font-family:serif;padding:20px;">
-<h2>🎓 Certificate Generator</h2>
-<form method="GET" action="/admin/certificate">
-<input name="student_id" placeholder="Student ID" required>
-<input name="title" value="Certificate of Completion" style="width:280px;">
-<button type="submit">Generate</button>
-</form>
-<a href="/admin">Back</a></body></html>`);
-    }
-    db.get(`SELECT * FROM students WHERE UPPER(student_id)=UPPER(?)`, [sid], (e, st) => {
-        if (!st) return res.send('<h3>Student not found</h3><a href="/admin/certificate">Back</a>');
-        res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8">
-<title>Certificate - ${st.name}</title>
+    const loadForm = (student) => {
+        const name = student ? (student.name || '') : '';
+        const id = student ? (student.student_id || sid) : sid;
+        const cls = student ? (student.class_level || '') : '';
+        const esc = (s) => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+        res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Certificate Designer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
-@page{size:A4 landscape;margin:0}
-body{font-family:Georgia,serif;background:#f5f5f5;margin:0;padding:20px;}
-.cert{width:297mm;max-width:100%;min-height:180mm;margin:auto;background:linear-gradient(135deg,#fff,#f8fafc);border:12px solid #1f4e79;padding:40px;box-sizing:border-box;text-align:center;position:relative;}
-h1{color:#1f4e79;font-size:36px;margin:10px 0}
-.name{font-size:32px;color:#c9a227;margin:20px 0;font-weight:bold;}
-.meta{color:#555;font-size:14px;}
-@media print{body{background:#fff;padding:0}.no-print{display:none}}
+*{box-sizing:border-box}body{font-family:Segoe UI,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:16px}
+.wrap{max-width:1100px;margin:auto;display:grid;grid-template-columns:300px 1fr;gap:16px}
+@media(max-width:800px){.wrap{grid-template-columns:1fr}}
+.panel{background:#1e293b;border-radius:12px;padding:16px;max-height:90vh;overflow:auto}
+label{display:block;font-size:12px;color:#94a3b8;margin:8px 0 4px}
+input,select,textarea{width:100%;padding:8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0}
+button{width:100%;padding:12px;margin-top:10px;border:none;border-radius:8px;font-weight:bold;cursor:pointer;background:#2980b9;color:#fff}
+button.gold{background:linear-gradient(135deg,#c9a227,#f0d77b);color:#1f2937}
+button.sec{background:#475569}
+.stage{overflow:auto;padding:8px}
+.cert{width:297mm;min-height:200mm;margin:auto;position:relative;background:linear-gradient(145deg,#fffef8,#fff 45%,#f1f5f9);color:#1e293b;
+border:14px solid #1f4e79;outline:6px solid #c9a227;outline-offset:6px;box-shadow:0 20px 50px rgba(0,0,0,.4);padding:32px 44px;text-align:center}
+.cert.theme-blue{border-color:#1d4ed8;outline-color:#38bdf8}
+.cert.theme-green{border-color:#15803d;outline-color:#4ade80}
+.cert.theme-royal{border-color:#7c3aed;outline-color:#e879f9}
+.ornament{font-size:20px;color:#c9a227;letter-spacing:10px;margin-bottom:4px}
+.school{font-size:14px;letter-spacing:4px;color:#1f4e79;font-weight:800;text-transform:uppercase}
+.title{font-family:Georgia,serif;font-size:38px;color:#1f4e79;margin:10px 0;font-weight:bold}
+.subtitle{font-size:14px;color:#64748b}
+.name{font-family:Georgia,serif;font-size:34px;color:#b45309;margin:16px 0;font-weight:bold;border-bottom:2px solid #c9a227;display:inline-block;padding:0 12px 6px}
+.body{font-size:15px;line-height:1.65;color:#334155;max-width:88%;margin:10px auto}
+.meta{font-size:13px;color:#475569;margin-top:8px}
+.sigs{display:flex;justify-content:space-around;margin-top:44px}
+.sig{width:170px}.sig-line{border-top:1px solid #334155;margin-top:36px;padding-top:6px;font-size:12px;color:#64748b}
+.seal{width:64px;height:64px;border:3px solid #c9a227;border-radius:50%;margin:12px auto;display:flex;align-items:center;justify-content:center;font-size:11px;color:#1f4e79;font-weight:bold;background:radial-gradient(circle,#fff7d6,#fff)}
+@media print{body{background:#fff;padding:0}.panel,.no-print{display:none!important}.cert{box-shadow:none;outline:6px solid #c9a227}}
 </style></head><body>
-<p class="no-print" style="text-align:center;"><button onclick="window.print()">🖨️ Print</button> <a href="/admin">Admin</a></p>
-<div class="cert">
-<div style="font-size:18px;letter-spacing:4px;color:#64748b;">AMANUEL LIGHT & LIFE SCHOOL</div>
-<h1>${title}</h1>
-<p>This is to certify that</p>
-<div class="name">${st.name}</div>
-<p>Student ID: <b>${st.student_id}</b> · Class: <b>${st.class_level||''}</b></p>
-<p class="meta">has successfully completed the academic requirements.</p>
-<p class="meta" style="margin-top:40px;">Date: ${getFormattedTimestamp()}</p>
-<div style="display:flex;justify-content:space-around;margin-top:50px;">
-<div><div style="border-top:1px solid #333;width:160px;margin:auto;"></div>Director</div>
-<div><div style="border-top:1px solid #333;width:160px;margin:auto;"></div>School Stamp</div>
+<div class="wrap">
+<div class="panel no-print">
+<h3 style="margin-top:0">🎓 Certificate Editor</h3>
+<form method="GET" action="/admin/certificate">
+<label>Student ID</label>
+<input name="student_id" value="${esc(id)}" placeholder="ALLS-1234">
+<button type="submit" class="sec">Load student</button>
+</form>
+<label>School</label><input id="fSchool" value="AMANUEL LIGHT & LIFE SCHOOL" oninput="sync()">
+<label>Title</label><input id="fTitle" value="Certificate of Completion" oninput="sync()">
+<label>Subtitle</label><input id="fSub" value="This is proudly presented to" oninput="sync()">
+<label>Student name</label><input id="fName" value="${esc(name)}" oninput="sync()">
+<label>Body</label><textarea id="fBody" rows="3" oninput="sync()">for successfully completing the academic requirements of class ${esc(cls)} with dedication and excellence.</textarea>
+<label>Meta line</label><input id="fMeta" value="Student ID: ${esc(id)}  ·  Class: ${esc(cls)}" oninput="sync()">
+<label>Date</label><input id="fDate" value="${esc(getFormattedTimestamp())}" oninput="sync()">
+<label>Left sign</label><input id="fSig1" value="Director" oninput="sync()">
+<label>Right sign</label><input id="fSig2" value="School Seal" oninput="sync()">
+<label>Theme</label>
+<select id="fTheme" onchange="sync()"><option value="">Gold / Navy</option><option value="theme-blue">Blue</option><option value="theme-green">Green</option><option value="theme-royal">Royal</option></select>
+<button type="button" class="gold" onclick="downloadPdf()">📥 Download Colored PDF</button>
+<button type="button" class="sec" onclick="window.print()">🖨️ Print</button>
+<p style="font-size:12px;margin-top:12px"><a href="/admin" style="color:#93c5fd">← Admin</a></p>
 </div>
-</div></body></html>`);
-    });
+<div class="stage"><div class="cert" id="cert">
+<div class="ornament">✦ ◆ ✦</div>
+<div class="school" id="cSchool">AMANUEL LIGHT & LIFE SCHOOL</div>
+<div class="title" id="cTitle">Certificate of Completion</div>
+<div class="subtitle" id="cSub">This is proudly presented to</div>
+<div class="name" id="cName">${esc(name)||'Student Name'}</div>
+<div class="body" id="cBody">for successfully completing the academic requirements of class ${esc(cls)||'—'} with dedication and excellence.</div>
+<div class="meta" id="cMeta">Student ID: ${esc(id)||'—'}  ·  Class: ${esc(cls)||'—'}</div>
+<div class="seal">ALLS</div>
+<div class="meta" id="cDate">${esc(getFormattedTimestamp())}</div>
+<div class="sigs"><div class="sig"><div class="sig-line" id="cSig1">Director</div></div><div class="sig"><div class="sig-line" id="cSig2">School Seal</div></div></div>
+</div></div>
+</div>
+<script>
+function sync(){
+  var c=document.getElementById('cert');
+  c.className='cert '+(document.getElementById('fTheme').value||'');
+  ['School','Title','Sub','Name','Body','Meta','Date','Sig1','Sig2'].forEach(function(k){
+    var f=document.getElementById('f'+k), el=document.getElementById('c'+k);
+    if(f&&el) el.textContent=f.value||(k==='Name'?'Student Name':'');
+  });
+}
+function downloadPdf(){
+  html2pdf().set({margin:4,filename:'Certificate_'+(document.getElementById('fName').value||'student').replace(/\\s+/g,'_')+'.pdf',
+    image:{type:'jpeg',quality:0.98},html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff'},
+    jsPDF:{unit:'mm',format:'a4',orientation:'landscape'}}).from(document.getElementById('cert')).save();
+}
+sync();
+</script></body></html>`);
+    };
+    if (!sid) return loadForm(null);
+    db.get(`SELECT * FROM students WHERE UPPER(student_id)=UPPER(?)`, [sid], (e, student) => loadForm(student || null));
 });
 
 // 12 Auto daily backup to folder (runs every 24h after start)
