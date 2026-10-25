@@ -69,6 +69,23 @@
         .chart-box h4 { margin: 0 0 12px; color: var(--primary); font-size: 15px; text-align: center; }
         .dark-toggle { background: #64748b; color: white; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; }
         body.dark .dark-toggle { background: #fbbf24; color: #0f172a; }
+        body.dark input, body.dark select, body.dark textarea {
+            background: #0f172a !important; color: #e2e8f0 !important; border-color: #334155 !important;
+        }
+        body.dark .card { background: var(--card); color: var(--text); }
+        body.dark table { background: var(--card); }
+        body.dark th { background: #1e3a5f !important; }
+        body.dark tr:nth-child(even) { background: #1a2332; }
+        body.dark .ql-toolbar.ql-snow, body.dark .ql-container.ql-snow { background: #1e293b; color: #e2e8f0; border-color: #334155 !important; }
+        body.dark .ql-editor { color: #e2e8f0; }
+        body.dark .multi-sec-grid, body.dark #handoverSectionCheckboxes, body.dark #regSectionCheckboxes { background: #0f172a !important; border-color: #475569 !important; }
+        body.dark .sec-chk-label { background: #1e293b !important; border-color: #475569 !important; color: #e2e8f0 !important; }
+        body.dark a { color: #93c5fd; }
+        body.dark #toolsWorkspaceHint { background: #1e293b !important; border-color: #475569 !important; color: #94a3b8 !important; }
+        body.dark div[style*="background:#eef7fa"], body.dark div[style*="background: #eef7fa"] { background: #1e293b !important; }
+        body.dark div[style*="background:#f8fafc"], body.dark div[style*="background: #f8fafc"] { background: #1e293b !important; }
+        body.dark div[style*="background:#fff"], body.dark div[style*="background: #fff"] { background: #1e293b !important; }
+        body.dark a { color: #93c5fd; }
 
         /* ===== Modern UI 1-10 ===== */
         .toast-wrap { position: fixed; top: 18px; right: 18px; z-index: 99999; display: flex; flex-direction: column; gap: 8px; max-width: 320px; }
@@ -121,16 +138,24 @@
 <script>
         window.setLang = function(lang) {
             var cleanLang = (lang === 'en') ? 'en' : 'am';
-            document.body.className = (document.body.className || '').replace(/lang-(am|en)/g, '').trim() + ' lang-' + cleanLang;
+            var isDark = document.body && document.body.classList.contains('dark');
+            document.body.className = 'lang-' + cleanLang + (isDark ? ' dark' : '');
             try { localStorage.setItem('prefLang', cleanLang); } catch(e) {}
             var btnAm = document.getElementById('btn-am');
             var btnEn = document.getElementById('btn-en');
             if (btnAm && btnEn) {
                 btnAm.style.background = cleanLang === 'am' ? '#27ae60' : 'transparent';
-                btnAm.style.color = cleanLang === 'am' ? 'white' : '#333';
+                btnAm.style.color = cleanLang === 'am' ? 'white' : (isDark ? '#e2e8f0' : '#333');
                 btnEn.style.background = cleanLang === 'en' ? '#2980b9' : 'transparent';
-                btnEn.style.color = cleanLang === 'en' ? 'white' : '#333';
+                btnEn.style.color = cleanLang === 'en' ? 'white' : (isDark ? '#e2e8f0' : '#333');
             }
+        };
+        window.toggleDark = function() {
+            document.body.classList.toggle('dark');
+            var isDark = document.body.classList.contains('dark');
+            try { localStorage.setItem('darkMode', isDark ? '1' : '0'); } catch(e) {}
+            var btn = document.getElementById('darkToggle');
+            if (btn) btn.textContent = isDark ? '☀️ Light' : '🌙 Dark';
         };
         try {
             var pl = localStorage.getItem('prefLang') || 'am';
@@ -163,12 +188,18 @@
         </script>
 </head>
 <body class="lang-am">
-<script>try{var _pl=localStorage.getItem('prefLang');if(_pl==='en')document.body.className='lang-en';}catch(e){}</script>
+<script>
+try{
+  var _pl=localStorage.getItem('prefLang')||'am';
+  var _dk=localStorage.getItem('darkMode')==='1';
+  document.body.className='lang-'+(_pl==='en'?'en':'am')+(_dk?' dark':'');
+}catch(e){}
+</script>
     <div class="container">
         
         <!-- Top Navigation -->
         <div style="display: flex; justify-content: flex-end; gap: 12px; align-items: center; margin-bottom: 20px; flex-wrap: wrap;">
-            <button type="button" class="dark-toggle" id="darkToggle" onclick="toggleDark()">🌙 Dark</button>
+            <button type="button" class="dark-toggle" id="darkToggle" onclick="window.toggleDark && window.toggleDark()">🌙 Dark</button>
             <div style="background: var(--card); padding: 6px 12px; border-radius: 10px; box-shadow: 0 2px 8px var(--shadow); display: flex; gap: 8px; align-items: center;">
                 <span style="font-size:14px; font-weight:bold; color:var(--text);">🔔 <span id="unreadBadge" class="badge-unread">0</span></span>
                 <button type="button" onclick="window.setLang && window.setLang('am')" id="btn-am" style="background:#27ae60; color:white; padding:8px 18px; border-radius:6px; border:none; cursor:pointer; font-weight:bold; font-size:14px;">🇪🇹 አማርኛ</button>
@@ -598,6 +629,11 @@
                                 <option value="">-- የለም / None --</option>
                                 <%- typeof teacherOptions !== 'undefined' ? teacherOptions : '' %>
                             </select>
+                            <p id="leavingTeacherHint" style="font-size:12px;color:#64748b;margin:6px 0 0;"></p>
+                            <p style="font-size:11px;color:#94a3b8;margin:4px 0 0;">
+                                <span class="am">ምሳሌ፦ መምህር 4A,4B,3A,3B ካስተማረ 4B ብቻ ለመቀየር — Leaving ይምረጡ፣ 4B ብቻ checkbox ይተው።</span>
+                                <span class="en">Example: Teacher has 4A,4B,3A,3B — to replace only 4B, pick Leaving teacher then keep only 4B checked.</span>
+                            </p>
                         </div>
                         <div>
                             <label style="font-weight:bold;font-size:13px;color:#16a34a;display:block;margin-bottom:4px;">
@@ -712,17 +748,16 @@
     <script>
         window.setLang = function setLang(lang) {
             const cleanLang = (lang === 'en') ? 'en' : 'am';
-            document.body.className = 'lang-' + cleanLang;
+            const isDark = document.body.classList.contains('dark');
+            document.body.className = 'lang-' + cleanLang + (isDark ? ' dark' : '');
             localStorage.setItem('prefLang', cleanLang);
-            
             const btnAm = document.getElementById('btn-am');
             const btnEn = document.getElementById('btn-en');
             if (btnAm && btnEn) {
                 btnAm.style.background = cleanLang === 'am' ? '#27ae60' : 'transparent';
-                btnAm.style.color = cleanLang === 'am' ? 'white' : '#333';
-                
+                btnAm.style.color = cleanLang === 'am' ? 'white' : (isDark ? '#e2e8f0' : '#333');
                 btnEn.style.background = cleanLang === 'en' ? '#2980b9' : 'transparent';
-                btnEn.style.color = cleanLang === 'en' ? 'white' : '#333';
+                btnEn.style.color = cleanLang === 'en' ? 'white' : (isDark ? '#e2e8f0' : '#333');
             }
         }
 
@@ -991,6 +1026,50 @@
                 }
             }
 
+            
+            // Teacher -> sections map from table (for partial replace)
+            window._teacherSections = {};
+            (function(){
+                var table = document.getElementById('teachersListTable');
+                if (!table) return;
+                table.querySelectorAll('tr').forEach(function(row, index) {
+                    if (index === 0) return;
+                    var cells = row.querySelectorAll('td');
+                    if (cells.length >= 3) {
+                        var tId = (cells[0].innerText || '').trim();
+                        var secs = (cells[2].innerText || '').trim();
+                        if (tId) {
+                            window._teacherSections[tId] = secs.split(/[,;]+/).map(function(s){ return s.trim(); }).filter(Boolean);
+                        }
+                    }
+                });
+            })();
+
+            var oldSelEl = document.getElementById('oldTeacherSelect');
+            if (oldSelEl) {
+                oldSelEl.addEventListener('change', function() {
+                    var tid = oldSelEl.value;
+                    var secs = window._teacherSections[tid] || [];
+                    // Uncheck all first
+                    document.querySelectorAll('.hand-sec-chk').forEach(function(chk) {
+                        chk.checked = false;
+                    });
+                    if (tid && secs.length) {
+                        // Check only sections this teacher currently has
+                        document.querySelectorAll('.hand-sec-chk').forEach(function(chk) {
+                            if (secs.indexOf(chk.value) !== -1) chk.checked = true;
+                        });
+                    }
+                    if (typeof syncHandSections === 'function') syncHandSections();
+                    var hint = document.getElementById('leavingTeacherHint');
+                    if (hint) {
+                        if (!tid) hint.textContent = '';
+                        else if (!secs.length) hint.textContent = 'This teacher has no assigned sections listed.';
+                        else hint.innerHTML = 'Sections of leaving teacher: <b>' + secs.join(', ') + '</b> — unchecked ones stay with them; checked ones move to incoming teacher.';
+                    }
+                });
+            }
+
             var handForm = document.getElementById('handoverForm');
             if (handForm) {
                 handForm.addEventListener('submit', function(e) {
@@ -1097,12 +1176,18 @@
         });
 
         // ===== Dark Mode =====
-        function toggleDark() {
+        window.toggleDark = function toggleDark() {
             document.body.classList.toggle('dark');
             const isDark = document.body.classList.contains('dark');
             localStorage.setItem('darkMode', isDark ? '1' : '0');
-            document.getElementById('darkToggle').textContent = isDark ? '☀️ Light' : '🌙 Dark';
-        }
+            const btn = document.getElementById('darkToggle');
+            if (btn) btn.textContent = isDark ? '☀️ Light' : '🌙 Dark';
+            // keep language class
+            if (!document.body.classList.contains('lang-am') && !document.body.classList.contains('lang-en')) {
+                const pl = localStorage.getItem('prefLang') || 'am';
+                document.body.classList.add(pl === 'en' ? 'lang-en' : 'lang-am');
+            }
+        };
         if (localStorage.getItem('darkMode') === '1') {
             document.body.classList.add('dark');
             const btn = document.getElementById('darkToggle');
