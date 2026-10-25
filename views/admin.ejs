@@ -407,6 +407,7 @@ try{
             </div>
 <div class="card admin-tools-panel" id="timetable" style="grid-column: 1 / -1;">
                 <h3><span class="am">📅 የሰዓት ሰንጠረዥ (Table) ሰኞ–አርብ · 1–6</span><span class="en">📅 Timetable Table Mon–Fri · Periods 1–6</span></h3>
+                <p><a href="/admin/timetable-pdf" target="_blank" style="display:inline-block;padding:8px 14px;background:#0f766e;color:#fff;border-radius:8px;text-decoration:none;font-weight:bold;">📄 Download / Print PDF</a></p>
                 <p style="font-size:12px;color:var(--text2);">P1 8:00–8:45 · P2 8:45–9:30 · P3 9:30–10:15 · P4 10:15–11:00 · P5 11:00–11:45 · P6 11:45–12:30 · <b>Break 4:00–4:15 (15 min)</b></p>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
                     <input type="text" id="ttClass" placeholder="Section e.g. Grade 5A" style="max-width:200px;">
@@ -447,6 +448,7 @@ try{
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                   <b style="color:var(--primary);">📅 Upcoming exams</b>
                   <button type="button" onclick="loadExamCalendar()" style="padding:6px 12px;font-size:12px;">Refresh</button>
+                  <a href="/admin/exam-schedule-pdf" target="_blank" style="padding:6px 12px;font-size:12px;background:#0f766e;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold;">📄 PDF</a>
                 </div>
                 <div id="examCalendar" style="display:grid;gap:10px;"></div>
               </div>
@@ -1747,27 +1749,20 @@ document.addEventListener('DOMContentLoaded', function() {
 // Place Timetable + Exam always visible at bottom
 document.addEventListener('DOMContentLoaded', function() {
     var wrap = document.getElementById('bottomScheduleWrap');
-    if (!wrap) return;
-    ['timetable', 'examSchedule'].forEach(function(id) {
+    function place(id) {
         var el = document.getElementById(id);
-        if (el) {
-            el.classList.add('is-open');
-            el.style.setProperty('display', 'block', 'important');
-            wrap.appendChild(el);
-        }
-    });
-    // Build timetable grid if function exists
-    if (typeof window.buildTTGrid === 'function') {
-        try { window.buildTTGrid({}); } catch(e) {}
-        // load saved
-        var clsInp = document.getElementById('ttClass');
-        if (clsInp && clsInp.value) {
-            // trigger load if button exists
-        }
+        if (!el) return;
+        el.classList.remove('admin-tools-panel');
+        el.classList.add('is-open');
+        el.style.cssText = (el.style.cssText||'') + ';display:block!important;visibility:visible!important;';
+        if (wrap) wrap.appendChild(el);
     }
-    if (typeof window.loadExamCalendar === 'function') {
-        try { window.loadExamCalendar(); } catch(e) {}
-    }
+    place('timetable');
+    place('examSchedule');
+    setTimeout(function(){
+        if (typeof window.buildTTGrid === 'function') try { window.buildTTGrid({}); } catch(e) {}
+        if (typeof window.loadExamCalendar === 'function') try { window.loadExamCalendar(); } catch(e) {}
+    }, 300);
 });
 </script>
 
