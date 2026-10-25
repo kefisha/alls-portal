@@ -119,35 +119,51 @@
     
                 </style>
 <script>
+        window.setLang = function(lang) {
+            var cleanLang = (lang === 'en') ? 'en' : 'am';
+            document.body.className = (document.body.className || '').replace(/lang-(am|en)/g, '').trim() + ' lang-' + cleanLang;
+            try { localStorage.setItem('prefLang', cleanLang); } catch(e) {}
+            var btnAm = document.getElementById('btn-am');
+            var btnEn = document.getElementById('btn-en');
+            if (btnAm && btnEn) {
+                btnAm.style.background = cleanLang === 'am' ? '#27ae60' : 'transparent';
+                btnAm.style.color = cleanLang === 'am' ? 'white' : '#333';
+                btnEn.style.background = cleanLang === 'en' ? '#2980b9' : 'transparent';
+                btnEn.style.color = cleanLang === 'en' ? 'white' : '#333';
+            }
+        };
+        try {
+            var pl = localStorage.getItem('prefLang') || 'am';
+            document.documentElement.setAttribute('data-lang', pl);
+        } catch(e) {}
         window.openAdminPanel = function(id) {
             try {
                 var host = document.getElementById('toolsWorkspace');
-                if (!host) {
-                    host = document.createElement('div');
-                    host.id = 'toolsWorkspace';
-                    host.style.marginTop = '12px';
-                    var ql = document.getElementById('bottomLinks');
-                    if (ql && ql.parentNode) ql.parentNode.insertBefore(host, ql.nextSibling);
-                    else document.body.appendChild(host);
-                }
                 document.querySelectorAll('.admin-tools-panel').forEach(function(p) {
                     p.classList.remove('is-open');
                     p.style.setProperty('display', 'none', 'important');
                 });
                 var el = document.getElementById(id);
-                if (!el) { alert('Not found: ' + id); return; }
-                host.appendChild(el);
-                host.style.display = 'block';
+                if (!el) { alert('Section not found: ' + id); return false; }
+                if (host && el.parentNode !== host) host.appendChild(el);
                 el.classList.add('is-open');
                 el.style.setProperty('display', 'block', 'important');
                 var hint = document.getElementById('toolsWorkspaceHint');
                 if (hint) hint.style.display = 'none';
-                setTimeout(function(){ host.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
-            } catch (err) { console.error(err); alert(err.message); }
+                setTimeout(function(){
+                    (host || el).scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 80);
+                return false;
+            } catch (err) {
+                console.error(err);
+                alert(err.message);
+                return false;
+            }
         };
         </script>
 </head>
 <body class="lang-am">
+<script>try{var _pl=localStorage.getItem('prefLang');if(_pl==='en')document.body.className='lang-en';}catch(e){}</script>
     <div class="container">
         
         <!-- Top Navigation -->
@@ -291,56 +307,9 @@
 
         
         <!-- Features: Announcements, Library, Fees, Timetable, Backup -->
-        <div class="card admin-tools-panel" id="announcements">
-            <h3>📢 <span class="am">ማስታወቂያ ቦርድ</span><span class="en">Announcements Board</span></h3>
-            <form action="/admin/announcement" method="POST">
-                <input type="text" name="title" placeholder="Title" required>
-                <textarea name="body" rows="3" placeholder="Message..." required></textarea>
-                <select name="audience"><option value="ALL">All</option><option value="STUDENTS">Students</option><option value="TEACHERS">Teachers</option><option value="PARENTS">Parents</option></select>
-                <button type="submit" class="btn-green">📢 Publish</button>
-            </form>
-        </div>
-        <div class="grid-2">
-            <div class="card admin-tools-panel" id="fees">
-                <h3>💰 Fee Ledger</h3>
-                <form action="/admin/fee" method="POST">
-                    <input type="text" name="student_id" id="feeStudentId" placeholder="Student ID" required>
-                    <input type="text" id="feeSearchName" placeholder="🔍 Search by Student Name..." style="margin-bottom:6px;">
-                    <div id="feeNameResults" style="font-size:12px;margin-bottom:8px;"></div>
-                    <input type="number" step="any" name="amount" placeholder="Amount due" required>
-                    <input type="number" step="any" name="paid" placeholder="Paid" value="0">
-                    <input type="text" name="description" placeholder="Description e.g. Tuition Term 1">
-                    <button type="submit">💾 Save Fee</button>
-                </form>
-                <div id="feeList" style="margin-top:10px;font-size:13px;"></div>
-            </div>
-            <div class="card admin-tools-panel" id="timetable" style="grid-column: 1 / -1;">
-                <h3><span class="am">📅 የሰዓት ሰንጠረዥ (Table) ሰኞ–አርብ · 1–6</span><span class="en">📅 Timetable Table Mon–Fri · Periods 1–6</span></h3>
-                <p style="font-size:12px;color:var(--text2);">P1 8:00–8:45 · P2 8:45–9:30 · P3 9:30–10:15 · P4 10:15–11:00 · P5 11:00–11:45 · P6 11:45–12:30 · <b>Break 4:00–4:15 (15 min)</b></p>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-                    <input type="text" id="ttClass" placeholder="Section e.g. Grade 5A" style="max-width:200px;">
-                    <button type="button" onclick="loadTTGrid()">📂 Load</button>
-                    <button type="button" class="btn-green" onclick="saveTTGrid()">💾 Save Grid</button>
-                </div>
-                <div style="overflow-x:auto;">
-                    <table id="ttGrid" style="font-size:12px;min-width:700px;">
-                        <thead><tr><th>Period</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th></tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-        <div class="card admin-tools-panel" id="librarySection">
-            <h3>📖 Library upload · 📦 Backup</h3>
-            <form action="/library/upload" method="POST" enctype="multipart/form-data" style="margin-bottom:12px;">
-                <input type="text" name="title" placeholder="Resource title" required>
-                <input type="text" name="category" placeholder="Category">
-                <input type="text" name="class_level" placeholder="Class or ALL">
-                <input type="file" name="file" required>
-                <button type="submit">📤 Upload to Library</button>
-            </form>
-
-        </div>
+        
+        
+        
 
         
         <div class="card no-print" id="bottomLinks" style="text-align:center;">
@@ -361,14 +330,60 @@
             </div></div>
         </div>
 
-        <div id="toolsWorkspace" style="margin-top:8px;">
-            <p id="toolsWorkspaceHint" style="text-align:center;color:#64748b;font-size:13px;padding:8px;">
-                <span class="am">⬆️ ከላይ Quick Links ይጫኑ — ይዘቱ እዚህ ይከፈታል</span>
-                <span class="en">⬆️ Click a Quick Link above — content opens here</span>
+        <div id="toolsWorkspace" style="margin-top:14px;">
+            <p id="toolsWorkspaceHint" style="text-align:center;color:#64748b;font-size:13px;padding:12px;background:#f1f5f9;border-radius:10px;border:1px dashed #94a3b8;">
+                <span class="am">⬆️ Quick Links ይጫኑ — ይዘቱ <b>ከታች እዚህ</b> ይከፈታል</span>
+                <span class="en">⬆️ Click a Quick Link — content opens <b>below here</b></span>
             </p>
+<div class="card admin-tools-panel" id="announcements">
+            <h3>📢 <span class="am">ማስታወቂያ ቦርድ</span><span class="en">Announcements Board</span></h3>
+            <form action="/admin/announcement" method="POST">
+                <input type="text" name="title" placeholder="Title" required>
+                <textarea name="body" rows="3" placeholder="Message..." required></textarea>
+                <select name="audience"><option value="ALL">All</option><option value="STUDENTS">Students</option><option value="TEACHERS">Teachers</option><option value="PARENTS">Parents</option></select>
+                <button type="submit" class="btn-green">📢 Publish</button>
+            </form>
         </div>
+<div class="card admin-tools-panel" id="fees">
+                <h3>💰 Fee Ledger</h3>
+                <form action="/admin/fee" method="POST">
+                    <input type="text" name="student_id" id="feeStudentId" placeholder="Student ID" required>
+                    <input type="text" id="feeSearchName" placeholder="🔍 Search by Student Name..." style="margin-bottom:6px;">
+                    <div id="feeNameResults" style="font-size:12px;margin-bottom:8px;"></div>
+                    <input type="number" step="any" name="amount" placeholder="Amount due" required>
+                    <input type="number" step="any" name="paid" placeholder="Paid" value="0">
+                    <input type="text" name="description" placeholder="Description e.g. Tuition Term 1">
+                    <button type="submit">💾 Save Fee</button>
+                </form>
+                <div id="feeList" style="margin-top:10px;font-size:13px;"></div>
+            </div>
+<div class="card admin-tools-panel" id="timetable" style="grid-column: 1 / -1;">
+                <h3><span class="am">📅 የሰዓት ሰንጠረዥ (Table) ሰኞ–አርብ · 1–6</span><span class="en">📅 Timetable Table Mon–Fri · Periods 1–6</span></h3>
+                <p style="font-size:12px;color:var(--text2);">P1 8:00–8:45 · P2 8:45–9:30 · P3 9:30–10:15 · P4 10:15–11:00 · P5 11:00–11:45 · P6 11:45–12:30 · <b>Break 4:00–4:15 (15 min)</b></p>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+                    <input type="text" id="ttClass" placeholder="Section e.g. Grade 5A" style="max-width:200px;">
+                    <button type="button" onclick="loadTTGrid()">📂 Load</button>
+                    <button type="button" class="btn-green" onclick="saveTTGrid()">💾 Save Grid</button>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table id="ttGrid" style="font-size:12px;min-width:700px;">
+                        <thead><tr><th>Period</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+<div class="card admin-tools-panel" id="librarySection">
+            <h3>📖 Library upload · 📦 Backup</h3>
+            <form action="/library/upload" method="POST" enctype="multipart/form-data" style="margin-bottom:12px;">
+                <input type="text" name="title" placeholder="Resource title" required>
+                <input type="text" name="category" placeholder="Category">
+                <input type="text" name="class_level" placeholder="Class or ALL">
+                <input type="file" name="file" required>
+                <button type="submit">📤 Upload to Library</button>
+            </form>
 
-        <div class="card admin-tools-panel" id="examSchedule">
+        </div>
+<div class="card admin-tools-panel" id="examSchedule">
             <h3><span class="am">📝 የፈተና ሰንጠረዥ (Table) — ማርትዕ / መሰረዝ</span><span class="en">📝 Exam Schedule Table — Edit / Delete</span></h3>
             <div style="display:grid;grid-template-columns:1fr 1.2fr;gap:16px;">
               <form action="/admin/exam-schedule" method="POST" style="background:linear-gradient(135deg,#f8fafc,#eef2ff);padding:16px;border-radius:12px;border:1px solid #c7d2fe;">
@@ -390,7 +405,7 @@
             </div>
             <div id="examList" style="margin-top:16px;"></div>
         </div>
-        <div class="card admin-tools-panel" id="restoreBackup">
+<div class="card admin-tools-panel" id="restoreBackup">
             <h3>♻️ Restore from Backup</h3>
             <p style="font-size:13px;color:#b91c1c;"><b>Warning:</b> Restores data from a JSON backup file (best-effort insert).</p>
             <form action="/admin/backup-restore" method="POST" enctype="multipart/form-data">
@@ -398,9 +413,7 @@
                 <button type="submit" style="background:#b91c1c;color:#fff;">♻️ Restore</button>
             </form>
         </div>
-
-        
-        <div class="card admin-tools-panel" id="teacherAssign">
+<div class="card admin-tools-panel" id="teacherAssign">
             <h3>👨‍🏫 ለመምህር ብዙ ክፍሎች መመደቢያ / መተኪያ</h3>
             <p style="font-size:13px;color:#64748b;">መምህር ሲመዘገብ ወይም <b>Edit</b> ሲያደርጉ ክፍሎች (sections) ይምረጡ። ከታች Replace ይጠቀሙ ክፍሎችን ከአንድ መምህር ወደ ሌላ ለማዛወር።</p>
             <form action="/admin/replace-teacher" method="POST" style="background:#f0f9ff;padding:16px;border-radius:12px;border:1px solid #bae6fd;">
@@ -412,24 +425,8 @@
             </form>
             <p style="margin-top:14px;font-size:13px;">መምህር Edit → assigned sections checkboxes ከመምህራን ዝርዝር</p>
         </div>
-
-        <!-- Academic Year (bottom) -->
-        <!-- Academic Year -->
-        <div class="card" style="border-color: #f39c12;">
-            <h3 style="color: #d35400; border-bottom-color: #fce8cd;">🎓 <span class="am">የአካዳሚክ ዓመት ማጠቃለያ</span><span class="en">Academic Year-End Actions</span></h3>
-            <p style="font-size: 13px; color: #555;">
-                <span class="am">ማሳሰቢያ፦ እነዚህን ተግባራት ከማድረግዎ በፊት እባክዎ የክፍል ውጤቶችን ዳውንሎድ ማድረጎን ያረጋግጡ።</span>
-                <span class="en">Note: Please ensure you have downloaded all class reports before proceeding.</span>
-            </p>
-            <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 15px;">
-                <form action="/admin/archive-year" method="POST" onsubmit="return confirm('እርግጠኛ ነዎት? / Are you sure?');">
-                    <button type="submit" class="btn-orange">🗂️ <span class="am">1. የዓመቱን ውጤት ቋጥሮ ያዝ</span><span class="en">1. Archive Academic Year</span></button>
-                </form>
-                <form action="/admin/promote-students" method="POST" onsubmit="return confirm('እርግጠኛ ነዎት? / Are you sure?');">
-                    <button type="submit" class="btn-green">🚀 <span class="am">2. ተማሪዎችን ወደ ቀጣይ ክፍል አሳድግ</span><span class="en">2. Promote All Students</span></button>
-                </form>
-            </div>
         </div>
+</div>
 
         <!-- Activity Log -->
         <details class="card" id="activityLog" style="padding:12px 16px;">
@@ -681,6 +678,24 @@
             </div>
         </div>
 
+    
+        <!-- Academic Year - bottom -->
+        <!-- Academic Year (bottom) -->
+        <!-- Academic Year -->
+        <div class="card" style="border-color: #f39c12;">
+            <h3 style="color: #d35400; border-bottom-color: #fce8cd;">🎓 <span class="am">የአካዳሚክ ዓመት ማጠቃለያ</span><span class="en">Academic Year-End Actions</span></h3>
+            <p style="font-size: 13px; color: #555;">
+                <span class="am">ማሳሰቢያ፦ እነዚህን ተግባራት ከማድረግዎ በፊት እባክዎ የክፍል ውጤቶችን ዳውንሎድ ማድረጎን ያረጋግጡ።</span>
+                <span class="en">Note: Please ensure you have downloaded all class reports before proceeding.</span>
+            </p>
+            <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 15px;">
+                <form action="/admin/archive-year" method="POST" onsubmit="return confirm('እርግጠኛ ነዎት? / Are you sure?');">
+                    <button type="submit" class="btn-orange">🗂️ <span class="am">1. የዓመቱን ውጤት ቋጥሮ ያዝ</span><span class="en">1. Archive Academic Year</span></button>
+                </form>
+                <form action="/admin/promote-students" method="POST" onsubmit="return confirm('እርግጠኛ ነዎት? / Are you sure?');">
+                    <button type="submit" class="btn-green">🚀 <span class="am">2. ተማሪዎችን ወደ ቀጣይ ክፍል አሳድግ</span><span class="en">2. Promote All Students</span></button>
+                </form>
+            </div>
     </div>
 
     <script>
