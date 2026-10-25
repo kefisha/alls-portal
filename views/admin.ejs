@@ -47,7 +47,16 @@
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
         .logout-btn { background: #e74c3c; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; }
-        #editor { height: 180px; background: var(--card); border-radius: 0 0 6px 6px; font-size: 15px; }
+        #editor { min-height: 160px; background: #fff; border: 1px solid #ccc; border-radius: 0 0 6px 6px; font-size: 15px; }
+        .ql-toolbar.ql-snow { background: #f8fafc; border: 1px solid #ccc !important; border-radius: 6px 6px 0 0; flex-wrap: wrap; }
+        .ql-container.ql-snow { border: 1px solid #ccc !important; min-height: 140px; background: #fff; }
+        .ql-editor { min-height: 130px; }
+        .admin-tools-panel { display: none !important; }
+        .admin-tools-panel.is-open { display: block !important; }
+        #toolsWorkspace { margin-top: 12px; }
+        .cal-day { background:#fff; border-radius:12px; border:1px solid #e2e8f0; padding:12px; box-shadow:0 2px 8px rgba(0,0,0,.05); }
+        .cal-day h4 { margin:0 0 8px; color:#1f4e79; font-size:14px; }
+        .cal-item { background:linear-gradient(135deg,#eef2ff,#f8fafc); border-left:4px solid #7c3aed; padding:8px 10px; border-radius:8px; margin:6px 0; font-size:13px; }
         .badge-unread { background: #e74c3c; color: white; border-radius: 50px; padding: 2px 9px; font-size: 12px; font-weight: bold; margin-left: 6px; display: none; }
         .badge-unread.show { display: inline-block; }
         .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
@@ -103,9 +112,7 @@
         .compact-applicants-card { padding: 15px !important; max-height: 320px !important; overflow-y: auto !important; }
         .expanded-subjects-card { grid-column: 1 / -1 !important; padding: 28px !important; border-width: 4px !important; }
     
-        .admin-tools-panel { display: block; }
-        .admin-tools-panel.open { display: block; }
-        </style>
+                </style>
 </head>
 <body class="lang-am">
     <div class="container">
@@ -266,7 +273,7 @@
 
         
         <!-- Features: Announcements, Library, Fees, Timetable, Backup -->
-        <div class="card" id="announcements">
+        <div class="card admin-tools-panel" id="announcements">
             <h3>📢 <span class="am">ማስታወቂያ ቦርድ</span><span class="en">Announcements Board</span></h3>
             <form action="/admin/announcement" method="POST">
                 <input type="text" name="title" placeholder="Title" required>
@@ -314,8 +321,7 @@
                 <input type="file" name="file" required>
                 <button type="submit">📤 Upload to Library</button>
             </form>
-            <a href="/admin/backup-export" class="btn-green" style="display:inline-block;padding:10px 16px;text-decoration:none;color:#fff;border-radius:6px;">📦 Export Full Backup (JSON)</a>
-            <a href="/learning-hub" style="display:inline-block;margin-left:8px;padding:10px 16px;background:#8e44ad;color:#fff;text-decoration:none;border-radius:6px;">📚 Open Learning Hub</a>
+
         </div>
 
         
@@ -324,6 +330,7 @@
             <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
                 <a href="#timetable" style="background:#2980b9;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📅 Schedule / Timetable</a>
                 <a href="#librarySection" style="background:#8e44ad;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📖 Library Upload</a>
+                <a href="#announcements" style="background:#64748b;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📢 Announcements Board</a>
                 <a href="#fees" style="background:#16a085;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">💰 Fee Ledger</a>
                 <a href="/learning-hub" style="background:#1f4e79;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📚 Learning Hub</a>
                 <a href="/qr-scan" style="background:#e67e22;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📷 QR Attendance</a>
@@ -640,44 +647,59 @@
             const savedLang = localStorage.getItem('prefLang') || 'am';
             setLang(savedLang);
 
-            if (document.getElementById('editor')) {
-                var quill = new Quill('#editor', {
-                    theme: 'snow',
-                    placeholder: 'መልዕክትዎን እዚህ ይጻፉ... / Write your notification here...',
-                    modules: {
-                        toolbar: [
-                            [{ 'font': [] }, { 'size': ['small', false, 'large', 'huge'] }],
-                            [{ 'header': [1, 2, 3, false] }],
-                            ['bold', 'italic', 'underline', 'strike'],
-                            [{ 'color': [] }, { 'background': [] }],
-                            [{ 'align': [] }],
-                            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                            ['clean']
-                        ]
-                    }
-                });
-
-                const notifForm = document.getElementById('notifForm');
-                if (notifForm) {
-                    notifForm.addEventListener('submit', function(e) {
-                        // Always set rich text content
-                        document.getElementById('hiddenMessage').value = quill.root.innerHTML;
-
-                        // CRITICAL: decide final target BEFORE form posts
-                        const indiv = (document.getElementById('individualTargetValue').value || '').trim();
-                        const finalField = document.getElementById('finalTargetAudience');
-                        const quickVal = document.getElementById('quickTargetSelect').value;
-
-                        if (indiv && (indiv.startsWith('TEACHER:') || indiv.startsWith('STUDENT:'))) {
-                            finalField.value = indiv;   // send to ONE person only
-                        } else {
-                            finalField.value = quickVal || 'ALL_STUDENTS';
+            var quill = null;
+            try {
+                if (document.getElementById('editor') && window.Quill) {
+                    quill = new Quill('#editor', {
+                        theme: 'snow',
+                        placeholder: 'መልዕክትዎን እዚህ ይጻፉ... / Write message...',
+                        modules: {
+                            toolbar: [
+                                [{ 'font': [] }, { 'size': ['small', false, 'large', 'huge'] }],
+                                [{ 'header': [1, 2, 3, false] }],
+                                ['bold', 'italic', 'underline', 'strike'],
+                                [{ 'color': [] }, { 'background': [] }],
+                                [{ 'align': [] }],
+                                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                                ['clean']
+                            ]
                         }
-
-                        // Safety: never leave empty
-                        if (!finalField.value) finalField.value = 'ALL_STUDENTS';
                     });
+                    window._adminQuill = quill;
                 }
+            } catch (err) {
+                console.error('Quill init failed', err);
+                var ed = document.getElementById('editor');
+                if (ed) {
+                    ed.innerHTML = '<textarea id="editorFallback" style="width:100%;min-height:140px;padding:10px;font-size:15px;" placeholder="Write message..."></textarea>';
+                }
+            }
+
+            const notifForm = document.getElementById('notifForm');
+            if (notifForm) {
+                notifForm.addEventListener('submit', function(e) {
+                    var hm = document.getElementById('hiddenMessage');
+                    if (window._adminQuill) {
+                        hm.value = window._adminQuill.root.innerHTML;
+                    } else {
+                        var fb = document.getElementById('editorFallback');
+                        hm.value = fb ? fb.value : '';
+                    }
+                    if (!hm.value || hm.value === '<p><br></p>') {
+                        e.preventDefault();
+                        alert('መልዕክት ይጻፉ / Write a message');
+                        return;
+                    }
+                    const indiv = (document.getElementById('individualTargetValue').value || '').trim();
+                    const finalField = document.getElementById('finalTargetAudience');
+                    const quickVal = document.getElementById('quickTargetSelect') ? document.getElementById('quickTargetSelect').value : 'ALL_STUDENTS';
+                    if (indiv && (indiv.startsWith('TEACHER:') || indiv.startsWith('STUDENT:'))) {
+                        finalField.value = indiv;
+                    } else {
+                        finalField.value = quickVal || 'ALL_STUDENTS';
+                    }
+                    if (!finalField.value) finalField.value = 'ALL_STUDENTS';
+                });
             }
 
             // Keep finalTargetAudience synced when user changes the quick select
@@ -694,7 +716,9 @@
 
             // ========== LIVE SEARCH FOR TEACHER / STUDENT ==========
             let peopleData = {teachers:[], students:[]};
-            try { peopleData = <%- searchPeopleData || '{"teachers":[],"students":[]}' %>; } catch(e) { peopleData = {teachers:[], students:[]}; }
+            try {
+                peopleData = JSON.parse(document.getElementById('peopleDataJson').textContent || '{}');
+            } catch(e) { peopleData = {teachers:[], students:[]}; }
             const searchInput = document.getElementById('peopleSearchInput');
             const resultsBox = document.getElementById('searchResultsBox');
             const selectedBox = document.getElementById('selectedPersonBox');
@@ -713,8 +737,44 @@
             };
 
             if (searchInput) {
+                function renderPeopleMatches(matches) {
+                    if (!matches.length) {
+                        resultsBox.style.display = 'block';
+                        resultsBox.innerHTML = '<div style="padding:12px;color:#888;">No match</div>';
+                        return;
+                    }
+                    resultsBox.style.display = 'block';
+                    resultsBox.innerHTML = matches.slice(0, 25).map(function(m) {
+                        return '<div class="people-hit" data-val="'+m.val+'" data-label="'+m.label.replace(/"/g,'&quot;')+'" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid #eee;font-size:14px;">'+m.label+'</div>';
+                    }).join('');
+                    resultsBox.querySelectorAll('.people-hit').forEach(function(row) {
+                        row.addEventListener('click', function() {
+                            individualValue.value = row.getAttribute('data-val');
+                            selectedText.textContent = row.getAttribute('data-label');
+                            selectedBox.style.display = 'block';
+                            resultsBox.style.display = 'none';
+                            searchInput.value = row.getAttribute('data-label');
+                            document.getElementById('finalTargetAudience').value = individualValue.value;
+                        });
+                    });
+                }
                 searchInput.addEventListener('input', function() {
                     const q = this.value.trim().toLowerCase();
+                    // Live API search (teachers + students)
+                    if (q.length >= 1) {
+                        fetch('/api/search-students?q='+encodeURIComponent(q), {credentials:'same-origin'})
+                          .then(function(r){ return r.json(); })
+                          .then(function(d){
+                            var m = [];
+                            (d.teachers||[]).forEach(function(t){
+                              m.push({ val: 'TEACHER:'+t.id, label: '👨‍🏫 '+(t.name||'')+' ('+t.id+')' });
+                            });
+                            (d.rows||[]).forEach(function(s){
+                              m.push({ val: 'STUDENT:'+s.student_id, label: '🎓 '+(s.name||'')+' ('+s.student_id+')' });
+                            });
+                            if (m.length) renderPeopleMatches(m);
+                          }).catch(function(){});
+                    }
                     if (q.length < 1) {
                         resultsBox.style.display = 'none';
                         resultsBox.innerHTML = '';
@@ -1218,23 +1278,27 @@
         })();
 
 
-        // Quick Links: show only the target panel
-        function openAdminPanel(id) {
-            document.querySelectorAll('.admin-tools-panel').forEach(function(p){ p.classList.remove('open'); });
+        window.openAdminPanel = function(id) {
+            document.querySelectorAll('.admin-tools-panel').forEach(function(p){ p.classList.remove('is-open'); });
             var el = document.getElementById(id);
             if (el) {
-                el.classList.add('open');
-                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                el.classList.add('is-open');
+                setTimeout(function(){ el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
             }
-        }
-        document.querySelectorAll('a[href="#timetable"], a[href="#fees"], a[href="#librarySection"], a[href="#examSchedule"], a[href="#restoreBackup"]').forEach(function(a) {
+        };
+        document.querySelectorAll('#bottomLinks a[href^="#"]').forEach(function(a) {
             a.addEventListener('click', function(e) {
                 var id = (a.getAttribute('href') || '').replace('#','');
-                if (id) { e.preventDefault(); openAdminPanel(id); history.replaceState(null,'','#'+id); }
+                if (id && document.getElementById(id)) {
+                    e.preventDefault();
+                    openAdminPanel(id);
+                    history.replaceState(null,'','#'+id);
+                }
             });
         });
-        if (['#timetable','#fees','#librarySection','#examSchedule','#restoreBackup'].indexOf(location.hash) !== -1) {
-            openAdminPanel(location.hash.replace('#',''));
+        if (location.hash && location.hash.length > 1) {
+            var hid = location.hash.replace('#','');
+            if (document.getElementById(hid)) openAdminPanel(hid);
         }
 
         // Fee name search
