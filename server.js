@@ -4003,8 +4003,8 @@ app.get('/admin/certificate', (req, res) => {
   body{background:#fff!important;padding:0!important}
   .panel,.no-print{display:none!important}
   .wrap{display:block!important;max-width:none!important}
-  .stage{padding:0!important;background:#fff!important}
-  .cert{box-shadow:none!important;width:277mm!important;min-height:180mm!important}
+  .stage{padding:10mm!important;background:#fff!important}
+  .cert{box-shadow:none!important;width:250mm!important;min-height:165mm!important;margin:0 auto!important}
 }
 .wrap{max-width:1200px;margin:auto;display:grid;grid-template-columns:320px 1fr;gap:16px}
 @media(max-width:900px){.wrap{grid-template-columns:1fr}}
@@ -4016,11 +4016,15 @@ button.gold{background:linear-gradient(135deg,#c9a227,#f0d77b);color:#1f2937}
 button.sec{background:#475569}
 .stage{overflow:auto;padding:8px}
 .cert{
-  width:297mm;min-height:200mm;margin:auto;position:relative;
+  width:260mm;min-height:170mm;margin:12px auto;position:relative;
   background:linear-gradient(145deg,#fffef8,#fff 45%,#f8fafc);color:#1e293b;
-  border:12px solid #1f4e79;box-shadow:0 20px 50px rgba(0,0,0,.4);
-  padding:28px 40px;text-align:center;
+  border:12px solid #1f4e79;box-shadow:0 8px 24px rgba(0,0,0,.25);
+  padding:24px 36px;text-align:center;
+  box-sizing:border-box;
 }
+.cert [contenteditable="true"]{outline:1px dashed transparent;border-radius:4px;padding:2px 4px}
+.cert [contenteditable="true"]:hover{outline-color:#93c5fd}
+.cert [contenteditable="true"]:focus{outline-color:#2980b9;background:rgba(41,128,185,.06)}
 /* 12+ modern border styles */
 .cert.b-classic{border:14px solid #1f4e79;outline:6px solid #c9a227;outline-offset:6px}
 .cert.b-double{border:10px double #1f4e79}
@@ -4136,25 +4140,25 @@ h1{font-size:18px;margin:0 0 8px;color:#f8fafc}
 <button type="button" class="sec" onclick="window.print()">🖨️ Print Full Page</button>
 <p style="font-size:12px;margin-top:12px"><a href="/admin" style="color:#93c5fd">← Admin</a></p>
 </div>
-<div class="stage">
+<div class="stage"><p class="no-print" style="text-align:center;color:#94a3b8;font-size:13px;margin:0 0 8px">✏️ Click any text on the certificate to type/edit directly</p>
 <div class="cert b-classic" id="cert">
   <div class="topbar">
     <div class="slot empty" id="logoSlot"><span>Org Logo</span><img id="cLogo" alt="" style="display:none"></div>
     <div style="flex:1;padding:0 12px">
       <div class="ornament">✦ ◆ ✦</div>
-      <div class="school" id="cSchool">AMANUEL LIGHT & LIFE SCHOOL</div>
+      <div class="school" id="cSchool" contenteditable="true">AMANUEL LIGHT & LIFE SCHOOL</div>
     </div>
     <div class="slot empty" id="photoSlot"><span>Photo</span><img id="cPhoto" alt="" style="display:none"></div>
   </div>
-  <div class="title" id="cTitle">Certificate of Completion</div>
-  <div class="subtitle" id="cSub">This is proudly presented to</div>
-  <div class="meta" id="cPersonType">Student</div>
-  <div class="name" id="cName">${esc(name)||'Student Name'}</div>
-  <div class="body" id="cBody">for successfully completing the academic requirements of class ${esc(cls)||'—'} with dedication and excellence.</div>
-  <div class="meta" id="cMeta">ID: ${esc(id)||'—'}  ·  Class: ${esc(cls)||'—'}</div>
+  <div class="title" id="cTitle" contenteditable="true">Certificate of Completion</div>
+  <div class="subtitle" id="cSub" contenteditable="true">This is proudly presented to</div>
+  <div class="meta" id="cPersonType" contenteditable="true">Student</div>
+  <div class="name" id="cName" contenteditable="true">${esc(name)||'Student Name'}</div>
+  <div class="body" id="cBody" contenteditable="true">for successfully completing the academic requirements of class ${esc(cls)||'—'} with dedication and excellence.</div>
+  <div class="meta" id="cMeta" contenteditable="true">ID: ${esc(id)||'—'}  ·  Class: ${esc(cls)||'—'}</div>
   <div class="seal">ALLS</div>
-  <div class="meta" id="cDate">${esc(getFormattedTimestamp())}</div>
-  <div class="sigs"><div class="sig"><div id="cSig1">Director</div></div><div class="sig"><div id="cSig2">School Seal</div></div></div>
+  <div class="meta" id="cDate" contenteditable="true">${esc(getFormattedTimestamp())}</div>
+  <div class="sigs"><div class="sig"><div id="cSig1" contenteditable="true">Director</div></div><div class="sig"><div id="cSig2" contenteditable="true">School Seal</div></div></div>
 </div>
 </div>
 </div>
