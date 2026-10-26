@@ -3808,7 +3808,7 @@ fetch('/api/quizzes').then(r=>r.json()).then(d=>{
   ).join('')||'No quizzes';
 });
 fetch('/api/exam-schedule').then(r=>r.json()).then(d=>{
-  document.getElementById('examHubList').innerHTML='<table><tr><th>Date</th><th>Time</th><th>Class</th><th>Subject</th><th>Notes</th></tr>'
+  (document.getElementById('examHubList')||{innerHTML:''}).innerHTML='<table><tr><th>Date</th><th>Time</th><th>Class</th><th>Subject</th><th>Notes</th></tr>'
     +(d.rows||[]).map(x=>'<tr><td>'+(x.exam_date||'')+'</td><td>'+(x.exam_time||'')+'</td><td>'+(x.class_level||'')+'</td><td>'+(x.subject||'')+'</td><td>'+(x.notes||'')+'</td></tr>').join('')+'</table>';
 }).catch(()=>{});
 fetch('/api/timetable').then(r=>r.json()).then(d=>{
