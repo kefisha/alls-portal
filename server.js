@@ -250,6 +250,10 @@ async function initDB() {
             id SERIAL PRIMARY KEY, title TEXT, category TEXT, class_level TEXT,
             file_path TEXT, uploaded_by TEXT, created_at TEXT
         )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS library_resources (
+            id SERIAL PRIMARY KEY,
+            title TEXT, category TEXT, class_level TEXT, file_path TEXT, uploaded_by TEXT, created_at TEXT
+        )`);
         await pool.query(`CREATE TABLE IF NOT EXISTS quizzes (
             id SERIAL PRIMARY KEY, teacher_id TEXT, teacher_name TEXT, class_level TEXT,
             title TEXT, questions_json TEXT, created_at TEXT
@@ -3194,6 +3198,113 @@ app.post('/teacher/quiz', upload.any(), (req, res) => {
             () => res.redirect('/teacher-dashboard#quiz'));
     });
 });
+
+
+// Teacher: list my quizzes (with answers for editing)
+app.get('/api/teacher/quizzes', (req, res) => {
+    if (!req.session.teacherId && !req.session.isAdmin) return res.status(401).json({ success: false });
+    const tid = req.session.teacherId || null;
+    const sql = tid
+        ? `SELECT id, teacher_id, teacher_name, class_level, title, questions_json, created_at FROM quizzes WHERE teacher_id=? ORDER BY id DESC LIMIT 50`
+        : `SELECT id, teacher_id, teacher_name, class_level, title, questions_json, created_at FROM quizzes ORDER BY id DESC LIMIT 50`;
+    const params = tid ? [tid] : [];
+    db.all(sql, params, (e, rows) => {
+        if (e) return res.json({ success: false, error: String(e.message || e) });
+        const list = (rows || []).map(r => {
+            let qs = [];
+            try { qs = JSON.parse(r.questions_json || '[]'); } catch (err) { qs = []; }
+            return {
+                id: r.id,
+                title: r.title,
+                class_level: r.class_level,
+                teacher_name: r.teacher_name,
+                created_at: r.created_at,
+                count: Array.isArray(qs) ? qs.length : 0,
+                questions: qs
+            };
+        });
+        res.json({ success: true, quizzes: list });
+    });
+});
+
+app.get('/api/teacher/quiz/:id', (req, res) => {
+    if (!req.session.teacherId && !req.session.isAdmin) return res.status(401).json({ success: false });
+    const id = parseInt(req.params.id, 10) || req.params.id;
+    db.get(`SELECT * FROM quizzes WHERE id=?`, [id], (e, quiz) => {
+        if (e || !quiz) return res.json({ success: false, error: 'not found' });
+        if (req.session.teacherId && String(quiz.teacher_id) !== String(req.session.teacherId) && !req.session.isAdmin) {
+            return res.json({ success: false, error: 'forbidden' });
+        }
+        let qs = [];
+        try { qs = JSON.parse(quiz.questions_json || '[]'); } catch (err) { qs = []; }
+        res.json({ success: true, quiz: { id: quiz.id, title: quiz.title, class_level: quiz.class_level, questions: qs } });
+    });
+});
+
+app.post('/teacher/quiz/:id/update', upload.any(), (req, res) => {
+    if (!req.session.teacherId && !req.session.isAdmin) return res.redirect('/');
+    const id = parseInt(req.params.id, 10) || req.params.id;
+    db.get(`SELECT * FROM quizzes WHERE id=?`, [id], (e, quiz) => {
+        if (!quiz) return res.redirect('/teacher-dashboard#quiz');
+        if (req.session.teacherId && String(quiz.teacher_id) !== String(req.session.teacherId) && !req.session.isAdmin) {
+            return res.redirect('/teacher-dashboard#quiz');
+        }
+        let questions = [];
+        try {
+            if (req.body.questions_json) questions = JSON.parse(req.body.questions_json);
+        } catch (err) { questions = []; }
+        questions = (questions || []).filter(x => x && String(x.q || '').length > 0);
+        const title = req.body.title || quiz.title;
+        const class_level = req.body.class_level != null ? req.body.class_level : quiz.class_level;
+        db.run(`UPDATE quizzes SET title=?, class_level=?, questions_json=? WHERE id=?`,
+            [title, class_level, JSON.stringify(questions), id],
+            () => res.redirect('/teacher-dashboard#quiz&edited=1'));
+    });
+});
+
+app.post('/teacher/quiz/:id/delete', (req, res) => {
+    if (!req.session.teacherId && !req.session.isAdmin) return res.json({ success: false });
+    const id = parseInt(req.params.id, 10) || req.params.id;
+    db.get(`SELECT teacher_id FROM quizzes WHERE id=?`, [id], (e, quiz) => {
+        if (!quiz) return res.json({ success: false });
+        if (req.session.teacherId && String(quiz.teacher_id) !== String(req.session.teacherId) && !req.session.isAdmin) {
+            return res.json({ success: false, error: 'forbidden' });
+        }
+        db.run(`DELETE FROM quizzes WHERE id=?`, [id], () => res.json({ success: true }));
+    });
+});
+
+// Handout: photo / file for class
+app.post('/teacher/handout', upload.single('file'), (req, res) => {
+    if (!req.session.teacherId) return res.redirect('/');
+    const title = (req.body.title || 'Handout').trim();
+    const class_level = (req.body.class_level || '').trim();
+    const note = (req.body.note || '').trim();
+    const file = req.file ? req.file.filename : '';
+    if (!file && !note) return res.redirect('/teacher-dashboard#handout');
+    db.get(`SELECT name FROM teachers WHERE id=?`, [req.session.teacherId], (e, t) => {
+        // store as library resource or announcements-like
+        db.run(
+            `INSERT INTO library_resources (title, category, class_level, file_path, uploaded_by, created_at) VALUES (?,?,?,?,?,?)`,
+            [title, 'Handout', class_level || 'ALL', file || '', (t && t.name) || 'Teacher', new Date().toISOString()],
+            (err) => {
+                // fallback if table columns differ - try notifications
+                if (err) {
+                    const body = (note || title) + (file ? ('\\n[File: /uploads/' + file + ']') : '');
+                    db.run(
+                        `INSERT INTO notifications (sender_role, sender_name, target_type, target_id, title, body, created_at) VALUES (?,?,?,?,?,?,?)`,
+                        ['teacher', (t && t.name) || 'Teacher', 'class', class_level || 'ALL', '📎 ' + title, body, new Date().toISOString()],
+                        () => res.redirect('/teacher-dashboard#handout')
+                    );
+                } else {
+                    res.redirect('/teacher-dashboard#handout');
+                }
+            }
+        );
+    });
+});
+
+// List quizzes
 // List quizzes (questions without answers for students)
 app.get('/api/quizzes', (req, res) => {
     db.all(`SELECT id, teacher_name, class_level, title, questions_json, created_at FROM quizzes ORDER BY id DESC LIMIT 40`, [], (e, rows) => {
