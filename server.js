@@ -3596,19 +3596,31 @@ app.get('/admin/timetable-pdf', (req, res) => {
     db.all(`SELECT * FROM timetable ORDER BY day_of_week, period_no`, [], (e, rows) => {
         rows = rows || [];
         if (cls) rows = rows.filter(r => String(r.class_level||'').toLowerCase().includes(cls.toLowerCase()));
-        const seen = {};
-        rows = rows.filter(r => {
-            const k = [r.day_of_week, r.period_no, r.subject, r.class_level].join('|');
-            if (seen[k]) return false; seen[k] = 1; return true;
+        const days = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
+        const times = {1:'8:00-8:45',2:'8:45-9:30',3:'9:30-10:15',4:'10:15-11:00',5:'11:00-11:45',6:'11:45-12:30'};
+        const map = {};
+        rows.forEach(r => {
+            const day = r.day_of_week || '';
+            const p = String(r.period_no || '');
+            if (!map[day]) map[day] = {};
+            map[day][p] = { s: r.subject || '', t: r.teacher_name || '' };
         });
-        const tr = rows.map(r => `<tr><td>${r.day_of_week||''}</td><td>${r.period_no||''}</td><td>${r.subject||''}</td><td>${r.teacher_name||''}</td><td>${r.class_level||''}</td></tr>`).join('')
-            || '<tr><td colspan="5">No timetable</td></tr>';
+        let body = '';
+        days.forEach(day => {
+            body += `<tr><td style="font-weight:bold;background:#eef2ff">${day}</td>`;
+            for (let p = 1; p <= 6; p++) {
+                const c = (map[day] && map[day][p]) ? map[day][p] : { s: '', t: '' };
+                body += `<td style="vertical-align:top;font-size:12px">${c.s ? '<b>'+c.s+'</b>' : '—'}${c.t ? '<br><small>'+c.t+'</small>' : ''}</td>`;
+            }
+            body += '</tr>';
+        });
+        const heads = [1,2,3,4,5,6].map(p => `<th>P${p}<br><small>${times[p]}</small></th>`).join('');
         res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Timetable PDF</title>
-<style>body{font-family:Segoe UI,sans-serif;padding:24px}h1{color:#1f4e79;text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px;font-size:13px}th{background:#1f4e79;color:#fff}
-@media print{.no-print{display:none}}</style></head><body>
+<style>body{font-family:Segoe UI,sans-serif;padding:20px}h1{color:#1f4e79;text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #94a3b8;padding:8px;text-align:center}th{background:#1f4e79;color:#fff}
+@media print{.no-print{display:none}body{padding:0}}</style></head><body>
 <p class="no-print" style="text-align:center"><button onclick="window.print()" style="padding:12px 18px;background:#2980b9;color:#fff;border:none;border-radius:8px;font-weight:bold">🖨️ Print / Save PDF</button></p>
-<h1>Weekly Timetable ${cls?('— '+cls):''}</h1>
-<table><tr><th>Day</th><th>Period</th><th>Subject</th><th>Teacher</th><th>Class</th></tr>${tr}</table>
+<h1>Weekly Timetable ${cls ? ('— ' + cls) : ''}</h1>
+<table><tr><th>Day</th>${heads}</tr>${body}</table>
 </body></html>`);
     });
 });
@@ -3800,15 +3812,29 @@ fetch('/api/exam-schedule').then(r=>r.json()).then(d=>{
     +(d.rows||[]).map(x=>'<tr><td>'+(x.exam_date||'')+'</td><td>'+(x.exam_time||'')+'</td><td>'+(x.class_level||'')+'</td><td>'+(x.subject||'')+'</td><td>'+(x.notes||'')+'</td></tr>').join('')+'</table>';
 }).catch(()=>{});
 fetch('/api/timetable').then(r=>r.json()).then(d=>{
-  var seen={};
-  var rows=(d.rows||[]).filter(function(r){
-    var k=[r.day_of_week,r.period_no,r.subject,r.class_level].join('|');
-    if(seen[k]) return false; seen[k]=1; return true;
+  var days=['Monday','Tuesday','Wednesday','Thursday','Friday'];
+  var times={1:'8:00-8:45',2:'8:45-9:30',3:'9:30-10:15',4:'10:15-11:00',5:'11:00-11:45',6:'11:45-12:30'};
+  var map={};
+  (d.rows||[]).forEach(function(r){
+    var day=r.day_of_week||'';
+    var p=String(r.period_no||'');
+    if(!map[day]) map[day]={};
+    map[day][p]={s:r.subject||'',t:r.teacher_name||'',c:r.class_level||''};
   });
-  document.getElementById('ttList').innerHTML='<table><tr><th>Day</th><th>Period</th><th>Subject</th><th>Teacher</th><th>Class</th></tr>'
-    +rows.map(r=>'<tr><td>'+(r.day_of_week||'')+'</td><td>'+(r.period_no||'')+'</td><td>'+(r.subject||'')+'</td><td>'+(r.teacher_name||'')+'</td><td>'+(r.class_level||'')+'</td></tr>').join('')
-    +'</table>';
-});
+  var html='<div style="overflow-x:auto"><table style="font-size:12px;min-width:640px"><tr><th>Day</th>';
+  for(var p=1;p<=6;p++) html+='<th>P'+p+'<br><small>'+(times[p]||'')+'</small></th>';
+  html+='</tr>';
+  days.forEach(function(day){
+    html+='<tr><td style="font-weight:bold;background:#eef2ff">'+day+'</td>';
+    for(var p=1;p<=6;p++){
+      var c=(map[day]&&map[day][p])?map[day][p]:{s:'',t:''};
+      html+='<td style="vertical-align:top;min-width:90px">'+(c.s?'<b>'+c.s+'</b>':'—')+(c.t?'<br><small style="color:#64748b">'+c.t+'</small>':'')+'</td>';
+    }
+    html+='</tr>';
+  });
+  html+='</table></div>';
+  document.getElementById('ttList').innerHTML=html;
+}).catch(function(){ document.getElementById('ttList').innerHTML='Failed to load'; });
 fetch('/api/student-progress/'+encodeURIComponent((window.STUDENT_ID||''))).then(r=>r.json()).then(d=>{
   if(!d.labels||!d.labels.length) return;
   new Chart(document.getElementById('progChart'),{type:'bar',data:{labels:d.labels,datasets:[{label:'Total',data:d.data,backgroundColor:'#2980b9'}]},options:{scales:{y:{beginAtZero:true,max:100}}}});
@@ -4025,7 +4051,32 @@ border:14px solid #1f4e79;outline:6px solid #c9a227;outline-offset:6px;box-shado
 <label>Right sign</label><input id="fSig2" value="School Seal" oninput="sync()">
 <label>Theme</label>
 <select id="fTheme" onchange="sync()"><option value="">Gold / Navy</option><option value="theme-blue">Blue</option><option value="theme-green">Green</option><option value="theme-royal">Royal</option></select>
-<button type="button" class="gold" onclick="downloadPdf()">📥 Download Colored PDF</button>
+<label>Title font size</label>
+<input id="fTitleSize" type="number" value="38" min="18" max="64" oninput="sync()">
+<label>Name font size</label>
+<input id="fNameSize" type="number" value="34" min="16" max="56" oninput="sync()">
+<label>Body font size</label>
+<input id="fBodySize" type="number" value="15" min="10" max="28" oninput="sync()">
+<label>Font family</label>
+<select id="fFont" onchange="sync()">
+<option value="Georgia, serif">Georgia (serif)</option>
+<option value="Times New Roman, serif">Times</option>
+<option value="Segoe UI, sans-serif">Segoe UI</option>
+<option value="Garamond, serif">Garamond</option>
+<option value="Palatino Linotype, serif">Palatino</option>
+</select>
+<label>Name color</label>
+<input id="fNameColor" type="color" value="#b45309" oninput="sync()">
+<label>Title color</label>
+<input id="fTitleColor" type="color" value="#1f4e79" oninput="sync()">
+<label><input id="fBoldName" type="checkbox" checked onchange="sync()"> Bold student name</label>
+<label>Border style</label>
+<select id="fBorder" onchange="sync()">
+<option value="solid">Solid</option>
+<option value="double">Double</option>
+<option value="ridge">Ridge</option>
+</select>
+<button type="button" class="gold" onclick="downloadPdf()">📥 Download Full-Page PDF</button>
 <button type="button" class="sec" onclick="window.print()">🖨️ Print</button>
 <p style="font-size:12px;margin-top:12px"><a href="/admin" style="color:#93c5fd">← Admin</a></p>
 </div>
@@ -4061,6 +4112,22 @@ function sync(){
     if(ph.value){ img.src=ph.value; img.style.display='inline-block'; }
     else { img.style.display='none'; }
   }
+  var font=document.getElementById('fFont');
+  if(font) c.style.fontFamily=font.value;
+  var ts=document.getElementById('fTitleSize');
+  var ns=document.getElementById('fNameSize');
+  var bs=document.getElementById('fBodySize');
+  var tc=document.getElementById('fTitleColor');
+  var nc=document.getElementById('fNameColor');
+  var bn=document.getElementById('fBoldName');
+  var bd=document.getElementById('fBorder');
+  var cTitle=document.getElementById('cTitle');
+  var cName=document.getElementById('cName');
+  var cBody=document.getElementById('cBody');
+  if(cTitle&&ts){ cTitle.style.fontSize=(ts.value||38)+'px'; if(tc) cTitle.style.color=tc.value; }
+  if(cName&&ns){ cName.style.fontSize=(ns.value||34)+'px'; if(nc) cName.style.color=nc.value; cName.style.fontWeight=(bn&&bn.checked)?'bold':'normal'; }
+  if(cBody&&bs) cBody.style.fontSize=(bs.value||15)+'px';
+  if(bd) c.style.borderStyle=bd.value;
 }
 function downloadPdf(){
   html2pdf().set({margin:4,filename:'Certificate_'+(document.getElementById('fName').value||'student').replace(/\\s+/g,'_')+'.pdf',
