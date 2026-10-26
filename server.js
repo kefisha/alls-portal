@@ -3991,6 +3991,7 @@ app.get('/admin/certificate', (req, res) => {
         const name = student ? (student.name || '') : '';
         const id = student ? (student.student_id || sid) : sid;
         const cls = student ? (student.class_level || '') : '';
+        const photo = student ? (student.photo || '') : '';
         const esc = (s) => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
         res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Certificate Designer</title>
@@ -3998,121 +3999,193 @@ app.get('/admin/certificate', (req, res) => {
 <style>
 *{box-sizing:border-box}body{font-family:Segoe UI,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:16px}
 @page{size:A4 landscape;margin:8mm}
-@media print{body{background:#fff!important;padding:0!important}.panel,.no-print{display:none!important}.wrap{display:block!important;max-width:none!important}.stage{padding:0!important;background:#fff!important}.cert{box-shadow:none!important;width:277mm!important;min-height:180mm!important}}
-.wrap{max-width:1100px;margin:auto;display:grid;grid-template-columns:300px 1fr;gap:16px}
-@media(max-width:800px){.wrap{grid-template-columns:1fr}}
-.panel{background:#1e293b;border-radius:12px;padding:16px;max-height:90vh;overflow:auto}
+@media print{
+  body{background:#fff!important;padding:0!important}
+  .panel,.no-print{display:none!important}
+  .wrap{display:block!important;max-width:none!important}
+  .stage{padding:0!important;background:#fff!important}
+  .cert{box-shadow:none!important;width:277mm!important;min-height:180mm!important}
+}
+.wrap{max-width:1200px;margin:auto;display:grid;grid-template-columns:320px 1fr;gap:16px}
+@media(max-width:900px){.wrap{grid-template-columns:1fr}}
+.panel{background:#1e293b;border-radius:12px;padding:16px;max-height:92vh;overflow:auto}
 label{display:block;font-size:12px;color:#94a3b8;margin:8px 0 4px}
 input,select,textarea{width:100%;padding:8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0}
 button{width:100%;padding:12px;margin-top:10px;border:none;border-radius:8px;font-weight:bold;cursor:pointer;background:#2980b9;color:#fff}
 button.gold{background:linear-gradient(135deg,#c9a227,#f0d77b);color:#1f2937}
 button.sec{background:#475569}
 .stage{overflow:auto;padding:8px}
-.cert{width:297mm;min-height:200mm;margin:auto;position:relative;background:linear-gradient(145deg,#fffef8,#fff 45%,#f1f5f9);color:#1e293b;
-border:14px solid #1f4e79;outline:6px solid #c9a227;outline-offset:6px;box-shadow:0 20px 50px rgba(0,0,0,.4);padding:32px 44px;text-align:center}
-.cert.theme-blue{border-color:#1d4ed8;outline-color:#38bdf8}
-.cert.theme-green{border-color:#15803d;outline-color:#4ade80}
-.cert.theme-royal{border-color:#7c3aed;outline-color:#e879f9}
-.ornament{font-size:20px;color:#c9a227;letter-spacing:10px;margin-bottom:4px}
-.school{font-size:14px;letter-spacing:4px;color:#1f4e79;font-weight:800;text-transform:uppercase}
-.title{font-family:Georgia,serif;font-size:38px;color:#1f4e79;margin:10px 0;font-weight:bold}
+.cert{
+  width:297mm;min-height:200mm;margin:auto;position:relative;
+  background:linear-gradient(145deg,#fffef8,#fff 45%,#f8fafc);color:#1e293b;
+  border:12px solid #1f4e79;box-shadow:0 20px 50px rgba(0,0,0,.4);
+  padding:28px 40px;text-align:center;
+}
+/* 12+ modern border styles */
+.cert.b-classic{border:14px solid #1f4e79;outline:6px solid #c9a227;outline-offset:6px}
+.cert.b-double{border:10px double #1f4e79}
+.cert.b-gold{border:12px solid #c9a227;outline:4px solid #1f4e79;outline-offset:8px}
+.cert.b-ribbon{border:8px solid #7c3aed;box-shadow:inset 0 0 0 6px #e9d5ff,0 20px 50px rgba(0,0,0,.35)}
+.cert.b-elegant{border:3px solid #0f172a;outline:10px solid #e2e8f0;outline-offset:4px}
+.cert.b-modern{border:none;box-shadow:0 0 0 12px #0ea5e9,0 0 0 18px #fff,0 0 0 22px #0ea5e9}
+.cert.b-royal{border:16px ridge #7c3aed}
+.cert.b-emerald{border:12px solid #059669;outline:5px dashed #6ee7b7;outline-offset:8px}
+.cert.b-rose{border:12px solid #e11d48;outline:6px solid #fecdd3;outline-offset:6px}
+.cert.b-navy{border:20px solid #0f172a;border-image:linear-gradient(135deg,#1e3a8a,#c9a227) 1}
+.cert.b-soft{border:10px solid #cbd5e1;border-radius:24px}
+.cert.b-stamp{border:8px solid #b45309;box-shadow:inset 0 0 0 4px #fde68a,0 12px 40px rgba(0,0,0,.3)}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;min-height:90px}
+.topbar .slot{width:100px;height:100px;border:2px dashed #94a3b8;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#f8fafc}
+.topbar .slot img{width:100%;height:100%;object-fit:cover}
+.topbar .slot span{font-size:10px;color:#94a3b8;padding:4px;text-align:center}
+.ornament{font-size:18px;color:#c9a227;letter-spacing:8px}
+.school{font-size:14px;letter-spacing:3px;color:#1f4e79;font-weight:800;text-transform:uppercase}
+.title{font-family:Georgia,serif;font-size:36px;color:#1f4e79;margin:8px 0;font-weight:bold}
 .subtitle{font-size:14px;color:#64748b}
-.name{font-family:Georgia,serif;font-size:34px;color:#b45309;margin:16px 0;font-weight:bold;border-bottom:2px solid #c9a227;display:inline-block;padding:0 12px 6px}
-.body{font-size:15px;line-height:1.65;color:#334155;max-width:88%;margin:10px auto}
-.meta{font-size:13px;color:#475569;margin-top:8px}
-.sigs{display:flex;justify-content:space-around;margin-top:44px}
-.sig{width:170px}.sig-line{border-top:1px solid #334155;margin-top:36px;padding-top:6px;font-size:12px;color:#64748b}
-.seal{width:64px;height:64px;border:3px solid #c9a227;border-radius:50%;margin:12px auto;display:flex;align-items:center;justify-content:center;font-size:11px;color:#1f4e79;font-weight:bold;background:radial-gradient(circle,#fff7d6,#fff)}
-@media print{body{background:#fff;padding:0}.panel,.no-print{display:none!important}.cert{box-shadow:none;outline:6px solid #c9a227}}
+.name{font-family:Georgia,serif;font-size:32px;color:#b45309;margin:12px 0;font-weight:bold;border-bottom:2px solid #c9a227;display:inline-block;padding:0 12px 6px}
+.body{font-size:15px;line-height:1.6;color:#334155;max-width:88%;margin:8px auto}
+.meta{font-size:13px;color:#475569;margin-top:6px}
+.seal{display:inline-block;margin-top:10px;width:64px;height:64px;border-radius:50%;border:3px solid #c9a227;line-height:58px;font-weight:800;color:#1f4e79;font-size:12px}
+.sigs{display:flex;justify-content:space-between;margin-top:28px;padding:0 40px}
+.sig{width:40%;border-top:1px solid #94a3b8;padding-top:6px;font-size:12px;color:#64748b}
+h1{font-size:18px;margin:0 0 8px;color:#f8fafc}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 </style></head><body>
 <div class="wrap">
 <div class="panel no-print">
-<h3 style="margin-top:0">🎓 Certificate Editor</h3>
+<h1>🎓 Certificate Designer</h1>
 <form method="GET" action="/admin/certificate">
-<label>Load person</label>
-<select name="person_type" id="personTypeLoad">
-<option value="student">Student</option>
-<option value="teacher">Teacher</option>
-</select>
-<label>ID</label>
+<label>Load student / teacher ID</label>
 <input name="student_id" value="${esc(id)}" placeholder="ID">
-<button type="submit" class="sec">Load</button>
-<label>Person type (on cert)</label>
-<select id="fPersonType" onchange="sync()"><option value="Student">Student</option><option value="Teacher">Teacher</option></select>
-<label>Photo URL or /uploads/...</label>
-<input id="fPhoto" value="${student && student.photo ? '/uploads/'+esc(student.photo) : ''}" oninput="sync()" placeholder="/uploads/photo.jpg">
+<label>Type</label>
+<select name="person_type"><option value="student">Student</option><option value="teacher">Teacher</option></select>
+<button type="submit">Load</button>
 </form>
-<label>School</label><input id="fSchool" value="AMANUEL LIGHT & LIFE SCHOOL" oninput="sync()">
-<label>Title</label><input id="fTitle" value="Certificate of Completion" oninput="sync()">
-<label>Subtitle</label><input id="fSub" value="This is proudly presented to" oninput="sync()">
-<label>Student name</label><input id="fName" value="${esc(name)}" oninput="sync()">
-<label>Body</label><textarea id="fBody" rows="3" oninput="sync()">for successfully completing the academic requirements of class ${esc(cls)} with dedication and excellence.</textarea>
-<label>Meta line</label><input id="fMeta" value="Student ID: ${esc(id)}  ·  Class: ${esc(cls)}" oninput="sync()">
-<label>Date</label><input id="fDate" value="${esc(getFormattedTimestamp())}" oninput="sync()">
-<label>Left sign</label><input id="fSig1" value="Director" oninput="sync()">
-<label>Right sign</label><input id="fSig2" value="School Seal" oninput="sync()">
-<label>Theme</label>
-<select id="fTheme" onchange="sync()"><option value="">Gold / Navy</option><option value="theme-blue">Blue</option><option value="theme-green">Green</option><option value="theme-royal">Royal</option></select>
-<label>Title font size</label>
-<input id="fTitleSize" type="number" value="38" min="18" max="64" oninput="sync()">
-<label>Name font size</label>
-<input id="fNameSize" type="number" value="34" min="16" max="56" oninput="sync()">
-<label>Body font size</label>
-<input id="fBodySize" type="number" value="15" min="10" max="28" oninput="sync()">
-<label>Font family</label>
+<hr style="border-color:#334155;margin:14px 0">
+<label>🏫 School / Org logo (left)</label>
+<input type="file" id="logoFile" accept="image/*">
+<label>📷 Person photo (right)</label>
+<input type="file" id="photoFile" accept="image/*">
+<label>Or photo URL</label>
+<input id="fPhoto" value="${esc(photo)}" oninput="sync()" placeholder="https://... or /uploads/...">
+<label>School name</label>
+<input id="fSchool" value="AMANUEL LIGHT & LIFE SCHOOL" oninput="sync()">
+<label>Title</label>
+<input id="fTitle" value="Certificate of Completion" oninput="sync()">
+<label>Subtitle</label>
+<input id="fSub" value="This is proudly presented to" oninput="sync()">
+<label>Person type label</label>
+<input id="fPersonType" value="Student" oninput="sync()">
+<label>Full name</label>
+<input id="fName" value="${esc(name)}" oninput="sync()">
+<label>Body text</label>
+<textarea id="fBody" rows="3" oninput="sync()">for successfully completing the academic requirements of class ${esc(cls)||'—'} with dedication and excellence.</textarea>
+<label>Meta line</label>
+<input id="fMeta" value="ID: ${esc(id)||'—'}  ·  Class: ${esc(cls)||'—'}" oninput="sync()">
+<label>Date line</label>
+<input id="fDate" value="${esc(getFormattedTimestamp())}" oninput="sync()">
+<label>Signature left</label>
+<input id="fSig1" value="Director" oninput="sync()">
+<label>Signature right</label>
+<input id="fSig2" value="School Seal" oninput="sync()">
+<div class="row2">
+<div><label>Title size</label><input id="fTitleSize" type="number" value="36" min="18" max="64" oninput="sync()"></div>
+<div><label>Name size</label><input id="fNameSize" type="number" value="32" min="16" max="56" oninput="sync()"></div>
+</div>
+<div class="row2">
+<div><label>Body size</label><input id="fBodySize" type="number" value="15" min="10" max="28" oninput="sync()"></div>
+<div><label>Title color</label><input id="fTitleColor" type="color" value="#1f4e79" oninput="sync()"></div>
+</div>
+<div class="row2">
+<div><label>Name color</label><input id="fNameColor" type="color" value="#b45309" oninput="sync()"></div>
+<div><label><input id="fBoldName" type="checkbox" checked onchange="sync()"> Bold name</label></div>
+</div>
+<label>Font</label>
 <select id="fFont" onchange="sync()">
-<option value="Georgia, serif">Georgia (serif)</option>
+<option value="Georgia, serif">Georgia</option>
 <option value="Times New Roman, serif">Times</option>
-<option value="Segoe UI, sans-serif">Segoe UI</option>
 <option value="Garamond, serif">Garamond</option>
 <option value="Palatino Linotype, serif">Palatino</option>
+<option value="Segoe UI, sans-serif">Segoe UI</option>
+<option value="Trebuchet MS, sans-serif">Trebuchet</option>
 </select>
-<label>Name color</label>
-<input id="fNameColor" type="color" value="#b45309" oninput="sync()">
-<label>Title color</label>
-<input id="fTitleColor" type="color" value="#1f4e79" oninput="sync()">
-<label><input id="fBoldName" type="checkbox" checked onchange="sync()"> Bold student name</label>
-<label>Border style</label>
-<select id="fBorder" onchange="sync()">
-<option value="solid">Solid</option>
-<option value="double">Double</option>
-<option value="ridge">Ridge</option>
+<label>🎨 Border style (12 modern)</label>
+<select id="fBorderStyle" onchange="sync()">
+<option value="b-classic">1. Classic Gold Outline</option>
+<option value="b-double">2. Double Line</option>
+<option value="b-gold">3. Gold Frame</option>
+<option value="b-ribbon">4. Purple Ribbon</option>
+<option value="b-elegant">5. Elegant Grey</option>
+<option value="b-modern">6. Modern Cyan</option>
+<option value="b-royal">7. Royal Ridge</option>
+<option value="b-emerald">8. Emerald Dash</option>
+<option value="b-rose">9. Rose Accent</option>
+<option value="b-navy">10. Navy Strong</option>
+<option value="b-soft">11. Soft Rounded</option>
+<option value="b-stamp">12. Stamp / Wax</option>
+</select>
+<label>Theme tint</label>
+<select id="fTheme" onchange="sync()">
+<option value="">Default</option>
+<option value="theme-blue">Blue</option>
+<option value="theme-green">Green</option>
+<option value="theme-royal">Royal</option>
 </select>
 <button type="button" class="gold" onclick="downloadPdf()">📥 Download Full-Page PDF</button>
-<button type="button" class="sec no-print" onclick="printCert()">🖨️ Print Full Page</button>
+<button type="button" class="sec" onclick="window.print()">🖨️ Print Full Page</button>
 <p style="font-size:12px;margin-top:12px"><a href="/admin" style="color:#93c5fd">← Admin</a></p>
 </div>
-<div class="stage"><div class="cert" id="cert">
-<div class="ornament">✦ ◆ ✦</div>
-<div class="school" id="cSchool">AMANUEL LIGHT & LIFE SCHOOL</div>
-<div class="title" id="cTitle">Certificate of Completion</div>
-<div class="subtitle" id="cSub">This is proudly presented to</div>
-<div id="cPhotoWrap" style="margin:10px auto;"><img id="cPhoto" alt="" style="width:90px;height:90px;border-radius:50%;object-fit:cover;border:3px solid #c9a227;display:none;"></div>
-<div class="meta" id="cPersonType">Student</div>
-<div class="name" id="cName">${esc(name)||'Student Name'}</div>
-<div class="body" id="cBody">for successfully completing the academic requirements of class ${esc(cls)||'—'} with dedication and excellence.</div>
-<div class="meta" id="cMeta">Student ID: ${esc(id)||'—'}  ·  Class: ${esc(cls)||'—'}</div>
-<div class="seal">ALLS</div>
-<div class="meta" id="cDate">${esc(getFormattedTimestamp())}</div>
-<div class="sigs"><div class="sig"><div class="sig-line" id="cSig1">Director</div></div><div class="sig"><div class="sig-line" id="cSig2">School Seal</div></div></div>
-</div></div>
+<div class="stage">
+<div class="cert b-classic" id="cert">
+  <div class="topbar">
+    <div class="slot" id="logoSlot"><span>Org Logo</span><img id="cLogo" alt="" style="display:none"></div>
+    <div style="flex:1;padding:0 12px">
+      <div class="ornament">✦ ◆ ✦</div>
+      <div class="school" id="cSchool">AMANUEL LIGHT & LIFE SCHOOL</div>
+    </div>
+    <div class="slot" id="photoSlot"><span>Photo</span><img id="cPhoto" alt="" style="display:none"></div>
+  </div>
+  <div class="title" id="cTitle">Certificate of Completion</div>
+  <div class="subtitle" id="cSub">This is proudly presented to</div>
+  <div class="meta" id="cPersonType">Student</div>
+  <div class="name" id="cName">${esc(name)||'Student Name'}</div>
+  <div class="body" id="cBody">for successfully completing the academic requirements of class ${esc(cls)||'—'} with dedication and excellence.</div>
+  <div class="meta" id="cMeta">ID: ${esc(id)||'—'}  ·  Class: ${esc(cls)||'—'}</div>
+  <div class="seal">ALLS</div>
+  <div class="meta" id="cDate">${esc(getFormattedTimestamp())}</div>
+  <div class="sigs"><div class="sig"><div id="cSig1">Director</div></div><div class="sig"><div id="cSig2">School Seal</div></div></div>
+</div>
+</div>
 </div>
 <script>
+function readFileTo(imgId, fileInput, placeholderSpanParent){
+  var f=fileInput.files&&fileInput.files[0];
+  if(!f) return;
+  var r=new FileReader();
+  r.onload=function(){
+    var img=document.getElementById(imgId);
+    img.src=r.result; img.style.display='block';
+    var span=img.parentNode.querySelector('span');
+    if(span) span.style.display='none';
+  };
+  r.readAsDataURL(f);
+}
+document.getElementById('logoFile').addEventListener('change', function(){ readFileTo('cLogo', this); });
+document.getElementById('photoFile').addEventListener('change', function(){ readFileTo('cPhoto', this); });
 function sync(){
   var c=document.getElementById('cert');
-  c.className='cert '+(document.getElementById('fTheme').value||'');
-  ['School','Title','Sub','Name','Body','Meta','Date','Sig1','Sig2'].forEach(function(k){
+  var border=document.getElementById('fBorderStyle').value||'b-classic';
+  var theme=document.getElementById('fTheme').value||'';
+  c.className='cert '+border+(theme?(' '+theme):'');
+  ['School','Title','Sub','Name','Body','Meta','Date','Sig1','Sig2','PersonType'].forEach(function(k){
     var f=document.getElementById('f'+k), el=document.getElementById('c'+k);
-    if(f&&el) el.textContent=f.value||(k==='Name'?'Student Name':'');
+    if(f&&el) el.textContent=f.value||'';
   });
-  var pt=document.getElementById('fPersonType');
-  var cpt=document.getElementById('cPersonType');
-  if(pt&&cpt) cpt.textContent=pt.value||'Student';
   var ph=document.getElementById('fPhoto');
   var img=document.getElementById('cPhoto');
-  if(ph&&img){
-    if(ph.value){ img.src=ph.value; img.style.display='inline-block'; }
-    else { img.style.display='none'; }
+  if(ph&&img&&ph.value&&!document.getElementById('photoFile').files.length){
+    img.src=ph.value; img.style.display='block';
+    var span=img.parentNode.querySelector('span'); if(span) span.style.display='none';
   }
   var font=document.getElementById('fFont');
   if(font) c.style.fontFamily=font.value;
@@ -4122,31 +4195,26 @@ function sync(){
   var tc=document.getElementById('fTitleColor');
   var nc=document.getElementById('fNameColor');
   var bn=document.getElementById('fBoldName');
-  var bd=document.getElementById('fBorder');
   var cTitle=document.getElementById('cTitle');
   var cName=document.getElementById('cName');
   var cBody=document.getElementById('cBody');
-  if(cTitle&&ts){ cTitle.style.fontSize=(ts.value||38)+'px'; if(tc) cTitle.style.color=tc.value; }
-  if(cName&&ns){ cName.style.fontSize=(ns.value||34)+'px'; if(nc) cName.style.color=nc.value; cName.style.fontWeight=(bn&&bn.checked)?'bold':'normal'; }
+  if(cTitle&&ts){ cTitle.style.fontSize=(ts.value||36)+'px'; if(tc) cTitle.style.color=tc.value; }
+  if(cName&&ns){ cName.style.fontSize=(ns.value||32)+'px'; if(nc) cName.style.color=nc.value; cName.style.fontWeight=(bn&&bn.checked)?'bold':'normal'; }
   if(cBody&&bs) cBody.style.fontSize=(bs.value||15)+'px';
-  if(bd) c.style.borderStyle=bd.value;
 }
 function downloadPdf(){
   var el=document.getElementById('cert');
-  el.style.width='297mm';
-  el.style.minHeight='200mm';
-  el.style.maxWidth='none';
+  el.style.width='297mm'; el.style.minHeight='200mm'; el.style.maxWidth='none';
   var name=(document.getElementById('fName')&&document.getElementById('fName').value)||'student';
   html2pdf().set({
     margin:0,
-    filename:'Certificate_'+String(name).replace(/\s+/g,'_')+'.pdf',
+    filename:'Certificate_'+String(name).replace(/\\s+/g,'_')+'.pdf',
     image:{type:'jpeg',quality:1},
     html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff',scrollX:0,scrollY:0,width:el.scrollWidth,height:el.scrollHeight},
     jsPDF:{unit:'mm',format:'a4',orientation:'landscape'},
     pagebreak:{mode:['avoid-all']}
   }).from(el).save().catch(function(){ window.print(); });
 }
-function printCert(){ window.print(); }
 sync();
 </script></body></html>`);
     };
@@ -4161,6 +4229,7 @@ sync();
         db.get(`SELECT * FROM students WHERE UPPER(student_id)=UPPER(?)`, [sid], (e, student) => loadForm(student || null));
     }
 });
+
 
 // 12 Auto daily backup to folder (runs every 24h after start)
 const fsBackup = require('fs');
