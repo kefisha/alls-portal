@@ -95,6 +95,35 @@
             <input type="date" name="due_date">
             <button type="submit">📝 Assign Homework</button>
         </form>
+        
+        <!-- My Quizzes: edit / add / delete previous -->
+        <div id="myQuizzesBox" style="margin:14px 0;padding:14px;border:2px solid #8e44ad;border-radius:12px;background:#faf5ff;">
+            <h4 style="margin:0 0 10px;color:#8e44ad;">📚 My Quizzes (previous) — Edit · Add · Delete</h4>
+            <div id="myQuizzesList"><span style="color:#64748b;">Loading...</span></div>
+            <div id="quizEditPanel" style="display:none;margin-top:14px;padding:12px;background:#fff;border-radius:10px;border:1px solid #ddd;">
+                <h4 style="margin:0 0 8px;">✏️ Edit quiz</h4>
+                <input type="hidden" id="editQuizId">
+                <input type="text" id="editQuizTitle" placeholder="Title" style="width:100%;margin-bottom:8px;">
+                <input type="text" id="editQuizClass" placeholder="Class" style="width:100%;margin-bottom:8px;">
+                <div id="editQuestions"></div>
+                <button type="button" onclick="addEditQuestion()" style="background:#8e44ad;color:#fff;border:none;padding:8px 12px;border-radius:8px;margin-top:8px;">➕ Add question</button>
+                <button type="button" onclick="saveEditQuiz()" style="background:#27ae60;color:#fff;border:none;padding:8px 12px;border-radius:8px;margin-top:8px;">💾 Save changes</button>
+                <button type="button" onclick="document.getElementById('quizEditPanel').style.display='none'" style="background:#64748b;color:#fff;border:none;padding:8px 12px;border-radius:8px;margin-top:8px;">Close</button>
+            </div>
+        </div>
+        <!-- Handout photo / file -->
+        <div id="handoutBox" style="margin:14px 0;padding:14px;border:2px solid #0ea5e9;border-radius:12px;background:#f0f9ff;">
+            <h4 style="margin:0 0 10px;color:#0369a1;">📎 Handout — send photo / file to class</h4>
+            <form action="/teacher/handout" method="POST" enctype="multipart/form-data">
+                <input type="text" name="title" placeholder="Handout title" required style="width:100%;margin-bottom:8px;">
+                <input type="text" name="class_level" placeholder="Class e.g. 5A" style="width:100%;margin-bottom:8px;">
+                <textarea name="note" rows="2" placeholder="Note / instruction (optional)" style="width:100%;margin-bottom:8px;"></textarea>
+                <label style="font-size:13px;font-weight:bold;">📷 Photo or file</label>
+                <input type="file" name="file" accept="image/*,.pdf,.doc,.docx" style="margin-bottom:8px;">
+                <button type="submit" style="background:#0284c7;color:#fff;border:none;padding:10px 16px;border-radius:8px;font-weight:bold;">📤 Send Handout</button>
+            </form>
+        </div>
+
         <form id="quizBuilderForm" action="/teacher/quiz" method="POST" enctype="multipart/form-data" style="margin-bottom:14px;border-top:1px solid #ddd;padding-top:12px;">
             <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px;margin-bottom:12px;font-size:13px;line-height:1.5;">
                 <b>📌 ቀመር እንደ ፎቶ ለማስቀመጥ (ምርጥ መንገድ):</b><br>
@@ -753,5 +782,122 @@
         }).join('');
     }).catch(function(){});
 </script>
+
+<script>
+(function(){
+  function loadMyQuizzes(){
+    fetch('/api/teacher/quizzes', { credentials:'same-origin' })
+      .then(r=>r.json())
+      .then(function(d){
+        var box = document.getElementById('myQuizzesList');
+        if (!box) return;
+        if (!d.success || !(d.quizzes||[]).length) {
+          box.innerHTML = '<p style="color:#64748b;margin:0">No quizzes yet. Create one below.</p>';
+          return;
+        }
+        box.innerHTML = d.quizzes.map(function(q){
+          return '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px;border-bottom:1px solid #e9d5ff;">'+
+            '<div style="flex:1;min-width:160px"><b>'+ (q.title||'Quiz') +'</b><br><small>'+ (q.class_level||'') +' · '+ (q.count||0) +' questions</small></div>'+
+            '<button type="button" onclick="editQuiz('+q.id+')" style="background:#f59e0b;color:#fff;border:none;padding:8px 12px;border-radius:8px;font-weight:bold;">✏️ Edit</button>'+
+            '<button type="button" onclick="deleteQuiz('+q.id+')" style="background:#e74c3c;color:#fff;border:none;padding:8px 12px;border-radius:8px;font-weight:bold;">🗑️ Delete</button>'+
+            '<a href="/quiz/'+q.id+'" target="_blank" style="background:#2980b9;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:bold;">▶️ Open</a>'+
+          '</div>';
+        }).join('');
+      }).catch(function(){
+        var box = document.getElementById('myQuizzesList');
+        if (box) box.innerHTML = '<p style="color:#c00">Failed to load quizzes</p>';
+      });
+  }
+  window.editQuiz = function(id){
+    fetch('/api/teacher/quiz/'+id, { credentials:'same-origin' })
+      .then(r=>r.json())
+      .then(function(d){
+        if (!d.success) { alert('Cannot load quiz'); return; }
+        var q = d.quiz;
+        document.getElementById('editQuizId').value = q.id;
+        document.getElementById('editQuizTitle').value = q.title || '';
+        document.getElementById('editQuizClass').value = q.class_level || '';
+        var wrap = document.getElementById('editQuestions');
+        wrap.innerHTML = '';
+        (q.questions||[]).forEach(function(qq, i){ appendEditQ(wrap, qq, i); });
+        if (!(q.questions||[]).length) appendEditQ(wrap, {}, 0);
+        document.getElementById('quizEditPanel').style.display = 'block';
+        document.getElementById('quizEditPanel').scrollIntoView({ block:'nearest' });
+      });
+  };
+  function appendEditQ(wrap, qq, i){
+    qq = qq || {};
+    var opts = qq.options || {};
+    var div = document.createElement('div');
+    div.className = 'edit-qblock';
+    div.style.cssText = 'border:1px solid #ddd;border-radius:10px;padding:10px;margin:8px 0;background:#f8fafc;';
+    div.innerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:center"><b>Q'+(i+1)+'</b>'+
+      '<button type="button" class="del-eq" style="background:#e74c3c;color:#fff;border:none;border-radius:6px;padding:4px 10px;">🗑️</button></div>'+
+      '<textarea class="eq-q" rows="2" placeholder="Question" style="width:100%;margin:6px 0;">'+(qq.q||'').replace(/</g,'&lt;')+'</textarea>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">'+
+      '<input class="eq-A" placeholder="A" value="'+(opts.A||'').replace(/"/g,'&quot;')+'">'+
+      '<input class="eq-B" placeholder="B" value="'+(opts.B||'').replace(/"/g,'&quot;')+'">'+
+      '<input class="eq-C" placeholder="C" value="'+(opts.C||'').replace(/"/g,'&quot;')+'">'+
+      '<input class="eq-D" placeholder="D" value="'+(opts.D||'').replace(/"/g,'&quot;')+'">'+
+      '</div>'+
+      '<input class="eq-a" placeholder="Correct answer (A/B/C/D)" value="'+(qq.a||'')+'" style="width:100%;margin-top:6px;">'+
+      '<textarea class="eq-d" rows="2" placeholder="Explanation (optional)" style="width:100%;margin-top:6px;">'+(qq.desc||'').replace(/</g,'&lt;')+'</textarea>';
+    wrap.appendChild(div);
+    div.querySelector('.del-eq').onclick = function(){ div.remove(); renumberEditQ(); };
+  }
+  function renumberEditQ(){
+    document.querySelectorAll('#editQuestions .edit-qblock').forEach(function(div,i){
+      var b = div.querySelector('b'); if (b) b.textContent = 'Q'+(i+1);
+    });
+  }
+  window.addEditQuestion = function(){
+    var wrap = document.getElementById('editQuestions');
+    appendEditQ(wrap, {}, wrap.querySelectorAll('.edit-qblock').length);
+  };
+  window.saveEditQuiz = function(){
+    var id = document.getElementById('editQuizId').value;
+    var questions = [];
+    document.querySelectorAll('#editQuestions .edit-qblock').forEach(function(div){
+      var q = (div.querySelector('.eq-q').value||'').trim();
+      if (!q) return;
+      questions.push({
+        q: q,
+        a: (div.querySelector('.eq-a').value||'').trim(),
+        desc: (div.querySelector('.eq-d').value||'').trim(),
+        type: 'mcq',
+        options: {
+          A: div.querySelector('.eq-A').value||'',
+          B: div.querySelector('.eq-B').value||'',
+          C: div.querySelector('.eq-C').value||'',
+          D: div.querySelector('.eq-D').value||''
+        }
+      });
+    });
+    if (!questions.length) { alert('Add at least one question'); return; }
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/teacher/quiz/'+id+'/update';
+    function hid(n,v){ var i=document.createElement('input'); i.type='hidden'; i.name=n; i.value=v; form.appendChild(i); }
+    hid('title', document.getElementById('editQuizTitle').value);
+    hid('class_level', document.getElementById('editQuizClass').value);
+    hid('questions_json', JSON.stringify(questions));
+    document.body.appendChild(form);
+    form.submit();
+  };
+  window.deleteQuiz = function(id){
+    if (!confirm('Delete this quiz?')) return;
+    fetch('/teacher/quiz/'+id+'/delete', { method:'POST', credentials:'same-origin' })
+      .then(r=>r.json())
+      .then(function(d){
+        if (d.success) loadMyQuizzes();
+        else alert('Delete failed');
+      });
+  };
+  document.addEventListener('DOMContentLoaded', loadMyQuizzes);
+  loadMyQuizzes();
+})();
+</script>
+
 </body>
 </html>
