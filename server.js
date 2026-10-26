@@ -4037,6 +4037,14 @@ button.danger{background:#b91c1c}
 .cert.bg8{background:repeating-linear-gradient(45deg,#fff,#fff 12px,#f8fafc 12px,#f8fafc 24px)}
 .cert.bg9{background:linear-gradient(180deg,#fff 0%,#fef2f2 100%)}
 .cert.bg10{background:linear-gradient(120deg,#f0fdfa,#fff 50%,#ecfeff)}
+.cert.bg11{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);color:#e2e8f0}
+.cert.bg11 .school,.cert.bg11 .title{color:#e94560!important}
+.cert.bg11 .name{color:#f5d76e!important;border-color:#f5d76e!important}
+.cert.bg11 .body,.cert.bg11 .meta,.cert.bg11 .subtitle{color:#a0aec0!important}
+.cert.bg12{background:
+  radial-gradient(ellipse at 20% 20%,rgba(201,162,39,.25),transparent 50%),
+  radial-gradient(ellipse at 80% 80%,rgba(31,78,121,.2),transparent 50%),
+  linear-gradient(180deg,#fffef5,#fff);}
 /* borders */
 .cert.b-classic{border:14px solid #1f4e79;outline:6px solid #c9a227;outline-offset:6px}
 .cert.b-double{border:10px double #1f4e79}
@@ -4145,6 +4153,8 @@ h1{font-size:17px;margin:0 0 6px;color:#f8fafc}
 <option value="bg8">8. Subtle Stripe</option>
 <option value="bg9">9. Soft Rose</option>
 <option value="bg10">10. Aqua Fresh</option>
+<option value="bg11">11. Midnight Luxury</option>
+<option value="bg12">12. Champagne Gold</option>
 </select>
 <label>Border style</label>
 <select id="fBorderStyle" onchange="sync()">
@@ -4183,7 +4193,18 @@ h1{font-size:17px;margin:0 0 6px;color:#f8fafc}
 <label><input id="newTextItalic" type="checkbox"> Italic</label>
 </div>
 </div>
-<button type="button" class="sec" onclick="addCertText()">➕ Add text</button>
+<button type="button" class="sec" onclick="addCertText()">➕ Add / Create text</button>
+<label>Selected text style (select text on cert then apply)</label>
+<div class="row2">
+<button type="button" class="sec" onclick="styleSel('bold')" style="margin:0">B Bold</button>
+<button type="button" class="sec" onclick="styleSel('italic')" style="margin:0"><i>I</i></button>
+</div>
+<div class="row2">
+<input id="selColor" type="color" value="#1f4e79" title="Color">
+<input id="selSize" type="number" value="18" min="10" max="72" title="Size">
+</div>
+<button type="button" class="sec" onclick="applySelStyle()">Apply color/size to selection</button>
+<button type="button" class="danger" onclick="deleteSelectedExtra()">🗑️ Delete selected extra text</button>
 <button type="button" class="gold" onclick="downloadPdf()">📥 Download Full Page PDF (with border)</button>
 <button type="button" class="sec" onclick="window.print()">🖨️ Print Full Page</button>
 <p style="font-size:12px;margin-top:10px"><a href="/admin" style="color:#93c5fd">← Admin</a></p>
@@ -4258,6 +4279,30 @@ function sync(){
   if(cTitle&&ts){ cTitle.style.fontSize=(ts.value||34)+'px'; if(tc) cTitle.style.color=tc.value; }
   if(cName&&ns){ cName.style.fontSize=(ns.value||30)+'px'; if(nc) cName.style.color=nc.value; cName.style.fontWeight=(bn&&bn.checked)?'bold':'normal'; }
   if(cBody&&bs) cBody.style.fontSize=(bs.value||15)+'px';
+}
+function styleSel(cmd){ document.execCommand(cmd,false,null); }
+function applySelStyle(){
+  var color=document.getElementById('selColor').value;
+  var size=document.getElementById('selSize').value;
+  document.execCommand('styleWithCSS',false,true);
+  document.execCommand('foreColor',false,color);
+  var sel=window.getSelection();
+  if(sel && sel.rangeCount){
+    var span=document.createElement('span');
+    span.style.fontSize=size+'px';
+    span.style.color=color;
+    try{ sel.getRangeAt(0).surroundContents(span); }catch(e){ document.execCommand('fontSize',false,'4'); }
+  }
+}
+function deleteSelectedExtra(){
+  var sel=window.getSelection();
+  if(!sel||!sel.anchorNode) return;
+  var n=sel.anchorNode.nodeType===3?sel.anchorNode.parentNode:sel.anchorNode;
+  while(n&&n!==document.getElementById('cert')){
+    if(n.classList && n.classList.contains('extra-text')){ n.remove(); return; }
+    n=n.parentNode;
+  }
+  alert('Click inside an extra text block first');
 }
 function addCertText(){
   var val=(document.getElementById('newTextVal').value||'').trim();
