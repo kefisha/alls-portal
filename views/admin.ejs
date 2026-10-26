@@ -374,11 +374,108 @@ try{
                 <p style="font-size:12px;color:var(--text2);">P1 8:00–8:45 · P2 8:45–9:30 · P3 9:30–10:15 · P4 10:15–11:00 · P5 11:00–11:45 · P6 11:45–12:30 · <b>Break 4:00–4:15 (15 min)</b></p>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
                     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;width:100%;">
-                      <select id="ttClassSelect" style="max-width:240px;padding:8px;border-radius:8px;border:1px solid #94a3b8;">
-                        <option value="">— Classes with schedule —</option>
+                      <select id="ttClassSelect" style="max-width:280px;padding:8px;border-radius:8px;border:1px solid #94a3b8;font-size:15px;">
+                        <option value="">— Select class 1–12 / section —</option>
+                        <option value="Grade 1 - Section A">Grade 1 - Section A</option>
+                        <option value="Grade 1 - Section B">Grade 1 - Section B</option>
+                        <option value="1A">1A</option>
+                        <option value="1B">1B</option>
+                        <option value="Grade 2 - Section A">Grade 2 - Section A</option>
+                        <option value="Grade 2 - Section B">Grade 2 - Section B</option>
+                        <option value="2A">2A</option>
+                        <option value="2B">2B</option>
+                        <option value="Grade 3 - Section A">Grade 3 - Section A</option>
+                        <option value="Grade 3 - Section B">Grade 3 - Section B</option>
+                        <option value="3A">3A</option>
+                        <option value="3B">3B</option>
+                        <option value="Grade 4 - Section A">Grade 4 - Section A</option>
+                        <option value="Grade 4 - Section B">Grade 4 - Section B</option>
+                        <option value="4A">4A</option>
+                        <option value="4B">4B</option>
+                        <option value="Grade 5 - Section A">Grade 5 - Section A</option>
+                        <option value="Grade 5 - Section B">Grade 5 - Section B</option>
+                        <option value="5A">5A</option>
+                        <option value="5B">5B</option>
+                        <option value="Grade 6 - Section A">Grade 6 - Section A</option>
+                        <option value="Grade 6 - Section B">Grade 6 - Section B</option>
+                        <option value="6A">6A</option>
+                        <option value="6B">6B</option>
+                        <option value="Grade 7 - Section A">Grade 7 - Section A</option>
+                        <option value="Grade 7 - Section B">Grade 7 - Section B</option>
+                        <option value="7A">7A</option>
+                        <option value="7B">7B</option>
+                        <option value="Grade 8 - Section A">Grade 8 - Section A</option>
+                        <option value="Grade 8 - Section B">Grade 8 - Section B</option>
+                        <option value="8A">8A</option>
+                        <option value="8B">8B</option>
+                        <option value="Grade 9 - Section A">Grade 9 - Section A</option>
+                        <option value="Grade 9 - Section B">Grade 9 - Section B</option>
+                        <option value="9A">9A</option>
+                        <option value="9B">9B</option>
+                        <option value="Grade 10 - Section A">Grade 10 - Section A</option>
+                        <option value="Grade 10 - Section B">Grade 10 - Section B</option>
+                        <option value="10A">10A</option>
+                        <option value="10B">10B</option>
+                        <option value="Grade 11 - Section A">Grade 11 - Section A</option>
+                        <option value="Grade 11 - Section B">Grade 11 - Section B</option>
+                        <option value="11A">11A</option>
+                        <option value="11B">11B</option>
+                        <option value="Grade 12 - Section A">Grade 12 - Section A</option>
+                        <option value="Grade 12 - Section B">Grade 12 - Section B</option>
+                        <option value="12A">12A</option>
+                        <option value="12B">12B</option>
                       </select>
                       <input type="text" id="ttClass" list="ttClassList" placeholder="Or type class e.g. 4A" style="max-width:200px;">
-                      <datalist id="ttClassList"></datalist>
+                      <datalist id="ttClassList">
+                      <option value="Grade 1 - Section A">
+                      <option value="1A">
+                      <option value="Grade 1 - Section B">
+                      <option value="1B">
+                      <option value="Grade 2 - Section A">
+                      <option value="2A">
+                      <option value="Grade 2 - Section B">
+                      <option value="2B">
+                      <option value="Grade 3 - Section A">
+                      <option value="3A">
+                      <option value="Grade 3 - Section B">
+                      <option value="3B">
+                      <option value="Grade 4 - Section A">
+                      <option value="4A">
+                      <option value="Grade 4 - Section B">
+                      <option value="4B">
+                      <option value="Grade 5 - Section A">
+                      <option value="5A">
+                      <option value="Grade 5 - Section B">
+                      <option value="5B">
+                      <option value="Grade 6 - Section A">
+                      <option value="6A">
+                      <option value="Grade 6 - Section B">
+                      <option value="6B">
+                      <option value="Grade 7 - Section A">
+                      <option value="7A">
+                      <option value="Grade 7 - Section B">
+                      <option value="7B">
+                      <option value="Grade 8 - Section A">
+                      <option value="8A">
+                      <option value="Grade 8 - Section B">
+                      <option value="8B">
+                      <option value="Grade 9 - Section A">
+                      <option value="9A">
+                      <option value="Grade 9 - Section B">
+                      <option value="9B">
+                      <option value="Grade 10 - Section A">
+                      <option value="10A">
+                      <option value="Grade 10 - Section B">
+                      <option value="10B">
+                      <option value="Grade 11 - Section A">
+                      <option value="11A">
+                      <option value="Grade 11 - Section B">
+                      <option value="11B">
+                      <option value="Grade 12 - Section A">
+                      <option value="12A">
+                      <option value="Grade 12 - Section B">
+                      <option value="12B">
+                      </datalist>
                       <button type="button" onclick="loadTTGrid()">📂 Load</button>
                       <button type="button" class="btn-green" id="ttSaveBtn" onclick="saveTTGrid()">💾 Save / Update</button>
                       <button type="button" id="ttDeleteBtn" onclick="deleteTTGrid()" style="background:#b91c1c;color:#fff;">🗑️ Delete this class schedule</button>
@@ -1907,15 +2004,28 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 </script>
 <script>
-document.addEventListener('DOMContentLoaded', function(){
-  if (typeof window.loadAllTTClasses === 'function') window.loadAllTTClasses();
-  var sel = document.getElementById('ttClassSelect');
-  if (sel) sel.addEventListener('change', function(){
-    var inp = document.getElementById('ttClass');
-    if (inp && sel.value) inp.value = sel.value;
-    if (sel.value && typeof window.loadTTGrid === 'function') window.loadTTGrid();
-  });
-});
+(function(){
+  function bindTT(){
+    var sel = document.getElementById('ttClassSelect');
+    if (!sel) return;
+    if (sel.getAttribute('data-bound')) return;
+    sel.setAttribute('data-bound','1');
+    sel.addEventListener('change', function(){
+      var inp = document.getElementById('ttClass');
+      if (inp) inp.value = sel.value || '';
+      if (sel.value && typeof window.loadTTGrid === 'function') {
+        try { window.loadTTGrid(); } catch(e) { console.error(e); }
+      }
+    });
+    if (typeof window.loadAllTTClasses === 'function') {
+      try { window.loadAllTTClasses(); } catch(e) { console.error(e); }
+    }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindTT);
+  else bindTT();
+  setTimeout(bindTT, 300);
+  setTimeout(bindTT, 1000);
+})();
 </script>
 </body>
 </html>
