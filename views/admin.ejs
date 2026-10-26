@@ -363,7 +363,7 @@ try{
         <div class="card no-print" id="bottomLinks" style="text-align:center;">
             <h3>🔗 Quick Links</h3>
             <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
-                <a href="#timetable" onclick="event.preventDefault();window.openAdminPanel('timetable');return false;" style="background:#2980b9;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📅 Schedule / Timetable</a>
+                <a href="#timetable" onclick="event.preventDefault();var e=document.getElementById('timetable');if(e){e.scrollIntoView({behavior:'smooth',block:'nearest'});}return false;" style="background:#2980b9;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📅 Schedule / Timetable</a>
                 <a href="#librarySection" onclick="event.preventDefault();window.openAdminPanel('librarySection');return false;" style="background:#8e44ad;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📖 Library Upload</a>
                 <a href="#announcements" onclick="event.preventDefault();window.openAdminPanel('announcements');return false;" style="background:#64748b;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📢 Announcements Board</a>
                 <a href="#fees" onclick="event.preventDefault();window.openAdminPanel('fees');return false;" style="background:#16a085;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">💰 Fee Ledger</a>
@@ -372,7 +372,7 @@ try{
                 <a href="/admin/backup-export" style="background:#27ae60;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📦 Full Backup (JSON)</a>
                 <a href="/admin/attendance-report" style="background:#0f766e;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📋 Attendance Report</a>
                 <a href="/admin/certificate" style="background:#a16207;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">🎓 Certificate</a>
-                <a href="#examSchedule" onclick="event.preventDefault();window.openAdminPanel('examSchedule');return false;" style="background:#7c3aed;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📝 Exam Schedule</a>
+                <a href="#examSchedule" onclick="event.preventDefault();var e=document.getElementById('examSchedule');if(e){e.scrollIntoView({behavior:'smooth',block:'nearest'});}return false;" style="background:#7c3aed;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📝 Exam Schedule</a>
                 <a href="#restoreBackup" onclick="event.preventDefault();window.openAdminPanel('restoreBackup');return false;" style="background:#b91c1c;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">♻️ Restore Backup</a>
                 <a href="#teacherAssign" onclick="event.preventDefault();window.openAdminPanel('teacherAssign');return false;" style="background:#0e7490;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">👨‍🏫 Teacher Assign / Replace</a>
             </div></div>
@@ -383,29 +383,7 @@ try{
                 <span class="am">⬆️ Quick Link ይጫኑ — ይዘቱ <b>እዚህ ብቻ</b> ይከፈታል</span>
                 <span class="en">⬆️ Click a Quick Link — content opens <b>here only</b></span>
             </p>
-<div class="card admin-tools-panel" id="announcements">
-            <h3>📢 <span class="am">ማስታወቂያ ቦርድ</span><span class="en">Announcements Board</span></h3>
-            <form action="/admin/announcement" method="POST">
-                <input type="text" name="title" placeholder="Title" required>
-                <textarea name="body" rows="3" placeholder="Message..." required></textarea>
-                <select name="audience"><option value="ALL">All</option><option value="STUDENTS">Students</option><option value="TEACHERS">Teachers</option><option value="PARENTS">Parents</option></select>
-                <button type="submit" class="btn-green">📢 Publish</button>
-            </form>
-        </div>
-<div class="card admin-tools-panel" id="fees">
-                <h3>💰 Fee Ledger</h3>
-                <form action="/admin/fee" method="POST">
-                    <input type="text" name="student_id" id="feeStudentId" placeholder="Student ID" required>
-                    <input type="text" id="feeSearchName" placeholder="🔍 Search by Student Name..." style="margin-bottom:6px;">
-                    <div id="feeNameResults" style="font-size:12px;margin-bottom:8px;"></div>
-                    <input type="number" step="any" name="amount" placeholder="Amount due" required>
-                    <input type="number" step="any" name="paid" placeholder="Paid" value="0">
-                    <input type="text" name="description" placeholder="Description e.g. Tuition Term 1">
-                    <button type="submit">💾 Save Fee</button>
-                </form>
-                <div id="feeList" style="margin-top:10px;font-size:13px;"></div>
-            </div>
-<div class="card admin-tools-panel" id="timetable" style="grid-column: 1 / -1;">
+<div class="card" id="timetable" style="grid-column: 1 / -1;">
                 <h3><span class="am">📅 የሰዓት ሰንጠረዥ (Table) ሰኞ–አርብ · 1–6</span><span class="en">📅 Timetable Table Mon–Fri · Periods 1–6</span></h3>
                 <p><a href="/admin/timetable-pdf" target="_blank" style="display:inline-block;padding:8px 14px;background:#0f766e;color:#fff;border-radius:8px;text-decoration:none;font-weight:bold;">📄 Download / Print PDF</a></p>
                 <p style="font-size:12px;color:var(--text2);">P1 8:00–8:45 · P2 8:45–9:30 · P3 9:30–10:15 · P4 10:15–11:00 · P5 11:00–11:45 · P6 11:45–12:30 · <b>Break 4:00–4:15 (15 min)</b></p>
@@ -416,23 +394,12 @@ try{
                 </div>
                 <div style="overflow-x:auto;">
                     <table id="ttGrid" style="font-size:12px;min-width:700px;">
-                        <thead><tr><th>Period</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th></tr></thead>
+                        <thead><tr><th>Day \ Period</th><th>P1</th><th>P2</th><th>P3</th><th>P4</th><th>P5</th><th>P6</th></tr></thead>
                         <tbody></tbody>
                     </table>
                 </div>
             </div>
-<div class="card admin-tools-panel" id="librarySection">
-            <h3>📖 Library upload · 📦 Backup</h3>
-            <form action="/library/upload" method="POST" enctype="multipart/form-data" style="margin-bottom:12px;">
-                <input type="text" name="title" placeholder="Resource title" required>
-                <input type="text" name="category" placeholder="Category">
-                <input type="text" name="class_level" placeholder="Class or ALL">
-                <input type="file" name="file" required>
-                <button type="submit">📤 Upload to Library</button>
-            </form>
-
-        </div>
-<div class="card admin-tools-panel" id="examSchedule">
+<div class="card" id="examSchedule">
             <h3><span class="am">📝 የፈተና ሰንጠረዥ (Table) — ማርትዕ / መሰረዝ</span><span class="en">📝 Exam Schedule Table — Edit / Delete</span></h3>
             <div style="display:grid;grid-template-columns:1fr 1.2fr;gap:16px;">
               <form action="/admin/exam-schedule" method="POST" style="background:linear-gradient(135deg,#f8fafc,#eef2ff);padding:16px;border-radius:12px;border:1px solid #c7d2fe;">
@@ -455,6 +422,42 @@ try{
             </div>
             <div id="examList" style="margin-top:16px;"></div>
         </div>
+
+<div class="card admin-tools-panel" id="announcements">
+            <h3>📢 <span class="am">ማስታወቂያ ቦርድ</span><span class="en">Announcements Board</span></h3>
+            <form action="/admin/announcement" method="POST">
+                <input type="text" name="title" placeholder="Title" required>
+                <textarea name="body" rows="3" placeholder="Message..." required></textarea>
+                <select name="audience"><option value="ALL">All</option><option value="STUDENTS">Students</option><option value="TEACHERS">Teachers</option><option value="PARENTS">Parents</option></select>
+                <button type="submit" class="btn-green">📢 Publish</button>
+            </form>
+        </div>
+<div class="card admin-tools-panel" id="fees">
+                <h3>💰 Fee Ledger</h3>
+                <form action="/admin/fee" method="POST">
+                    <input type="text" name="student_id" id="feeStudentId" placeholder="Student ID" required>
+                    <input type="text" id="feeSearchName" placeholder="🔍 Search by Student Name..." style="margin-bottom:6px;">
+                    <div id="feeNameResults" style="font-size:12px;margin-bottom:8px;"></div>
+                    <input type="number" step="any" name="amount" placeholder="Amount due" required>
+                    <input type="number" step="any" name="paid" placeholder="Paid" value="0">
+                    <input type="text" name="description" placeholder="Description e.g. Tuition Term 1">
+                    <button type="submit">💾 Save Fee</button>
+                </form>
+                <div id="feeList" style="margin-top:10px;font-size:13px;"></div>
+            </div>
+
+<div class="card admin-tools-panel" id="librarySection">
+            <h3>📖 Library upload · 📦 Backup</h3>
+            <form action="/library/upload" method="POST" enctype="multipart/form-data" style="margin-bottom:12px;">
+                <input type="text" name="title" placeholder="Resource title" required>
+                <input type="text" name="category" placeholder="Category">
+                <input type="text" name="class_level" placeholder="Class or ALL">
+                <input type="file" name="file" required>
+                <button type="submit">📤 Upload to Library</button>
+            </form>
+
+        </div>
+
 <div class="card admin-tools-panel" id="restoreBackup">
             <h3>♻️ Restore from Backup</h3>
             <p style="font-size:13px;color:#b91c1c;"><b>Warning:</b> Restores data from a JSON backup file (best-effort insert).</p>
