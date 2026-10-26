@@ -346,22 +346,21 @@ try{
         
 
         
-        <div class="card no-print" id="bottomLinks" style="text-align:center;">
+                <div class="card no-print" id="bottomLinks" style="text-align:center;">
             <h3>🔗 Quick Links</h3>
             <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
-                <a href="#timetable" onclick="event.preventDefault();var e=document.getElementById('timetable');if(e){e.scrollIntoView({behavior:'smooth',block:'nearest'});}return false;" style="background:#2980b9;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📅 Schedule / Timetable</a>
-                
-                
-                
+                <a href="#timetable" onclick="event.preventDefault();var e=document.getElementById('timetable');if(e){e.style.display='block';e.scrollIntoView({block:'nearest'});}return false;" style="background:#2980b9;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📅 Schedule / Timetable</a>
+                <a href="#" onclick="event.preventDefault();openAdminPanel('announcements');return false;" style="background:#7c3aed;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📢 Announcement Board</a>
+                <a href="#" onclick="event.preventDefault();openAdminPanel('librarySection');return false;" style="background:#0ea5e9;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📖 Library Upload</a>
+                <a href="#" onclick="event.preventDefault();openAdminPanel('restoreBackup');return false;" style="background:#b91c1c;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">♻️ Restore Backup</a>
+                <a href="#" onclick="event.preventDefault();openAdminPanel('fees');return false;" style="background:#ca8a04;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">💰 Fee Ledger</a>
+                <a href="#" onclick="event.preventDefault();openAdminPanel('teacherAssign');return false;" style="background:#0369a1;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">👨‍🏫 Teacher Assign</a>
                 <a href="/learning-hub" style="background:#1f4e79;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📚 Learning Hub</a>
                 <a href="/qr-scan" style="background:#e67e22;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📷 QR Attendance</a>
                 <a href="/admin/backup-export" style="background:#27ae60;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📦 Full Backup (JSON)</a>
                 <a href="/admin/attendance-report" style="background:#0f766e;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📋 Attendance Report</a>
                 <a href="/admin/certificate" style="background:#a16207;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">🎓 Certificate</a>
-                
-                
-                
-            </div></div>
+            </div>
         </div>
 
         <div id="toolsWorkspace" style="margin-top:14px;min-height:200px;border:2px solid #cbd5e1;border-radius:14px;padding:12px;background:var(--card,#fff);">
@@ -382,6 +381,7 @@ try{
                       <datalist id="ttClassList"></datalist>
                       <button type="button" onclick="loadTTGrid()">📂 Load</button>
                       <button type="button" class="btn-green" id="ttSaveBtn" onclick="saveTTGrid()">💾 Save / Update</button>
+                      <button type="button" id="ttDeleteBtn" onclick="deleteTTGrid()" style="background:#b91c1c;color:#fff;">🗑️ Delete this class schedule</button>
                       <button type="button" onclick="loadTTGrid()" style="background:#64748b;color:#fff;">🔄 Refresh</button>
                       <button type="button" onclick="loadAllTTClasses()" style="background:#0f766e;color:#fff;">📋 Refresh class list</button>
                     </div>
@@ -1478,32 +1478,60 @@ try{
             var sel = (document.getElementById('ttClassSelect') && document.getElementById('ttClassSelect').value || '').trim();
             return inp || sel || '';
         };
+        
         window.loadAllTTClasses = function() {
-            fetch('/api/timetable-classes', { credentials: 'same-origin' })
+            var grades = [];
+            for (var g = 1; g <= 12; g++) {
+                grades.push('Grade ' + g + ' - Section A');
+                grades.push('Grade ' + g + ' - Section B');
+                grades.push(g + 'A');
+                grades.push(g + 'B');
+            }
+            function fill(list) {
+                var all = grades.slice();
+                (list || []).forEach(function(c){
+                    if (c && all.indexOf(c) === -1) all.push(c);
+                });
+                all.sort();
+                var sel = document.getElementById('ttClassSelect');
+                var dl = document.getElementById('ttClassList');
+                var hint = document.getElementById('ttAllClassesHint');
+                var cur = sel ? sel.value : '';
+                if (sel) {
+                    sel.innerHTML = '<option value="">— Select class 1–12 / section —</option>';
+                    all.forEach(function(c){
+                        var o = document.createElement('option');
+                        o.value = c; o.textContent = c;
+                        if (c === cur) o.selected = true;
+                        sel.appendChild(o);
+                    });
+                }
+                if (dl) dl.innerHTML = all.map(function(c){ return '<option value="'+String(c).replace(/"/g,'&quot;')+'">'; }).join('');
+                // mark which have saved schedule
+                fetch('/api/timetable-classes', { credentials: 'same-origin' })
+                  .then(function(r){ return r.json(); })
+                  .then(function(d){
+                      var saved = d.classes || [];
+                      if (sel) {
+                        Array.prototype.forEach.call(sel.options, function(o){
+                          if (o.value && saved.indexOf(o.value) >= 0) o.textContent = o.value + ' ✓';
+                        });
+                      }
+                      if (hint) hint.innerHTML = saved.length
+                        ? ('📅 Has schedule: <b>'+saved.join('</b>, <b>')+'</b>')
+                        : 'Pick Grade 1–12 section, fill grid, Save. ✓ = already saved.';
+                  }).catch(function(){});
+            }
+            // also sections from DB
+            fetch('/api/sections', { credentials: 'same-origin' })
               .then(function(r){ return r.json(); })
               .then(function(d){
-                  var list = d.classes || [];
-                  var sel = document.getElementById('ttClassSelect');
-                  var dl = document.getElementById('ttClassList');
-                  var hint = document.getElementById('ttAllClassesHint');
-                  if (sel) {
-                    var cur = sel.value;
-                    sel.innerHTML = '<option value="">— Classes with schedule —</option>';
-                    list.forEach(function(c){
-                      var o = document.createElement('option');
-                      o.value = c; o.textContent = c;
-                      if (c === cur) o.selected = true;
-                      sel.appendChild(o);
-                    });
-                  }
-                  if (dl) {
-                    dl.innerHTML = list.map(function(c){ return '<option value="'+String(c).replace(/"/g,'&quot;')+'">'; }).join('');
-                  }
-                  if (hint) hint.innerHTML = list.length
-                    ? ('📅 Saved schedules: <b>'+list.join('</b>, <b>')+'</b> — pick one to edit')
-                    : 'No schedules saved yet — type a class name, fill grid, Save';
-              }).catch(function(){});
+                  var extra = (d.rows || d.sections || []).map(function(s){ return s.name || s; });
+                  fill(extra);
+              })
+              .catch(function(){ fill([]); });
         };
+
         window.loadTTGrid = function() {
             const cls = window.getTTClass();
             if (!cls) { if (window.showToast) showToast('Class ይምረጡ ወይም ይጻፉ e.g. 4A', 'err'); else alert('Select or type class'); return; }
@@ -1566,6 +1594,25 @@ try{
             })
             .catch(function(){ if (window.showToast) showToast('Network error', 'err'); });
         };
+        window.deleteTTGrid = function() {
+            var cls = window.getTTClass ? window.getTTClass() : '';
+            if (!cls) { alert('Select class first'); return; }
+            if (!confirm('Delete entire timetable for '+cls+'?')) return;
+            fetch('/admin/timetable-grid/delete', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ class_level: cls })
+            }).then(function(r){ return r.json(); }).then(function(d){
+                if (d.success) {
+                    if (window.showToast) showToast('Deleted schedule for '+cls);
+                    else alert('Deleted');
+                    if (window.buildTTGrid) buildTTGrid({});
+                    if (window.loadAllTTClasses) loadAllTTClasses();
+                } else alert('Delete failed');
+            }).catch(function(){ alert('Delete failed'); });
+        };
+
         // Build empty grid on page load so cells are visible
         window.buildTTGrid(window._sampleTT ? window._sampleTT() : {});
         
