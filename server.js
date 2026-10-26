@@ -3336,6 +3336,17 @@ app.post('/teacher/handout', upload.single('file'), (req, res) => {
     });
 });
 
+app.get('/api/teacher/my-sections', (req, res) => {
+    if (!req.session.teacherId) return res.json({ sections: [] });
+    db.get(`SELECT assigned_sections FROM teachers WHERE id=?`, [req.session.teacherId], (e, t) => {
+        let sections = [];
+        if (t && t.assigned_sections) {
+            sections = String(t.assigned_sections).split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+        }
+        res.json({ sections });
+    });
+});
+
 app.get('/api/teacher/handouts', (req, res) => {
     if (!req.session.teacherId && !req.session.isAdmin) return res.status(401).json({ success: false });
     const tid = String(req.session.teacherId || '');
@@ -4025,75 +4036,100 @@ app.get('/api/student-progress/:id', (req, res) => {
 app.get('/learning-hub', (req, res) => {
     if (!req.session.isAdmin && !req.session.teacherId && !req.session.studentId && !req.session.parentStudentId) return res.redirect('/');
     const hubSid = req.session.studentId || req.session.parentStudentId || '';
-    res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Learning Hub - ALLS</title>
+    const loadPage = (studentCls) => {
+        const sidJson = JSON.stringify(String(hubSid || ''));
+        const clsJson = JSON.stringify(String(studentCls || ''));
+        res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Learning Hub</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
 body{font-family:Segoe UI,sans-serif;background:#eef2f5;margin:0;padding:16px;color:#333}
 .wrap{max-width:960px;margin:auto}
 .card{background:#fff;border-radius:12px;padding:18px;margin-bottom:16px;box-shadow:0 4px 12px rgba(0,0,0,.06);border-top:4px solid #2980b9}
 h2{color:#1f4e79;margin-top:0}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th,td{border:1px solid #e0e0e0;padding:8px;text-align:left}
-th{background:#1f4e79;color:#fff}
-input,select,textarea,button{padding:8px;margin:4px 0;border-radius:6px;border:1px solid #ccc;width:100%;box-sizing:border-box}
-button{background:#2980b9;color:#fff;border:none;font-weight:bold;cursor:pointer}
-.tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
-.tabs button{width:auto;padding:8px 14px;background:#64748b}
+h3{color:#1f4e79;margin:0 0 12px}
+.tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.tabs button{border:none;background:#64748b;color:#fff;padding:10px 14px;border-radius:10px;font-weight:bold;cursor:pointer}
 .tabs button.on{background:#1f4e79}
-.hidden{display:none}
-a{color:#2980b9}
-</style></head><body><div class="wrap">
-<h2>📚 Learning Hub / የትምህርት ማዕከል</h2>
-<p><a href="javascript:history.back()">⬅️ Back</a></p>
-<div class="tabs">
-<button type="button" class="on" data-t="ann">📢 Announcements</button>
-<button type="button" data-t="lib">📖 Library</button>
-<button type="button" data-t="hw">📝 Homework</button>
-<button type="button" data-t="quiz">❓ Quiz</button>
-<button type="button" data-t="tt">📅 Timetable</button>
-<button type="button" data-t="prog">📈 Progress</button>
-<button type="button" data-t="exam">📝 Exams</button>
+.panel{display:none}
+.panel.on{display:block}
+.back{display:inline-block;margin-bottom:12px;color:#2980b9;font-weight:bold;text-decoration:none}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{border:1px solid #e2e8f0;padding:8px;text-align:left}
+th{background:#1f4e79;color:#fff}
+.item{padding:12px 0;border-bottom:1px solid #e2e8f0}
+.item a{color:#0369a1;font-weight:bold}
+.thumb{max-width:100%;max-height:220px;border-radius:8px;margin-top:8px}
+</style></head><body>
+<div class="wrap">
+  <a class="back" href="javascript:history.back()">⬅️ Back</a>
+  <h2>📚 Learning Hub / የትምህርት ማዕከል</h2>
+  <div class="tabs">
+    <button type="button" class="on" data-t="ann">📢 Announcements</button>
+    <button type="button" data-t="lib">📖 Library / Handouts</button>
+    <button type="button" data-t="hw">📝 Homework</button>
+    <button type="button" data-t="quiz">❓ Quiz</button>
+    <button type="button" data-t="tt">📅 Timetable</button>
+    <button type="button" data-t="prog">📈 Progress</button>
+  </div>
+
+  <div class="card panel on" id="ann"><h3>Announcements</h3><div id="annList">Loading...</div></div>
+  <div class="card panel" id="lib"><h3>Library · Handouts · Photos · PDF</h3><div id="libList">Loading...</div></div>
+  <div class="card panel" id="hw"><h3>Homework</h3><div id="hwList">Loading...</div></div>
+  <div class="card panel" id="quiz"><h3>Quizzes</h3><div id="quizList">Loading...</div></div>
+  <div class="card panel" id="tt"><h3>Timetable</h3><div id="ttList">Loading...</div></div>
+  <div class="card panel" id="prog"><h3>Progress</h3><canvas id="progChart" height="160"></canvas></div>
 </div>
-<div class="card panel" id="ann"><h3>Announcements</h3><div id="annList">Loading...</div></div>
-<script>window.STUDENT_CLASS = ${JSON.stringify((typeof studentCls !== 'undefined' ? studentCls : (req.session.studentClass || '')))};</script>
-<div class="card panel hidden" id="lib"><h3>Digital Library</h3><div id="libList">Loading...</div></div>
-<div class="card panel hidden" id="hw"><h3>Homework</h3><div id="hwList">Loading...</div></div>
-<div class="card panel hidden" id="quiz"><h3>Quizzes</h3><div id="quizList">Loading...</div></div>
-<div class="card panel hidden" id="tt"><h3>Timetable</h3><div id="ttList">Loading...</div></div>
-<div class="card panel hidden" id="prog"><h3>Progress</h3><canvas id="progChart" height="180"></canvas></div>
-<div class="card panel hidden" id="exam"><h3>Exam Schedule</h3><div id="examHubList">Loading...</div></div>
-</div>
-<script src="/socket.io/socket.io.js"></script>
 <script>
-window.STUDENT_CLASS=(typeof STUDENT_CLASS!=="undefined"?STUDENT_CLASS:"");window.STUDENT_ID=${JSON.stringify(hubSid)};
-// class filter for library/quiz
-if (typeof window.STUDENT_CLASS === 'undefined') window.STUDENT_CLASS = '';
-document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
-  document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));
-  b.classList.add('on');
-  document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));
-  document.getElementById(b.dataset.t).classList.remove('hidden');
+window.STUDENT_ID = ${sidJson};
+window.STUDENT_CLASS = ${clsJson};
+document.querySelectorAll('.tabs button').forEach(function(b){
+  b.onclick = function(){
+    document.querySelectorAll('.tabs button').forEach(function(x){ x.classList.remove('on'); });
+    document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('on'); });
+    b.classList.add('on');
+    var el = document.getElementById(b.getAttribute('data-t'));
+    if (el) el.classList.add('on');
+  };
 });
-fetch('/api/announcements').then(r=>r.json()).then(d=>{
-  document.getElementById('annList').innerHTML=(d.rows||[]).map(a=>'<div style="border-bottom:1px solid #eee;padding:8px 0"><b>'+a.title+'</b><br><small>'+a.created_at+'</small><p>'+a.body+'</p></div>').join('')||'No announcements';
-});
-function renderLib(rows){
-  document.getElementById('libList').innerHTML=(rows||[]).map(i=>{
-    var link=i.file_path?('<a href="/uploads/'+i.file_path+'" target="_blank">'+(String(i.file_path).match(/\.(jpg|jpeg|png|gif|webp)$/i)?'🖼️ View photo':'Download')+'</a>'):'';
-    var note=i.note?('<div style="font-size:13px;color:#475569;margin-top:4px">'+i.note+'</div>'):'';
-    return '<div style="padding:10px 0;border-bottom:1px solid #eee"><b>'+(i.title||'')+'</b> <small>('+(i.category||'')+') · '+(i.class_level||'')+'</small><br><small>'+(i.uploaded_by||'')+'</small><br>'+link+note+'</div>';
-  }).join('')||'No handouts for your class';
-}
-function loadLibAndQuiz(){
-  var cls=window.STUDENT_CLASS||'';
-  fetch('/api/library?class='+encodeURIComponent(cls)).then(r=>r.json()).then(d=>renderLib(d.rows||[])).catch(()=>{});
-  /* quizzes loaded in loadLibAndQuiz */
-fetch('/api/exam-schedule').then(r=>r.json()).then(d=>{
-  (document.getElementById('examHubList')||{innerHTML:''}).innerHTML='<table><tr><th>Date</th><th>Time</th><th>Class</th><th>Subject</th><th>Notes</th></tr>'
-    +(d.rows||[]).map(x=>'<tr><td>'+(x.exam_date||'')+'</td><td>'+(x.exam_time||'')+'</td><td>'+(x.class_level||'')+'</td><td>'+(x.subject||'')+'</td><td>'+(x.notes||'')+'</td></tr>').join('')+'</table>';
-}).catch(()=>{});
-fetch('/api/timetable').then(r=>r.json()).then(d=>{
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function isImg(f){ return /\\.(jpg|jpeg|png|gif|webp)$/i.test(f||''); }
+function isPdf(f){ return /\\.pdf$/i.test(f||''); }
+
+fetch('/api/announcements',{credentials:'same-origin'}).then(function(r){return r.json()}).then(function(d){
+  var rows = d.rows || d || [];
+  if (!Array.isArray(rows)) rows = [];
+  document.getElementById('annList').innerHTML = rows.map(function(a){
+    return '<div class="item"><b>'+esc(a.title)+'</b><br><small>'+esc(a.created_at||'')+'</small><p>'+esc(a.body||a.message||'')+'</p></div>';
+  }).join('') || 'No announcements';
+}).catch(function(){ document.getElementById('annList').innerHTML = 'Could not load announcements'; });
+
+fetch('/api/library?class='+encodeURIComponent(window.STUDENT_CLASS||''),{credentials:'same-origin'}).then(function(r){return r.json()}).then(function(d){
+  var rows = d.rows || [];
+  document.getElementById('libList').innerHTML = rows.map(function(i){
+    var f = i.file_path || '';
+    var media = '';
+    if (f && isImg(f)) media = '<div><img class="thumb" src="/uploads/'+esc(f)+'" alt=""><br><a href="/uploads/'+esc(f)+'" download target="_blank">⬇️ Download photo</a></div>';
+    else if (f && isPdf(f)) media = '<div><a href="/uploads/'+esc(f)+'" target="_blank">📄 Open PDF</a> · <a href="/uploads/'+esc(f)+'" download>⬇️ Download PDF</a></div>';
+    else if (f) media = '<div><a href="/uploads/'+esc(f)+'" target="_blank">⬇️ Download file</a></div>';
+    var note = i.note ? ('<div style="font-size:13px;color:#475569;margin-top:4px">'+esc(i.note)+'</div>') : '';
+    return '<div class="item"><b>'+esc(i.title||'Resource')+'</b> <small>('+esc(i.category||'')+') · Class: '+esc(i.class_level||'')+'</small><br><small>From: '+esc(i.uploaded_by||'')+'</small>'+note+media+'</div>';
+  }).join('') || 'No handouts / files for your class yet';
+}).catch(function(){ document.getElementById('libList').innerHTML = 'Could not load library'; });
+
+fetch('/api/homework?class='+encodeURIComponent(window.STUDENT_CLASS||''),{credentials:'same-origin'}).then(function(r){return r.json()}).then(function(d){
+  document.getElementById('hwList').innerHTML = (d.rows||[]).map(function(h){
+    return '<div class="item"><b>'+esc(h.title)+'</b> — '+esc(h.class_level||'')+'<br>'+esc(h.description||'')+'<br><small>Due: '+esc(h.due_date||'-')+' | '+esc(h.teacher_name||'')+'</small></div>';
+  }).join('') || 'No homework';
+}).catch(function(){ document.getElementById('hwList').innerHTML = 'Could not load homework'; });
+
+fetch('/api/quizzes?class='+encodeURIComponent(window.STUDENT_CLASS||''),{credentials:'same-origin'}).then(function(r){return r.json()}).then(function(d){
+  document.getElementById('quizList').innerHTML = (d.rows||[]).map(function(q){
+    return '<div class="item"><b>'+esc(q.title)+'</b> · '+esc(q.class_level||'')+' · '+(q.count||0)+' questions<br><small>'+esc(q.teacher_name||'')+'</small><br><a href="/quiz/'+q.id+'" style="display:inline-block;margin-top:8px;background:#2980b9;color:#fff;padding:8px 14px;border-radius:8px;text-decoration:none;font-weight:bold;">Start Quiz ▶️</a></div>';
+  }).join('') || 'No quizzes for your class';
+}).catch(function(){ document.getElementById('quizList').innerHTML = 'Could not load quizzes'; });
+
+fetch('/api/timetable?class='+encodeURIComponent(window.STUDENT_CLASS||''),{credentials:'same-origin'}).then(function(r){return r.json()}).then(function(d){
   var days=['Monday','Tuesday','Wednesday','Thursday','Friday'];
   var times={1:'8:00-8:45',2:'8:45-9:30',3:'9:30-10:15',4:'10:15-11:00',5:'11:00-11:45',6:'11:45-12:30'};
   var map={};
@@ -4101,27 +4137,38 @@ fetch('/api/timetable').then(r=>r.json()).then(d=>{
     var day=r.day_of_week||'';
     var p=String(r.period_no||'');
     if(!map[day]) map[day]={};
-    map[day][p]={s:r.subject||'',t:r.teacher_name||'',c:r.class_level||''};
+    map[day][p]={s:r.subject||'',t:r.teacher_name||''};
   });
-  var html='<div style="overflow-x:auto"><table style="font-size:12px;min-width:640px"><tr><th>Day</th>';
+  var html='<div style="overflow-x:auto"><table style="min-width:640px"><tr><th>Day</th>';
   for(var p=1;p<=6;p++) html+='<th>P'+p+'<br><small>'+(times[p]||'')+'</small></th>';
   html+='</tr>';
   days.forEach(function(day){
     html+='<tr><td style="font-weight:bold;background:#eef2ff">'+day+'</td>';
     for(var p=1;p<=6;p++){
       var c=(map[day]&&map[day][p])?map[day][p]:{s:'',t:''};
-      html+='<td style="vertical-align:top;min-width:90px">'+(c.s?'<b>'+c.s+'</b>':'—')+(c.t?'<br><small style="color:#64748b">'+c.t+'</small>':'')+'</td>';
+      html+='<td>'+(c.s?'<b>'+esc(c.s)+'</b>':'—')+(c.t?'<br><small style="color:#64748b">'+esc(c.t)+'</small>':'')+'</td>';
     }
     html+='</tr>';
   });
   html+='</table></div>';
   document.getElementById('ttList').innerHTML=html;
-}).catch(function(){ document.getElementById('ttList').innerHTML='Failed to load'; });
-fetch('/api/student-progress/'+encodeURIComponent((window.STUDENT_ID||''))).then(r=>r.json()).then(d=>{
-  if(!d.labels||!d.labels.length) return;
-  new Chart(document.getElementById('progChart'),{type:'bar',data:{labels:d.labels,datasets:[{label:'Total',data:d.data,backgroundColor:'#2980b9'}]},options:{scales:{y:{beginAtZero:true,max:100}}}});
-}).catch(()=>{});
+}).catch(function(){ document.getElementById('ttList').innerHTML='Could not load timetable'; });
+
+if (window.STUDENT_ID) {
+  fetch('/api/student-progress/'+encodeURIComponent(window.STUDENT_ID),{credentials:'same-origin'}).then(function(r){return r.json()}).then(function(d){
+    if(!d.labels||!d.labels.length) return;
+    new Chart(document.getElementById('progChart'),{type:'bar',data:{labels:d.labels,datasets:[{label:'Total',data:d.data,backgroundColor:'#2980b9'}]},options:{scales:{y:{beginAtZero:true,max:100}}}});
+  }).catch(function(){});
+}
 </script></body></html>`);
+    };
+    if (hubSid) {
+        db.get(`SELECT class_level FROM students WHERE student_id=?`, [hubSid], (e, s) => {
+            loadPage(s ? (s.class_level || '') : '');
+        });
+    } else {
+        loadPage('');
+    }
 });
 
 
