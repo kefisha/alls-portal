@@ -66,14 +66,11 @@
         #toolsWorkspace > .card.is-open,
         #toolsWorkspace > .admin-tools-panel.is-open { display: block !important; }
         #toolsWorkspace #timetable,
-        #toolsWorkspace #examSchedule { display: block !important; }
-        #toolsWorkspace { scroll-margin-top: 12px; }
+                #toolsWorkspace { scroll-margin-top: 12px; }
         /* Always-visible schedule panels at bottom */
         #bottomScheduleWrap .admin-tools-panel,
         #bottomScheduleWrap #timetable,
-        #bottomScheduleWrap #examSchedule {
-            display: block !important;
-        }
+        
         #toolsHost { min-height: 0; }
         #toolsWorkspace { margin-top: 12px; }
         .cal-day { background:#fff; border-radius:12px; border:1px solid #e2e8f0; padding:12px; box-shadow:0 2px 8px rgba(0,0,0,.05); }
@@ -353,17 +350,17 @@ try{
             <h3>🔗 Quick Links</h3>
             <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
                 <a href="#timetable" onclick="event.preventDefault();var e=document.getElementById('timetable');if(e){e.scrollIntoView({behavior:'smooth',block:'nearest'});}return false;" style="background:#2980b9;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📅 Schedule / Timetable</a>
-                <a href="#" onclick="event.preventDefault();var el=document.getElementById('librarySection');if(!el)return false;['announcements','fees','librarySection','restoreBackup','teacherAssign'].forEach(function(p){var x=document.getElementById(p);if(x&&p!=='librarySection')x.style.display='none';});if('librarySection'==='timetable'||'librarySection'==='examSchedule'){el.scrollIntoView({block:'nearest'});}else{el.style.display=(el.style.display==='block')?'none':'block';}return false;" style="background:#8e44ad;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📖 Library Upload</a>
-                <a href="#" onclick="event.preventDefault();var el=document.getElementById('announcements');if(!el)return false;['announcements','fees','librarySection','restoreBackup','teacherAssign'].forEach(function(p){var x=document.getElementById(p);if(x&&p!=='announcements')x.style.display='none';});if('announcements'==='timetable'||'announcements'==='examSchedule'){el.scrollIntoView({block:'nearest'});}else{el.style.display=(el.style.display==='block')?'none':'block';}return false;" style="background:#64748b;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📢 Announcements Board</a>
-                <a href="#" onclick="event.preventDefault();var el=document.getElementById('fees');if(!el)return false;['announcements','fees','librarySection','restoreBackup','teacherAssign'].forEach(function(p){var x=document.getElementById(p);if(x&&p!=='fees')x.style.display='none';});if('fees'==='timetable'||'fees'==='examSchedule'){el.scrollIntoView({block:'nearest'});}else{el.style.display=(el.style.display==='block')?'none':'block';}return false;" style="background:#16a085;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">💰 Fee Ledger</a>
+                
+                
+                
                 <a href="/learning-hub" style="background:#1f4e79;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📚 Learning Hub</a>
                 <a href="/qr-scan" style="background:#e67e22;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📷 QR Attendance</a>
                 <a href="/admin/backup-export" style="background:#27ae60;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📦 Full Backup (JSON)</a>
                 <a href="/admin/attendance-report" style="background:#0f766e;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📋 Attendance Report</a>
                 <a href="/admin/certificate" style="background:#a16207;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">🎓 Certificate</a>
-                <a href="#examSchedule" onclick="event.preventDefault();var e=document.getElementById('examSchedule');if(e){e.scrollIntoView({behavior:'smooth',block:'nearest'});}return false;" style="background:#7c3aed;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📝 Exam Schedule</a>
-                <a href="#" onclick="event.preventDefault();var el=document.getElementById('restoreBackup');if(!el)return false;['announcements','fees','librarySection','restoreBackup','teacherAssign'].forEach(function(p){var x=document.getElementById(p);if(x&&p!=='restoreBackup')x.style.display='none';});if('restoreBackup'==='timetable'||'restoreBackup'==='examSchedule'){el.scrollIntoView({block:'nearest'});}else{el.style.display=(el.style.display==='block')?'none':'block';}return false;" style="background:#b91c1c;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">♻️ Restore Backup</a>
-                <a href="#" onclick="event.preventDefault();var el=document.getElementById('teacherAssign');if(!el)return false;['announcements','fees','librarySection','restoreBackup','teacherAssign'].forEach(function(p){var x=document.getElementById(p);if(x&&p!=='teacherAssign')x.style.display='none';});if('teacherAssign'==='timetable'||'teacherAssign'==='examSchedule'){el.scrollIntoView({block:'nearest'});}else{el.style.display=(el.style.display==='block')?'none':'block';}return false;" style="background:#0e7490;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">👨‍🏫 Teacher Assign / Replace</a>
+                
+                
+                
             </div></div>
         </div>
 
@@ -379,7 +376,8 @@ try{
                 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
                     <input type="text" id="ttClass" placeholder="Class only e.g. Grade 5A" style="max-width:200px;">
                     <button type="button" onclick="loadTTGrid()">📂 Load</button>
-                    <button type="button" class="btn-green" onclick="saveTTGrid()">💾 Save Grid</button>
+                    <button type="button" class="btn-green" id="ttSaveBtn" onclick="saveTTGrid()">💾 Save / Update</button>
+                    <button type="button" onclick="loadTTGrid()" style="background:#64748b;color:#fff;">🔄 Refresh</button>
                 </div>
                 <p style="font-size:13px;color:#64748b;margin:6px 0;">✏️ Each cell = Subject + Teacher — click to type, then <b>Save Grid</b></p>
                 <div style="overflow-x:auto;">
@@ -405,30 +403,6 @@ try{
                     </table>
                 </div>
             </div>
-<div class="card" id="examSchedule">
-            <h3><span class="am">📝 የፈተና ሰንጠረዥ (Table) — ማርትዕ / መሰረዝ</span><span class="en">📝 Exam Schedule Table — Edit / Delete</span></h3>
-            <div style="display:grid;grid-template-columns:1fr 1.2fr;gap:16px;">
-              <form action="/admin/exam-schedule" method="POST" style="background:linear-gradient(135deg,#f8fafc,#eef2ff);padding:16px;border-radius:12px;border:1px solid #c7d2fe;">
-                <p style="margin:0 0 10px;font-weight:bold;color:#3730a3;">➕ Add exam</p>
-                <input type="text" name="class_level" placeholder="Class e.g. Grade 8A" required>
-                <input type="text" name="subject" placeholder="Subject" required>
-                <input type="date" name="exam_date" required>
-                <input type="time" name="exam_time">
-                <input type="text" name="notes" placeholder="Notes (optional)">
-                <button type="submit" class="btn-green">Save to calendar</button>
-              </form>
-              <div>
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                  <b style="color:var(--primary);">📅 Upcoming exams</b>
-                  <button type="button" onclick="loadExamCalendar()" style="padding:6px 12px;font-size:12px;">Refresh</button>
-                  <a href="/admin/exam-schedule-pdf" target="_blank" style="padding:6px 12px;font-size:12px;background:#0f766e;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold;">📄 PDF</a>
-                </div>
-                <div id="examCalendar" style="display:grid;gap:10px;"></div>
-              </div>
-            </div>
-            <div id="examList" style="margin-top:16px;"></div>
-        </div>
-
 <div class="card admin-tools-panel" id="announcements">
             <h3>📢 <span class="am">ማስታወቂያ ቦርድ</span><span class="en">Announcements Board</span></h3>
             <form action="/admin/announcement" method="POST">
@@ -758,8 +732,8 @@ try{
         
         <div id="bottomScheduleWrap" style="margin-top:20px;">
             <h3 style="text-align:center;color:var(--primary);margin-bottom:12px;">
-                <span class="am">📅 የሳምንት ሰዓት ሰንጠረዥ + የፈተና ሰንጠረዥ (Table)</span>
-                <span class="en">📅 Weekly Timetable + Exam Schedule (Tables)</span>
+                <span class="am">📅 የሳምንት ሰዓት ሰንጠረዥ (Table)</span>
+                <span class="en">📅 Weekly Timetable (Table)</span>
             </h3>
         </div>
 
@@ -1419,8 +1393,7 @@ try{
         // Toast after hash actions
         if (location.hash === '#pending-approvals') showToast('✅ Pending list updated', 'info');
         if (location.hash === '#fees') { if (typeof openAdminPanel==='function') openAdminPanel('fees'); showToast('Fee ledger', 'info'); }
-        if (location.hash === '#examSchedule') { if (typeof openAdminPanel==='function') openAdminPanel('examSchedule'); }
-        if (location.hash === '#notifications') showToast('💬 Notifications updated', 'info');
+                if (location.hash === '#notifications') showToast('💬 Notifications updated', 'info');
         fetch('/api/fees').then(r=>r.json()).then(d=>{
             const el=document.getElementById('feeList');
             if(!el) return;
@@ -1520,48 +1493,14 @@ try{
             })
             .then(function(r){ return r.json(); })
             .then(function(d){
-                if (d.success) { if (window.showToast) showToast('✅ Saved ('+d.saved+' slots)'); else alert('Saved'); }
+                if (d.success) { if (window.showToast) showToast('✅ Updated / Saved ('+d.saved+' slots)'); else alert('Updated'); var b=document.getElementById('ttSaveBtn'); if(b){ var t=b.textContent; b.textContent='✅ Saved'; setTimeout(function(){ b.textContent=t; },1500);} }
                 else { if (window.showToast) showToast('Save failed', 'err'); else alert('Failed'); }
             })
             .catch(function(){ if (window.showToast) showToast('Network error', 'err'); });
         };
         // Build empty grid on page load so cells are visible
         window.buildTTGrid(window._sampleTT ? window._sampleTT() : {});
-        window.loadExamCalendar = function(){
-            fetch('/api/exam-schedule').then(r=>r.json()).then(d=>{
-                var cal=document.getElementById('examCalendar');
-                var el=document.getElementById('examList');
-                var rows=d.rows||[];
-                var table = '<div style="overflow-x:auto;"><table style="font-size:13px;width:100%;min-width:640px;"><thead><tr>'
-                  +'<th>Date</th><th>Time</th><th>Class</th><th>Subject</th><th>Notes</th><th>Edit / Delete</th></tr></thead><tbody>';
-                if(!rows.length){
-                    table += '<tr><td colspan="6">No exams yet</td></tr>';
-                } else {
-                    rows.forEach(function(x){
-                        table += '<tr>'
-                          +'<td colspan="6" style="padding:0;border:none;">'
-                          +'<form action="/admin/exam-edit" method="POST" style="display:grid;grid-template-columns:110px 90px 1fr 1fr 1fr auto auto;gap:6px;align-items:center;padding:8px;border-bottom:1px solid #e2e8f0;">'
-                          +'<input type="hidden" name="id" value="'+x.id+'">'
-                          +'<input name="exam_date" type="date" value="'+(x.exam_date||'')+'" style="padding:6px;font-size:12px;">'
-                          +'<input name="exam_time" value="'+(x.exam_time||'')+'" style="padding:6px;font-size:12px;">'
-                          +'<input name="class_level" value="'+(x.class_level||'')+'" style="padding:6px;font-size:12px;">'
-                          +'<input name="subject" value="'+(x.subject||'')+'" style="padding:6px;font-size:12px;">'
-                          +'<input name="notes" value="'+(x.notes||'')+'" style="padding:6px;font-size:12px;">'
-                          +'<button type="submit" style="padding:6px 10px;font-size:12px;background:#2980b9;color:#fff;border:none;border-radius:6px;">✏️ Update</button>'
-                          +'</form></td></tr>'
-                          +'<tr><td colspan="6" style="padding:0 8px 8px;border:none;text-align:right;">'
-                          +'<form action="/admin/exam-delete" method="POST" style="display:inline;" onsubmit="return confirm(\'Delete?\');">'
-                          +'<input type="hidden" name="id" value="'+x.id+'">'
-                          +'<button type="submit" style="padding:4px 10px;font-size:11px;background:#e74c3c;color:#fff;border:none;border-radius:6px;">🗑️ Delete</button></form>'
-                          +'</td></tr>';
-                    });
-                }
-                table += '</tbody></table></div>';
-                if(cal) cal.innerHTML = table;
-                if(el) el.innerHTML = '';
-            }).catch(function(){});
-        };
-        loadExamCalendar();
+        
 
         // Report card: name search → select → then open
         (function(){
@@ -1795,10 +1734,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (wrap) wrap.appendChild(el);
     }
     place('timetable');
-    place('examSchedule');
     setTimeout(function(){
         if (typeof window.buildTTGrid === 'function') try { window.buildTTGrid(window._sampleTT ? window._sampleTT() : {}); } catch(e) {}
-        if (typeof window.loadExamCalendar === 'function') try { window.loadExamCalendar(); } catch(e) {}
+        
     }, 300);
 });
 </script>
@@ -1809,9 +1747,7 @@ document.addEventListener('DOMContentLoaded', function() {
   if (typeof window.buildTTGrid === 'function') {
     try { window.buildTTGrid(window._sampleTT ? window._sampleTT() : {}); } catch(e) { console.error(e); }
   }
-  if (typeof window.loadExamCalendar === 'function') {
-    try { window.loadExamCalendar(); } catch(e) {}
-  }
+  
 });
 </script>
 <script>
@@ -1826,6 +1762,34 @@ document.addEventListener('DOMContentLoaded', function() {
   run();
   setTimeout(run, 400);
 });
+</script>
+<script>
+/* STAY_IN_PLACE — after reload, restore scroll to last panel */
+(function(){
+  try {
+    var y = sessionStorage.getItem('adminScrollY');
+    var pid = sessionStorage.getItem('adminPanelId');
+    if (y !== null) {
+      window.scrollTo(0, parseInt(y, 10) || 0);
+      sessionStorage.removeItem('adminScrollY');
+    }
+    if (pid) {
+      var el = document.getElementById(pid);
+      if (el) { el.style.display = 'block'; el.scrollIntoView({block:'nearest'}); }
+      sessionStorage.removeItem('adminPanelId');
+    }
+  } catch(e) {}
+  document.querySelectorAll('form').forEach(function(f) {
+    f.addEventListener('submit', function() {
+      try {
+        sessionStorage.setItem('adminScrollY', String(window.scrollY || window.pageYOffset || 0));
+        var panel = f.closest('.card, .admin-tools-panel');
+        if (panel && panel.id) sessionStorage.setItem('adminPanelId', panel.id);
+      } catch(e) {}
+    });
+  });
+  // Save/Update buttons that use fetch — no reload so no jump
+})();
 </script>
 </body>
 </html>
