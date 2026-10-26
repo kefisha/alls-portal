@@ -3625,6 +3625,29 @@ app.get('/admin/timetable-pdf', (req, res) => {
     });
 });
 
+app.get('/api/teachers-for-class', (req, res) => {
+    const cls = (req.query.class || '').trim().toLowerCase();
+    if (!cls) return res.json({ teachers: [] });
+    db.all(`SELECT id, name, subject, assigned_sections FROM teachers`, [], (e, rows) => {
+        rows = rows || [];
+        const matched = rows.filter(t => {
+            const secs = String(t.assigned_sections || '').toLowerCase();
+            if (!secs) return false;
+            // match 5A, Grade 5A, 5 A etc.
+            const parts = secs.split(/[,;]+/).map(s => s.trim());
+            return parts.some(p => {
+                if (!p) return false;
+                if (p === cls) return true;
+                if (p.includes(cls) || cls.includes(p)) return true;
+                // normalize grade
+                const norm = (s) => s.replace(/grade\s*/i,'').replace(/\s+/g,'').toLowerCase();
+                return norm(p) === norm(cls);
+            });
+        }).map(t => ({ id: t.id, name: t.name, subject: t.subject || '', sections: t.assigned_sections || '' }));
+        res.json({ teachers: matched });
+    });
+});
+
 app.get('/api/timetable', (req, res) => {
     const cls = req.query.class || '';
     db.all(`SELECT * FROM timetable ORDER BY day_of_week, period_no`, [], (e, rows) => {
