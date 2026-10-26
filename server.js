@@ -4136,6 +4136,26 @@ h1{font-size:18px;margin:0 0 8px;color:#f8fafc}
 <option value="theme-green">Green</option>
 <option value="theme-royal">Royal</option>
 </select>
+<hr style="border-color:#334155;margin:14px 0">
+<label>➕ Add new text on certificate</label>
+<input id="newTextVal" placeholder="Type new text...">
+<div class="row2">
+<div><label>Size</label><input id="newTextSize" type="number" value="18" min="10" max="72"></div>
+<div><label>Color</label><input id="newTextColor" type="color" value="#1f4e79"></div>
+</div>
+<div class="row2">
+<div><label>Font</label>
+<select id="newTextFont">
+<option value="Georgia, serif">Georgia</option>
+<option value="Times New Roman, serif">Times</option>
+<option value="Segoe UI, sans-serif">Segoe UI</option>
+<option value="Garamond, serif">Garamond</option>
+<option value="Courier New, monospace">Courier</option>
+</select></div>
+<div><label><input id="newTextBold" type="checkbox"> Bold</label>
+<label><input id="newTextItalic" type="checkbox"> Italic</label></div>
+</div>
+<button type="button" class="sec" onclick="addCertText()">➕ Add text to certificate</button>
 <button type="button" class="gold" onclick="downloadPdf()">📥 Download Full-Page PDF</button>
 <button type="button" class="sec" onclick="window.print()">🖨️ Print Full Page</button>
 <p style="font-size:12px;margin-top:12px"><a href="/admin" style="color:#93c5fd">← Admin</a></p>
@@ -4214,6 +4234,30 @@ function sync(){
   if(cTitle&&ts){ cTitle.style.fontSize=(ts.value||36)+'px'; if(tc) cTitle.style.color=tc.value; }
   if(cName&&ns){ cName.style.fontSize=(ns.value||32)+'px'; if(nc) cName.style.color=nc.value; cName.style.fontWeight=(bn&&bn.checked)?'bold':'normal'; }
   if(cBody&&bs) cBody.style.fontSize=(bs.value||15)+'px';
+}
+var extraTexts=[];
+function addCertText(){
+  var val=(document.getElementById('newTextVal').value||'').trim();
+  if(!val){ alert('Type text first'); return; }
+  var size=document.getElementById('newTextSize').value||18;
+  var color=document.getElementById('newTextColor').value||'#1f4e79';
+  var font=document.getElementById('newTextFont').value||'Georgia, serif';
+  var bold=document.getElementById('newTextBold').checked;
+  var italic=document.getElementById('newTextItalic').checked;
+  var cert=document.getElementById('cert');
+  var div=document.createElement('div');
+  div.contentEditable='true';
+  div.className='extra-text';
+  div.textContent=val;
+  div.style.cssText='margin:8px auto;max-width:90%;font-size:'+size+'px;color:'+color+';font-family:'+font+
+    ';font-weight:'+(bold?'bold':'normal')+';font-style:'+(italic?'italic':'normal')+
+    ';cursor:text;padding:4px;border-radius:4px;';
+  // insert before seal
+  var seal=cert.querySelector('.seal');
+  if(seal) cert.insertBefore(div, seal);
+  else cert.appendChild(div);
+  document.getElementById('newTextVal').value='';
+  extraTexts.push(div);
 }
 function downloadPdf(){
   var el=document.getElementById('cert');
