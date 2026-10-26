@@ -169,38 +169,33 @@
         } catch(e) {}
         window.openAdminPanel = function(id) {
             try {
-                // Timetable / Exam → always at bottom wrap
-                if (id === 'timetable' || id === 'examSchedule') {
-                    var bsw = document.getElementById('bottomScheduleWrap');
-                    var el2 = document.getElementById(id);
-                    if (el2) {
-                        el2.classList.add('is-open');
-                        el2.style.setProperty('display', 'block', 'important');
-                        if (bsw) bsw.appendChild(el2);
-                        setTimeout(function(){ if(bsw) bsw.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 60);
-                    }
-                    return false;
-                }
                 var host = document.getElementById('toolsWorkspace');
+                if (!host) return false;
+                // Hide all tool panels inside host (except keep structure)
+                host.querySelectorAll('.admin-tools-panel').forEach(function(p) {
+                    p.classList.remove('is-open');
+                    p.style.setProperty('display', 'none', 'important');
+                });
+                // Also hide non-schedule cards that are panels at root
                 document.querySelectorAll('.admin-tools-panel').forEach(function(p) {
-                    if (p.id === 'timetable' || p.id === 'examSchedule') return; // keep schedules visible
+                    if (p.id === 'timetable' || p.id === 'examSchedule') return;
                     p.classList.remove('is-open');
                     p.style.setProperty('display', 'none', 'important');
                 });
                 var el = document.getElementById(id);
-                if (!el) { alert('Section not found: ' + id); return false; }
-                if (host && el.parentNode !== host) host.appendChild(el);
+                if (!el) { console.warn('missing', id); return false; }
+                // Move into workspace if needed
+                if (el.id !== 'timetable' && el.id !== 'examSchedule') {
+                    if (el.parentNode !== host) host.appendChild(el);
+                }
                 el.classList.add('is-open');
                 el.style.setProperty('display', 'block', 'important');
                 var hint = document.getElementById('toolsWorkspaceHint');
                 if (hint) hint.style.display = 'none';
-                setTimeout(function(){ if(host) host.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 60);
+                // Scroll ONLY the workspace into view — no jump to top
+                host.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
                 return false;
-            } catch (err) {
-                console.error(err);
-                alert(err.message);
-                return false;
-            }
+            } catch (err) { console.error(err); return false; }
         };
         </script>
 </head>
@@ -378,7 +373,7 @@ try{
             </div></div>
         </div>
 
-        <div id="toolsWorkspace" style="margin-top:14px;">
+        <div id="toolsWorkspace" style="margin-top:14px;min-height:200px;border:2px solid #cbd5e1;border-radius:14px;padding:12px;background:var(--card,#fff);">
             <p id="toolsWorkspaceHint" style="text-align:center;color:#64748b;font-size:13px;padding:12px;background:#f1f5f9;border-radius:10px;border:1px dashed #94a3b8;">
                 <span class="am">⬆️ Quick Link ይጫኑ — ይዘቱ <b>እዚህ ብቻ</b> ይከፈታል</span>
                 <span class="en">⬆️ Click a Quick Link — content opens <b>here only</b></span>
@@ -1779,5 +1774,16 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
+<script>
+/* BUILD_TT_ON_READY */
+document.addEventListener('DOMContentLoaded', function() {
+  if (typeof window.buildTTGrid === 'function') {
+    try { window.buildTTGrid({}); } catch(e) { console.error(e); }
+  }
+  if (typeof window.loadExamCalendar === 'function') {
+    try { window.loadExamCalendar(); } catch(e) {}
+  }
+});
+</script>
 </body>
 </html>
