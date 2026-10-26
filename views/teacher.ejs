@@ -91,7 +91,10 @@
         <form action="/teacher/homework" method="POST" style="margin-bottom:14px;">
             <input type="text" name="title" placeholder="Homework title" required>
             <textarea name="description" rows="2" placeholder="Instructions"></textarea>
-            <input type="text" name="class_level" placeholder="Class / Section e.g. 5A (required for students to see)" required value="<%= typeof selectedClass !== 'undefined' ? selectedClass : '' %>">
+            <select name="class_level" id="quizClassSelect" required style="width:100%;margin-bottom:8px;">
+              <option value="">— Select class / section —</option>
+              <% if (typeof selectedClass !== 'undefined' && selectedClass) { %><option value="<%= selectedClass %>" selected><%= selectedClass %></option><% } %>
+            </select>
             <input type="date" name="due_date">
             <button type="submit">📝 Assign Homework</button>
         </form>
@@ -117,7 +120,10 @@
             <p style="font-size:12px;color:#0369a1;margin:0 0 8px;">Only students in the selected class/section will see this handout or photo.</p>
             <form action="/teacher/handout" method="POST" enctype="multipart/form-data">
                 <input type="text" name="title" placeholder="Handout title" required style="width:100%;margin-bottom:8px;">
-                <input type="text" name="class_level" placeholder="Class / Section e.g. 5A (required)" required style="width:100%;margin-bottom:8px;">
+                <select name="class_level" id="handoutClassSelect" required style="width:100%;margin-bottom:8px;">
+                  <option value="">— Select your class / section —</option>
+                </select>
+                <input type="text" id="handoutClassOther" placeholder="Or type class if not listed" style="width:100%;margin-bottom:8px;display:none;">
                 <textarea name="note" rows="2" placeholder="Note / instruction (optional)" style="width:100%;margin-bottom:8px;"></textarea>
                 <label style="font-size:13px;font-weight:bold;">📷 Photo or file</label>
                 <input type="file" name="file" accept="image/*,.pdf,.doc,.docx" style="margin-bottom:8px;">
@@ -136,7 +142,10 @@
                 <span style="color:#666;">ጽሁፍ ብቻ paste ካደረጉ ቀመር ሊበላሽ ይችላል — ፎቶ ሁልጊዜ ይቀራል።</span>
             </div>
             <input type="text" name="title" placeholder="Quiz title" required>
-            <input type="text" name="class_level" placeholder="Class / Section e.g. 5A (required for students to see)" required value="<%= typeof selectedClass !== 'undefined' ? selectedClass : '' %>">
+            <select name="class_level" id="quizClassSelect" required style="width:100%;margin-bottom:8px;">
+              <option value="">— Select class / section —</option>
+              <% if (typeof selectedClass !== 'undefined' && selectedClass) { %><option value="<%= selectedClass %>" selected><%= selectedClass %></option><% } %>
+            </select>
             <input type="hidden" name="questions_json" id="questionsJson">
             <div id="quizQuestions"></div>
             <button type="button" onclick="addQuizQuestion()" style="background:#8e44ad;margin-top:8px;">➕ Add Question</button>
@@ -897,7 +906,39 @@
         else alert('Delete failed');
       });
   };
-  document.addEventListener('DOMContentLoaded', function(){ loadMyQuizzes(); loadMyHandouts(); });
+  document.addEventListener('DOMContentLoaded', function(){ loadMyQuizzes(); loadMyHandouts();
+  // Auto-fill class/section options from teacher's assigned sections
+  window.fillTeacherClassSelects = function(){
+    var sels = [document.getElementById('handoutClassSelect'), document.getElementById('quizClassSelect')];
+    fetch('/api/teacher/my-sections', { credentials:'same-origin' })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var secs = d.sections || [];
+        sels.forEach(function(sel){
+          if (!sel) return;
+          var cur = sel.value;
+          secs.forEach(function(s){
+            if (!s) return;
+            var opt = document.createElement('option');
+            opt.value = s; opt.textContent = s;
+            if (s === cur) opt.selected = true;
+            sel.appendChild(opt);
+          });
+          var other = document.createElement('option');
+          other.value = '__other__'; other.textContent = 'Other (type below)...';
+          sel.appendChild(other);
+          sel.addEventListener('change', function(){
+            if (sel.id === 'handoutClassSelect') {
+              var inp = document.getElementById('handoutClassOther');
+              if (!inp) return;
+              if (sel.value === '__other__') { inp.style.display='block'; inp.required=true; inp.name='class_level'; sel.name=''; }
+              else { inp.style.display='none'; inp.required=false; inp.name=''; sel.name='class_level'; }
+            }
+          });
+        });
+      }).catch(function(){});
+  };
+  fillTeacherClassSelects(); });
   loadMyQuizzes();
   window.loadMyHandouts = function(){
     fetch('/api/teacher/handouts', { credentials:'same-origin' })
@@ -919,9 +960,73 @@
     if (!confirm('Delete this handout/photo?')) return;
     fetch('/teacher/handout/'+id+'/delete', { method:'POST', credentials:'same-origin' })
       .then(function(r){ return r.json(); })
-      .then(function(d){ if(d.success) loadMyHandouts(); else alert('Delete failed'); });
+      .then(function(d){ if(d.success) loadMyHandouts();
+  // Auto-fill class/section options from teacher's assigned sections
+  window.fillTeacherClassSelects = function(){
+    var sels = [document.getElementById('handoutClassSelect'), document.getElementById('quizClassSelect')];
+    fetch('/api/teacher/my-sections', { credentials:'same-origin' })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var secs = d.sections || [];
+        sels.forEach(function(sel){
+          if (!sel) return;
+          var cur = sel.value;
+          secs.forEach(function(s){
+            if (!s) return;
+            var opt = document.createElement('option');
+            opt.value = s; opt.textContent = s;
+            if (s === cur) opt.selected = true;
+            sel.appendChild(opt);
+          });
+          var other = document.createElement('option');
+          other.value = '__other__'; other.textContent = 'Other (type below)...';
+          sel.appendChild(other);
+          sel.addEventListener('change', function(){
+            if (sel.id === 'handoutClassSelect') {
+              var inp = document.getElementById('handoutClassOther');
+              if (!inp) return;
+              if (sel.value === '__other__') { inp.style.display='block'; inp.required=true; inp.name='class_level'; sel.name=''; }
+              else { inp.style.display='none'; inp.required=false; inp.name=''; sel.name='class_level'; }
+            }
+          });
+        });
+      }).catch(function(){});
+  };
+  fillTeacherClassSelects(); else alert('Delete failed'); });
   };
   loadMyHandouts();
+  // Auto-fill class/section options from teacher's assigned sections
+  window.fillTeacherClassSelects = function(){
+    var sels = [document.getElementById('handoutClassSelect'), document.getElementById('quizClassSelect')];
+    fetch('/api/teacher/my-sections', { credentials:'same-origin' })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var secs = d.sections || [];
+        sels.forEach(function(sel){
+          if (!sel) return;
+          var cur = sel.value;
+          secs.forEach(function(s){
+            if (!s) return;
+            var opt = document.createElement('option');
+            opt.value = s; opt.textContent = s;
+            if (s === cur) opt.selected = true;
+            sel.appendChild(opt);
+          });
+          var other = document.createElement('option');
+          other.value = '__other__'; other.textContent = 'Other (type below)...';
+          sel.appendChild(other);
+          sel.addEventListener('change', function(){
+            if (sel.id === 'handoutClassSelect') {
+              var inp = document.getElementById('handoutClassOther');
+              if (!inp) return;
+              if (sel.value === '__other__') { inp.style.display='block'; inp.required=true; inp.name='class_level'; sel.name=''; }
+              else { inp.style.display='none'; inp.required=false; inp.name=''; sel.name='class_level'; }
+            }
+          });
+        });
+      }).catch(function(){});
+  };
+  fillTeacherClassSelects();
 })();
 </script>
 
