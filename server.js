@@ -4034,9 +4034,10 @@ button.sec{background:#475569}
 .cert.b-navy{border:20px solid #0f172a;border-image:linear-gradient(135deg,#1e3a8a,#c9a227) 1}
 .cert.b-soft{border:10px solid #cbd5e1;border-radius:24px}
 .cert.b-stamp{border:8px solid #b45309;box-shadow:inset 0 0 0 4px #fde68a,0 12px 40px rgba(0,0,0,.3)}
-.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;min-height:90px}
-.topbar .slot{width:100px;height:100px;border:2px dashed #94a3b8;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#f8fafc}
-.topbar .slot img{width:100%;height:100%;object-fit:cover}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;min-height:90px;gap:12px}
+.topbar .slot{width:110px;height:110px;border:none;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:transparent;padding:0}
+.topbar .slot.empty{border:1px dashed #cbd5e1;background:#f8fafc}
+.topbar .slot img{width:100%;height:100%;object-fit:contain;display:block;border:none;outline:none;box-shadow:none}
 .topbar .slot span{font-size:10px;color:#94a3b8;padding:4px;text-align:center}
 .ornament{font-size:18px;color:#c9a227;letter-spacing:8px}
 .school{font-size:14px;letter-spacing:3px;color:#1f4e79;font-weight:800;text-transform:uppercase}
@@ -4138,12 +4139,12 @@ h1{font-size:18px;margin:0 0 8px;color:#f8fafc}
 <div class="stage">
 <div class="cert b-classic" id="cert">
   <div class="topbar">
-    <div class="slot" id="logoSlot"><span>Org Logo</span><img id="cLogo" alt="" style="display:none"></div>
+    <div class="slot empty" id="logoSlot"><span>Org Logo</span><img id="cLogo" alt="" style="display:none"></div>
     <div style="flex:1;padding:0 12px">
       <div class="ornament">✦ ◆ ✦</div>
       <div class="school" id="cSchool">AMANUEL LIGHT & LIFE SCHOOL</div>
     </div>
-    <div class="slot" id="photoSlot"><span>Photo</span><img id="cPhoto" alt="" style="display:none"></div>
+    <div class="slot empty" id="photoSlot"><span>Photo</span><img id="cPhoto" alt="" style="display:none"></div>
   </div>
   <div class="title" id="cTitle">Certificate of Completion</div>
   <div class="subtitle" id="cSub">This is proudly presented to</div>
@@ -4158,15 +4159,22 @@ h1{font-size:18px;margin:0 0 8px;color:#f8fafc}
 </div>
 </div>
 <script>
-function readFileTo(imgId, fileInput, placeholderSpanParent){
+function readFileTo(imgId, fileInput){
   var f=fileInput.files&&fileInput.files[0];
   if(!f) return;
   var r=new FileReader();
   r.onload=function(){
     var img=document.getElementById(imgId);
-    img.src=r.result; img.style.display='block';
-    var span=img.parentNode.querySelector('span');
+    var slot=img.parentNode;
+    img.src=r.result;
+    img.style.display='block';
+    img.style.border='none';
+    img.style.outline='none';
+    var span=slot.querySelector('span');
     if(span) span.style.display='none';
+    slot.classList.remove('empty');
+    slot.style.border='none';
+    slot.style.background='transparent';
   };
   r.readAsDataURL(f);
 }
@@ -4183,9 +4191,10 @@ function sync(){
   });
   var ph=document.getElementById('fPhoto');
   var img=document.getElementById('cPhoto');
-  if(ph&&img&&ph.value&&!document.getElementById('photoFile').files.length){
-    img.src=ph.value; img.style.display='block';
-    var span=img.parentNode.querySelector('span'); if(span) span.style.display='none';
+  if(ph&&img&&ph.value&&!(document.getElementById('photoFile').files||[]).length){
+    img.src=ph.value; img.style.display='block'; img.style.border='none';
+    var slot=img.parentNode; slot.classList.remove('empty'); slot.style.border='none'; slot.style.background='transparent';
+    var span=slot.querySelector('span'); if(span) span.style.display='none';
   }
   var font=document.getElementById('fFont');
   if(font) c.style.fontFamily=font.value;
