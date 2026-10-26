@@ -57,6 +57,11 @@
         .ql-editor { min-height: 130px; }
         .admin-tools-panel { display: none !important; }
         .admin-tools-panel.is-open { display: block !important; }
+        #toolsWorkspace > .card.is-open,
+        #toolsWorkspace > .admin-tools-panel.is-open { display: block !important; }
+        #toolsWorkspace #timetable,
+        #toolsWorkspace #examSchedule { display: block !important; }
+        #toolsWorkspace { scroll-margin-top: 12px; }
         /* Always-visible schedule panels at bottom */
         #bottomScheduleWrap .admin-tools-panel,
         #bottomScheduleWrap #timetable,
@@ -170,32 +175,42 @@
         window.openAdminPanel = function(id) {
             try {
                 var host = document.getElementById('toolsWorkspace');
-                if (!host) return false;
-                // Hide all tool panels inside host (except keep structure)
-                host.querySelectorAll('.admin-tools-panel').forEach(function(p) {
-                    p.classList.remove('is-open');
-                    p.style.setProperty('display', 'none', 'important');
+                var panels = ['announcements','fees','librarySection','restoreBackup','teacherAssign','timetable','examSchedule'];
+                panels.forEach(function(pid) {
+                    var p = document.getElementById(pid);
+                    if (!p) return;
+                    if (pid === id) {
+                        // toggle open/close in place
+                        var open = p.style.display === 'block' || p.classList.contains('is-open');
+                        if (open && p.dataset.forceShow !== '1') {
+                            // keep schedules always option: just ensure visible
+                            p.style.display = 'block';
+                            p.classList.add('is-open');
+                        } else {
+                            p.style.display = 'block';
+                            p.classList.add('is-open');
+                        }
+                    } else if (pid !== 'timetable' && pid !== 'examSchedule') {
+                        p.style.display = 'none';
+                        p.classList.remove('is-open');
+                    }
                 });
-                // Also hide non-schedule cards that are panels at root
-                document.querySelectorAll('.admin-tools-panel').forEach(function(p) {
-                    if (p.id === 'timetable' || p.id === 'examSchedule') return;
-                    p.classList.remove('is-open');
-                    p.style.setProperty('display', 'none', 'important');
-                });
+                // Show only requested panel among tools (fees, library, etc.)
                 var el = document.getElementById(id);
-                if (!el) { console.warn('missing', id); return false; }
-                // Move into workspace if needed
-                if (el.id !== 'timetable' && el.id !== 'examSchedule') {
-                    if (el.parentNode !== host) host.appendChild(el);
-                }
+                if (!el) return false;
+                el.style.display = 'block';
                 el.classList.add('is-open');
-                el.style.setProperty('display', 'block', 'important');
                 var hint = document.getElementById('toolsWorkspaceHint');
                 if (hint) hint.style.display = 'none';
-                // Scroll ONLY the workspace into view — no jump to top
-                host.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+                // In-place: scroll toolsWorkspace only if needed, block nearest
+                if (host) {
+                    var rect = host.getBoundingClientRect();
+                    if (rect.top < 0 || rect.bottom > window.innerHeight) {
+                        host.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                }
                 return false;
-            } catch (err) { console.error(err); return false; }
+            } catch (e) { console.error(e); return false; }
         };
         </script>
 </head>
@@ -359,17 +374,17 @@ try{
             <h3>🔗 Quick Links</h3>
             <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
                 <a href="#timetable" onclick="event.preventDefault();var e=document.getElementById('timetable');if(e){e.scrollIntoView({behavior:'smooth',block:'nearest'});}return false;" style="background:#2980b9;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📅 Schedule / Timetable</a>
-                <a href="#librarySection" onclick="event.preventDefault();window.openAdminPanel('librarySection');return false;" style="background:#8e44ad;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📖 Library Upload</a>
-                <a href="#announcements" onclick="event.preventDefault();window.openAdminPanel('announcements');return false;" style="background:#64748b;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📢 Announcements Board</a>
-                <a href="#fees" onclick="event.preventDefault();window.openAdminPanel('fees');return false;" style="background:#16a085;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">💰 Fee Ledger</a>
+                <a href="javascript:void(0)" onclick="window.openAdminPanel('librarySection');return false;" style="background:#8e44ad;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📖 Library Upload</a>
+                <a href="javascript:void(0)" onclick="window.openAdminPanel('announcements');return false;" style="background:#64748b;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📢 Announcements Board</a>
+                <a href="javascript:void(0)" onclick="window.openAdminPanel('fees');return false;" style="background:#16a085;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">💰 Fee Ledger</a>
                 <a href="/learning-hub" style="background:#1f4e79;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📚 Learning Hub</a>
                 <a href="/qr-scan" style="background:#e67e22;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📷 QR Attendance</a>
                 <a href="/admin/backup-export" style="background:#27ae60;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📦 Full Backup (JSON)</a>
                 <a href="/admin/attendance-report" style="background:#0f766e;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📋 Attendance Report</a>
                 <a href="/admin/certificate" style="background:#a16207;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">🎓 Certificate</a>
                 <a href="#examSchedule" onclick="event.preventDefault();var e=document.getElementById('examSchedule');if(e){e.scrollIntoView({behavior:'smooth',block:'nearest'});}return false;" style="background:#7c3aed;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📝 Exam Schedule</a>
-                <a href="#restoreBackup" onclick="event.preventDefault();window.openAdminPanel('restoreBackup');return false;" style="background:#b91c1c;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">♻️ Restore Backup</a>
-                <a href="#teacherAssign" onclick="event.preventDefault();window.openAdminPanel('teacherAssign');return false;" style="background:#0e7490;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">👨‍🏫 Teacher Assign / Replace</a>
+                <a href="javascript:void(0)" onclick="window.openAdminPanel('restoreBackup');return false;" style="background:#b91c1c;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">♻️ Restore Backup</a>
+                <a href="javascript:void(0)" onclick="window.openAdminPanel('teacherAssign');return false;" style="background:#0e7490;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">👨‍🏫 Teacher Assign / Replace</a>
             </div></div>
         </div>
 
@@ -389,8 +404,15 @@ try{
                 </div>
                 <div style="overflow-x:auto;">
                     <table id="ttGrid" style="font-size:12px;min-width:700px;">
-                        <thead><tr><th>Day \ Period</th><th>P1</th><th>P2</th><th>P3</th><th>P4</th><th>P5</th><th>P6</th></tr></thead>
-                        <tbody></tbody>
+                        <thead><tr><th>Day</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th></tr></thead>
+
+<tbody>
+<tr><td style="font-weight:bold;background:#eef2ff">Monday</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="font-weight:bold;background:#eef2ff">Tuesday</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="font-weight:bold;background:#eef2ff">Wednesday</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="font-weight:bold;background:#eef2ff">Thursday</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="font-weight:bold;background:#eef2ff">Friday</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+</tbody>
                     </table>
                 </div>
             </div>
@@ -1439,9 +1461,9 @@ try{
             if (!tb) return;
             // Header: Day | P1 ... P6
             if (thead) {
-                thead.innerHTML = '<tr><th style="min-width:90px">Day</th>' +
+                thead.innerHTML = '<tr><th style="min-width:100px">Day</th>' +
                     [1,2,3,4,5,6].map(function(p){
-                        return '<th>P'+p+'<br><small style="font-weight:normal;opacity:.85">'+(window._ttTimes[p]||'')+'</small></th>';
+                        return '<th style="min-width:110px"><b>'+p+'</b><br><small style="font-weight:normal;opacity:.9">'+(window._ttTimes[p]||'')+'</small></th>';
                     }).join('') + '</tr>';
             }
             tb.innerHTML = '';
