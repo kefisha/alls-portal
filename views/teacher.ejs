@@ -70,6 +70,7 @@
 
 </style>
 </head>
+<script>window.TEACHER_SECTIONS = <%- typeof teacherSectionsJson !== 'undefined' ? teacherSectionsJson : '[]' %>;</script>
 <body class="lang-am">
     <div class="container">
         <div id="topLogout" style="display:flex;justify-content:flex-end;margin-bottom:12px;gap:8px;flex-wrap:wrap;">
@@ -795,15 +796,66 @@
     }).catch(function(){});
 </script>
 
+
 <script>
 (function(){
-  function loadMyQuizzes(){
+  function secsList(){
+    var s = window.TEACHER_SECTIONS;
+    if (Array.isArray(s) && s.length) return s;
+    return [];
+  }
+  function fillSelect(sel){
+    if (!sel) return;
+    var cur = sel.value;
+    var have = {};
+    Array.prototype.forEach.call(sel.options, function(o){ have[o.value]=true; });
+    secsList().forEach(function(sec){
+      if (!sec || have[sec]) return;
+      var opt = document.createElement('option');
+      opt.value = sec; opt.textContent = sec;
+      if (sec === cur) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+  function fillAllClassSelects(){
+    ['handoutClassSelect','quizClassSelect'].forEach(function(id){
+      fillSelect(document.getElementById(id));
+    });
+    // homework class if select/input
+    var hw = document.querySelector('form[action="/teacher/homework"] input[name="class_level"], form[action="/teacher/homework"] select[name="class_level"]');
+    if (hw && hw.tagName === 'SELECT') fillSelect(hw);
+    // convert homework text to select if needed
+    var hwForm = document.querySelector('form[action="/teacher/homework"]');
+    if (hwForm) {
+      var inp = hwForm.querySelector('input[name="class_level"]');
+      if (inp && !hwForm.querySelector('select[name="class_level"]')) {
+        var sel = document.createElement('select');
+        sel.name = 'class_level';
+        sel.required = true;
+        sel.style.cssText = inp.style.cssText || 'width:100%;margin-bottom:8px;';
+        sel.innerHTML = '<option value="">— Select class / section —</option>';
+        secsList().forEach(function(s){
+          var o=document.createElement('option'); o.value=s; o.textContent=s;
+          if (inp.value && inp.value===s) o.selected=true;
+          sel.appendChild(o);
+        });
+        inp.parentNode.replaceChild(sel, inp);
+      }
+    }
+  }
+
+  window.loadMyQuizzes = function(){
+    var box = document.getElementById('myQuizzesList');
+    if (!box) return;
+    box.innerHTML = 'Loading...';
     fetch('/api/teacher/quizzes', { credentials:'same-origin' })
-      .then(r=>r.json())
+      .then(function(r){ return r.json(); })
       .then(function(d){
-        var box = document.getElementById('myQuizzesList');
-        if (!box) return;
-        if (!d.success || !(d.quizzes||[]).length) {
+        if (!d || !d.success) {
+          box.innerHTML = '<p style="color:#c00;margin:0">Failed: '+(d && d.error ? d.error : 'unknown')+'</p>';
+          return;
+        }
+        if (!(d.quizzes||[]).length) {
           box.innerHTML = '<p style="color:#64748b;margin:0">No quizzes yet. Create one below.</p>';
           return;
         }
@@ -815,14 +867,42 @@
             '<a href="/quiz/'+q.id+'" target="_blank" style="background:#2980b9;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:bold;">▶️ Open</a>'+
           '</div>';
         }).join('');
-      }).catch(function(){
-        var box = document.getElementById('myQuizzesList');
-        if (box) box.innerHTML = '<p style="color:#c00">Failed to load quizzes</p>';
+      })
+      .catch(function(err){
+        box.innerHTML = '<p style="color:#c00;margin:0">Network error loading quizzes</p>';
       });
-  }
+  };
+
+  window.loadMyHandouts = function(){
+    var box = document.getElementById('myHandoutsList');
+    if (!box) return;
+    box.innerHTML = 'Loading...';
+    fetch('/api/teacher/handouts', { credentials:'same-origin' })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (!d || !d.success) { box.innerHTML = '<p style="color:#c00;margin:0">Failed to load handouts</p>'; return; }
+        if (!(d.rows||[]).length) { box.innerHTML = '<p style="color:#64748b;margin:0">No handouts yet.</p>'; return; }
+        box.innerHTML = d.rows.map(function(h){
+          var link = h.file_path ? ('<a href="/uploads/'+h.file_path+'" target="_blank">Open</a>') : '';
+          return '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #bae6fd;">'+
+            '<div style="flex:1;min-width:140px"><b>'+(h.title||'')+'</b><br><small>Class: '+(h.class_level||'')+'</small> '+link+'</div>'+
+            '<button type="button" onclick="deleteHandout('+h.id+')" style="background:#e74c3c;color:#fff;border:none;padding:6px 10px;border-radius:6px;">🗑️ Delete</button>'+
+          '</div>';
+        }).join('');
+      })
+      .catch(function(){ box.innerHTML = '<p style="color:#c00">Failed to load</p>'; });
+  };
+
+  window.deleteHandout = function(id){
+    if (!confirm('Delete this handout/photo?')) return;
+    fetch('/teacher/handout/'+id+'/delete', { method:'POST', credentials:'same-origin' })
+      .then(function(r){ return r.json(); })
+      .then(function(d){ if(d.success) loadMyHandouts(); else alert('Delete failed'); });
+  };
+
   window.editQuiz = function(id){
     fetch('/api/teacher/quiz/'+id, { credentials:'same-origin' })
-      .then(r=>r.json())
+      .then(function(r){ return r.json(); })
       .then(function(d){
         if (!d.success) { alert('Cannot load quiz'); return; }
         var q = d.quiz;
@@ -834,9 +914,9 @@
         (q.questions||[]).forEach(function(qq, i){ appendEditQ(wrap, qq, i); });
         if (!(q.questions||[]).length) appendEditQ(wrap, {}, 0);
         document.getElementById('quizEditPanel').style.display = 'block';
-        document.getElementById('quizEditPanel').scrollIntoView({ block:'nearest' });
       });
   };
+
   function appendEditQ(wrap, qq, i){
     qq = qq || {};
     var opts = qq.options || {};
@@ -846,22 +926,24 @@
     div.innerHTML =
       '<div style="display:flex;justify-content:space-between;align-items:center"><b>Q'+(i+1)+'</b>'+
       '<button type="button" class="del-eq" style="background:#e74c3c;color:#fff;border:none;border-radius:6px;padding:4px 10px;">🗑️</button></div>'+
-      '<textarea class="eq-q" rows="2" placeholder="Question" style="width:100%;margin:6px 0;">'+(qq.q||'').replace(/</g,'&lt;')+'</textarea>'+
+      '<textarea class="eq-q" rows="2" placeholder="Question" style="width:100%;margin:6px 0;"></textarea>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">'+
-      '<input class="eq-A" placeholder="A" value="'+(opts.A||'').replace(/"/g,'&quot;')+'">'+
-      '<input class="eq-B" placeholder="B" value="'+(opts.B||'').replace(/"/g,'&quot;')+'">'+
-      '<input class="eq-C" placeholder="C" value="'+(opts.C||'').replace(/"/g,'&quot;')+'">'+
-      '<input class="eq-D" placeholder="D" value="'+(opts.D||'').replace(/"/g,'&quot;')+'">'+
+      '<input class="eq-A" placeholder="A">'+
+      '<input class="eq-B" placeholder="B">'+
+      '<input class="eq-C" placeholder="C">'+
+      '<input class="eq-D" placeholder="D">'+
       '</div>'+
-      '<input class="eq-a" placeholder="Correct answer (A/B/C/D)" value="'+(qq.a||'')+'" style="width:100%;margin-top:6px;">'+
-      '<textarea class="eq-d" rows="2" placeholder="Explanation (optional)" style="width:100%;margin-top:6px;">'+(qq.desc||'').replace(/</g,'&lt;')+'</textarea>';
+      '<input class="eq-a" placeholder="Correct answer (A/B/C/D)" style="width:100%;margin-top:6px;">'+
+      '<textarea class="eq-d" rows="2" placeholder="Explanation (optional)" style="width:100%;margin-top:6px;"></textarea>';
     wrap.appendChild(div);
-    div.querySelector('.del-eq').onclick = function(){ div.remove(); renumberEditQ(); };
-  }
-  function renumberEditQ(){
-    document.querySelectorAll('#editQuestions .edit-qblock').forEach(function(div,i){
-      var b = div.querySelector('b'); if (b) b.textContent = 'Q'+(i+1);
-    });
+    div.querySelector('.eq-q').value = qq.q || '';
+    div.querySelector('.eq-A').value = opts.A || '';
+    div.querySelector('.eq-B').value = opts.B || '';
+    div.querySelector('.eq-C').value = opts.C || '';
+    div.querySelector('.eq-D').value = opts.D || '';
+    div.querySelector('.eq-a').value = qq.a || '';
+    div.querySelector('.eq-d').value = qq.desc || '';
+    div.querySelector('.del-eq').onclick = function(){ div.remove(); };
   }
   window.addEditQuestion = function(){
     var wrap = document.getElementById('editQuestions');
@@ -900,135 +982,26 @@
   window.deleteQuiz = function(id){
     if (!confirm('Delete this quiz?')) return;
     fetch('/teacher/quiz/'+id+'/delete', { method:'POST', credentials:'same-origin' })
-      .then(r=>r.json())
-      .then(function(d){
-        if (d.success) loadMyQuizzes();
-        else alert('Delete failed');
-      });
-  };
-  document.addEventListener('DOMContentLoaded', function(){ loadMyQuizzes(); loadMyHandouts();
-  // Auto-fill class/section options from teacher's assigned sections
-  window.fillTeacherClassSelects = function(){
-    var sels = [document.getElementById('handoutClassSelect'), document.getElementById('quizClassSelect')];
-    fetch('/api/teacher/my-sections', { credentials:'same-origin' })
       .then(function(r){ return r.json(); })
-      .then(function(d){
-        var secs = d.sections || [];
-        sels.forEach(function(sel){
-          if (!sel) return;
-          var cur = sel.value;
-          secs.forEach(function(s){
-            if (!s) return;
-            var opt = document.createElement('option');
-            opt.value = s; opt.textContent = s;
-            if (s === cur) opt.selected = true;
-            sel.appendChild(opt);
-          });
-          var other = document.createElement('option');
-          other.value = '__other__'; other.textContent = 'Other (type below)...';
-          sel.appendChild(other);
-          sel.addEventListener('change', function(){
-            if (sel.id === 'handoutClassSelect') {
-              var inp = document.getElementById('handoutClassOther');
-              if (!inp) return;
-              if (sel.value === '__other__') { inp.style.display='block'; inp.required=true; inp.name='class_level'; sel.name=''; }
-              else { inp.style.display='none'; inp.required=false; inp.name=''; sel.name='class_level'; }
-            }
-          });
-        });
-      }).catch(function(){});
+      .then(function(d){ if (d.success) loadMyQuizzes(); else alert('Delete failed'); });
   };
-  fillTeacherClassSelects(); });
+
+  // also fetch sections from API as backup
+  fetch('/api/teacher/my-sections', { credentials:'same-origin' })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.sections && d.sections.length) {
+        window.TEACHER_SECTIONS = d.sections;
+      }
+      fillAllClassSelects();
+    })
+    .catch(function(){ fillAllClassSelects(); });
+
   loadMyQuizzes();
-  window.loadMyHandouts = function(){
-    fetch('/api/teacher/handouts', { credentials:'same-origin' })
-      .then(function(r){ return r.json(); })
-      .then(function(d){
-        var box = document.getElementById('myHandoutsList');
-        if (!box) return;
-        if (!d.success || !(d.rows||[]).length) { box.innerHTML = '<p style="color:#64748b;margin:0">No handouts yet.</p>'; return; }
-        box.innerHTML = d.rows.map(function(h){
-          var link = h.file_path ? ('<a href="/uploads/'+h.file_path+'" target="_blank">Open</a>') : '';
-          return '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #bae6fd;">'+
-            '<div style="flex:1;min-width:140px"><b>'+(h.title||'')+'</b><br><small>Class: '+(h.class_level||'')+'</small> '+link+'</div>'+
-            '<button type="button" onclick="deleteHandout('+h.id+')" style="background:#e74c3c;color:#fff;border:none;padding:6px 10px;border-radius:6px;">🗑️ Delete</button>'+
-          '</div>';
-        }).join('');
-      }).catch(function(){ var box=document.getElementById('myHandoutsList'); if(box) box.innerHTML='Failed to load'; });
-  };
-  window.deleteHandout = function(id){
-    if (!confirm('Delete this handout/photo?')) return;
-    fetch('/teacher/handout/'+id+'/delete', { method:'POST', credentials:'same-origin' })
-      .then(function(r){ return r.json(); })
-      .then(function(d){ if(d.success) loadMyHandouts();
-  // Auto-fill class/section options from teacher's assigned sections
-  window.fillTeacherClassSelects = function(){
-    var sels = [document.getElementById('handoutClassSelect'), document.getElementById('quizClassSelect')];
-    fetch('/api/teacher/my-sections', { credentials:'same-origin' })
-      .then(function(r){ return r.json(); })
-      .then(function(d){
-        var secs = d.sections || [];
-        sels.forEach(function(sel){
-          if (!sel) return;
-          var cur = sel.value;
-          secs.forEach(function(s){
-            if (!s) return;
-            var opt = document.createElement('option');
-            opt.value = s; opt.textContent = s;
-            if (s === cur) opt.selected = true;
-            sel.appendChild(opt);
-          });
-          var other = document.createElement('option');
-          other.value = '__other__'; other.textContent = 'Other (type below)...';
-          sel.appendChild(other);
-          sel.addEventListener('change', function(){
-            if (sel.id === 'handoutClassSelect') {
-              var inp = document.getElementById('handoutClassOther');
-              if (!inp) return;
-              if (sel.value === '__other__') { inp.style.display='block'; inp.required=true; inp.name='class_level'; sel.name=''; }
-              else { inp.style.display='none'; inp.required=false; inp.name=''; sel.name='class_level'; }
-            }
-          });
-        });
-      }).catch(function(){});
-  };
-  fillTeacherClassSelects(); else alert('Delete failed'); });
-  };
   loadMyHandouts();
-  // Auto-fill class/section options from teacher's assigned sections
-  window.fillTeacherClassSelects = function(){
-    var sels = [document.getElementById('handoutClassSelect'), document.getElementById('quizClassSelect')];
-    fetch('/api/teacher/my-sections', { credentials:'same-origin' })
-      .then(function(r){ return r.json(); })
-      .then(function(d){
-        var secs = d.sections || [];
-        sels.forEach(function(sel){
-          if (!sel) return;
-          var cur = sel.value;
-          secs.forEach(function(s){
-            if (!s) return;
-            var opt = document.createElement('option');
-            opt.value = s; opt.textContent = s;
-            if (s === cur) opt.selected = true;
-            sel.appendChild(opt);
-          });
-          var other = document.createElement('option');
-          other.value = '__other__'; other.textContent = 'Other (type below)...';
-          sel.appendChild(other);
-          sel.addEventListener('change', function(){
-            if (sel.id === 'handoutClassSelect') {
-              var inp = document.getElementById('handoutClassOther');
-              if (!inp) return;
-              if (sel.value === '__other__') { inp.style.display='block'; inp.required=true; inp.name='class_level'; sel.name=''; }
-              else { inp.style.display='none'; inp.required=false; inp.name=''; sel.name='class_level'; }
-            }
-          });
-        });
-      }).catch(function(){});
-  };
-  fillTeacherClassSelects();
 })();
 </script>
+
 
 </body>
 </html>
