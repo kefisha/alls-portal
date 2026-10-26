@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="am">
 <head>
@@ -56,8 +55,14 @@
         .ql-toolbar.ql-snow { background: #f8fafc; border: 1px solid #ccc !important; border-radius: 6px 6px 0 0; flex-wrap: wrap; }
         .ql-container.ql-snow { border: 1px solid #ccc !important; min-height: 140px; background: #fff; }
         .ql-editor { min-height: 130px; }
-        .admin-tools-panel { display: none !important; }
+        .admin-tools-panel { display: none; }
         .admin-tools-panel.is-open { display: block !important; }
+        /* inline style.display=block must win when toggled */
+        #announcements[style*="block"],
+        #fees[style*="block"],
+        #librarySection[style*="block"],
+        #restoreBackup[style*="block"],
+        #teacherAssign[style*="block"] { display: block !important; }
         #toolsWorkspace > .card.is-open,
         #toolsWorkspace > .admin-tools-panel.is-open { display: block !important; }
         #toolsWorkspace #timetable,
@@ -174,45 +179,18 @@
             document.documentElement.setAttribute('data-lang', pl);
         } catch(e) {}
         window.openAdminPanel = function(id) {
-            try {
-                var host = document.getElementById('toolsWorkspace');
-                var panels = ['announcements','fees','librarySection','restoreBackup','teacherAssign','timetable','examSchedule'];
-                panels.forEach(function(pid) {
-                    var p = document.getElementById(pid);
-                    if (!p) return;
-                    if (pid === id) {
-                        // toggle open/close in place
-                        var open = p.style.display === 'block' || p.classList.contains('is-open');
-                        if (open && p.dataset.forceShow !== '1') {
-                            // keep schedules always option: just ensure visible
-                            p.style.display = 'block';
-                            p.classList.add('is-open');
-                        } else {
-                            p.style.display = 'block';
-                            p.classList.add('is-open');
-                        }
-                    } else if (pid !== 'timetable' && pid !== 'examSchedule') {
-                        p.style.display = 'none';
-                        p.classList.remove('is-open');
-                    }
-                });
-                // Show only requested panel among tools (fees, library, etc.)
-                var el = document.getElementById(id);
-                if (!el) return false;
-                el.style.display = 'block';
-                el.classList.add('is-open');
-                var hint = document.getElementById('toolsWorkspaceHint');
-                if (hint) hint.style.display = 'none';
-                // In-place: scroll toolsWorkspace only if needed, block nearest
-                if (host) {
-                    var rect = host.getBoundingClientRect();
-                    if (rect.top < 0 || rect.bottom > window.innerHeight) {
-                        host.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    }
-                }
-                return false;
-            } catch (e) { console.error(e); return false; }
+            var el = document.getElementById(id);
+            if (!el) return false;
+            // close other tool panels
+            ['announcements','fees','librarySection','restoreBackup','teacherAssign'].forEach(function(pid) {
+                var p = document.getElementById(pid);
+                if (p && pid !== id) { p.style.display = 'none'; }
+            });
+            // toggle this one in place
+            el.style.display = (el.style.display === 'none' || !el.style.display || el.style.display === '') ? 'block' : 'none';
+            return false;
         };
+        window.togglePanel = window.openAdminPanel;
         </script>
 </head>
 <body class="lang-am">
@@ -375,17 +353,17 @@ try{
             <h3>🔗 Quick Links</h3>
             <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
                 <a href="#timetable" onclick="event.preventDefault();var e=document.getElementById('timetable');if(e){e.scrollIntoView({behavior:'smooth',block:'nearest'});}return false;" style="background:#2980b9;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📅 Schedule / Timetable</a>
-                <a href="javascript:void(0)" onclick="window.openAdminPanel('librarySection');return false;" style="background:#8e44ad;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📖 Library Upload</a>
-                <a href="javascript:void(0)" onclick="window.openAdminPanel('announcements');return false;" style="background:#64748b;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📢 Announcements Board</a>
-                <a href="javascript:void(0)" onclick="window.openAdminPanel('fees');return false;" style="background:#16a085;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">💰 Fee Ledger</a>
+                <a href="#" onclick="event.preventDefault();var el=document.getElementById('librarySection');if(!el)return false;['announcements','fees','librarySection','restoreBackup','teacherAssign'].forEach(function(p){var x=document.getElementById(p);if(x&&p!=='librarySection')x.style.display='none';});if('librarySection'==='timetable'||'librarySection'==='examSchedule'){el.scrollIntoView({block:'nearest'});}else{el.style.display=(el.style.display==='block')?'none':'block';}return false;" style="background:#8e44ad;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📖 Library Upload</a>
+                <a href="#" onclick="event.preventDefault();var el=document.getElementById('announcements');if(!el)return false;['announcements','fees','librarySection','restoreBackup','teacherAssign'].forEach(function(p){var x=document.getElementById(p);if(x&&p!=='announcements')x.style.display='none';});if('announcements'==='timetable'||'announcements'==='examSchedule'){el.scrollIntoView({block:'nearest'});}else{el.style.display=(el.style.display==='block')?'none':'block';}return false;" style="background:#64748b;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📢 Announcements Board</a>
+                <a href="#" onclick="event.preventDefault();var el=document.getElementById('fees');if(!el)return false;['announcements','fees','librarySection','restoreBackup','teacherAssign'].forEach(function(p){var x=document.getElementById(p);if(x&&p!=='fees')x.style.display='none';});if('fees'==='timetable'||'fees'==='examSchedule'){el.scrollIntoView({block:'nearest'});}else{el.style.display=(el.style.display==='block')?'none':'block';}return false;" style="background:#16a085;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">💰 Fee Ledger</a>
                 <a href="/learning-hub" style="background:#1f4e79;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📚 Learning Hub</a>
                 <a href="/qr-scan" style="background:#e67e22;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📷 QR Attendance</a>
                 <a href="/admin/backup-export" style="background:#27ae60;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📦 Full Backup (JSON)</a>
                 <a href="/admin/attendance-report" style="background:#0f766e;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📋 Attendance Report</a>
                 <a href="/admin/certificate" style="background:#a16207;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">🎓 Certificate</a>
                 <a href="#examSchedule" onclick="event.preventDefault();var e=document.getElementById('examSchedule');if(e){e.scrollIntoView({behavior:'smooth',block:'nearest'});}return false;" style="background:#7c3aed;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📝 Exam Schedule</a>
-                <a href="javascript:void(0)" onclick="window.openAdminPanel('restoreBackup');return false;" style="background:#b91c1c;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">♻️ Restore Backup</a>
-                <a href="javascript:void(0)" onclick="window.openAdminPanel('teacherAssign');return false;" style="background:#0e7490;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">👨‍🏫 Teacher Assign / Replace</a>
+                <a href="#" onclick="event.preventDefault();var el=document.getElementById('restoreBackup');if(!el)return false;['announcements','fees','librarySection','restoreBackup','teacherAssign'].forEach(function(p){var x=document.getElementById(p);if(x&&p!=='restoreBackup')x.style.display='none';});if('restoreBackup'==='timetable'||'restoreBackup'==='examSchedule'){el.scrollIntoView({block:'nearest'});}else{el.style.display=(el.style.display==='block')?'none':'block';}return false;" style="background:#b91c1c;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">♻️ Restore Backup</a>
+                <a href="#" onclick="event.preventDefault();var el=document.getElementById('teacherAssign');if(!el)return false;['announcements','fees','librarySection','restoreBackup','teacherAssign'].forEach(function(p){var x=document.getElementById(p);if(x&&p!=='teacherAssign')x.style.display='none';});if('teacherAssign'==='timetable'||'teacherAssign'==='examSchedule'){el.scrollIntoView({block:'nearest'});}else{el.style.display=(el.style.display==='block')?'none':'block';}return false;" style="background:#0e7490;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">👨‍🏫 Teacher Assign / Replace</a>
             </div></div>
         </div>
 
@@ -394,7 +372,7 @@ try{
                 <span class="am">⬆️ Quick Link ይጫኑ — ይዘቱ <b>እዚህ ብቻ</b> ይከፈታል</span>
                 <span class="en">⬆️ Click a Quick Link — content opens <b>here only</b></span>
             </p>
-<div class="card" id="timetable" style="grid-column: 1 / -1;">
+<div class="card" id="timetable" style="display:block;grid-column: 1 / -1;">
                 <h3><span class="am">📅 የሰዓት ሰንጠረዥ (Table) ሰኞ–አርብ · 1–6</span><span class="en">📅 Timetable Table Mon–Fri · Periods 1–6</span></h3>
                 <p><a href="/admin/timetable-pdf" target="_blank" style="display:inline-block;padding:8px 14px;background:#0f766e;color:#fff;border-radius:8px;text-decoration:none;font-weight:bold;">📄 Download / Print PDF</a></p>
                 <p style="font-size:12px;color:var(--text2);">P1 8:00–8:45 · P2 8:45–9:30 · P3 9:30–10:15 · P4 10:15–11:00 · P5 11:00–11:45 · P6 11:45–12:30 · <b>Break 4:00–4:15 (15 min)</b></p>
@@ -408,11 +386,7 @@ try{
                         <thead><tr><th>Day</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th></tr></thead>
 
 <tbody>
-<tr><td style="font-weight:bold;background:#eef2ff">Monday</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-<tr><td style="font-weight:bold;background:#eef2ff">Tuesday</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-<tr><td style="font-weight:bold;background:#eef2ff">Wednesday</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-<tr><td style="font-weight:bold;background:#eef2ff">Thursday</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-<tr><td style="font-weight:bold;background:#eef2ff">Friday</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="font-weight:bold;background:#eef2ff">Monday</td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td></tr><tr><td style="font-weight:bold;background:#eef2ff">Tuesday</td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td></tr><tr><td style="font-weight:bold;background:#eef2ff">Wednesday</td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td></tr><tr><td style="font-weight:bold;background:#eef2ff">Thursday</td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td></tr><tr><td style="font-weight:bold;background:#eef2ff">Friday</td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td></tr>
 </tbody>
                     </table>
                 </div>
@@ -1453,6 +1427,18 @@ try{
 
         // ===== Timetable Excel Grid =====
         window._ttDays = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
+
+        window._sampleTT = function() {
+            var g = {};
+            window._ttDays.forEach(function(day) {
+                g[day] = {};
+                for (var p = 1; p <= 6; p++) {
+                    g[day][p] = { subject: 'test', teacher: 'test' };
+                }
+            });
+            return g;
+        };
+
         window._ttTimes = {1:'8:00–8:45',2:'8:45–9:30',3:'9:30–10:15',4:'10:15–11:00',5:'11:00–11:45',6:'11:45–12:30'};
         window.buildTTGrid = function(grid) {
             const table = document.getElementById('ttGrid');
@@ -1520,7 +1506,7 @@ try{
             .catch(function(){ if (window.showToast) showToast('Network error', 'err'); });
         };
         // Build empty grid on page load so cells are visible
-        window.buildTTGrid({});
+        window.buildTTGrid(window._sampleTT ? window._sampleTT() : {});
         window.loadExamCalendar = function(){
             fetch('/api/exam-schedule').then(r=>r.json()).then(d=>{
                 var cal=document.getElementById('examCalendar');
@@ -1791,7 +1777,7 @@ document.addEventListener('DOMContentLoaded', function() {
     place('timetable');
     place('examSchedule');
     setTimeout(function(){
-        if (typeof window.buildTTGrid === 'function') try { window.buildTTGrid({}); } catch(e) {}
+        if (typeof window.buildTTGrid === 'function') try { window.buildTTGrid(window._sampleTT ? window._sampleTT() : {}); } catch(e) {}
         if (typeof window.loadExamCalendar === 'function') try { window.loadExamCalendar(); } catch(e) {}
     }, 300);
 });
@@ -1801,7 +1787,7 @@ document.addEventListener('DOMContentLoaded', function() {
 /* BUILD_TT_ON_READY */
 document.addEventListener('DOMContentLoaded', function() {
   if (typeof window.buildTTGrid === 'function') {
-    try { window.buildTTGrid({}); } catch(e) { console.error(e); }
+    try { window.buildTTGrid(window._sampleTT ? window._sampleTT() : {}); } catch(e) { console.error(e); }
   }
   if (typeof window.loadExamCalendar === 'function') {
     try { window.loadExamCalendar(); } catch(e) {}
