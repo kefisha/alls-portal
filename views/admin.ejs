@@ -381,13 +381,12 @@ try{
                     <button type="button" onclick="loadTTGrid()">📂 Load</button>
                     <button type="button" class="btn-green" onclick="saveTTGrid()">💾 Save Grid</button>
                 </div>
+                <p style="font-size:13px;color:#64748b;margin:6px 0;">✏️ Each cell = Subject + Teacher — click to type, then <b>Save Grid</b></p>
                 <div style="overflow-x:auto;">
                     <table id="ttGrid" style="font-size:12px;min-width:700px;">
                         <thead><tr><th>Day</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th></tr></thead>
 
-<tbody>
-<tr><td style="font-weight:bold;background:#eef2ff">Monday</td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td></tr><tr><td style="font-weight:bold;background:#eef2ff">Tuesday</td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td></tr><tr><td style="font-weight:bold;background:#eef2ff">Wednesday</td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td></tr><tr><td style="font-weight:bold;background:#eef2ff">Thursday</td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td></tr><tr><td style="font-weight:bold;background:#eef2ff">Friday</td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td><td style="padding:4px"><div style="font-size:11px"><b>test</b><br><small>test</small></div></td></tr>
-</tbody>
+<tbody></tbody>
                     </table>
                 </div>
             </div>
@@ -1792,6 +1791,19 @@ document.addEventListener('DOMContentLoaded', function() {
   if (typeof window.loadExamCalendar === 'function') {
     try { window.loadExamCalendar(); } catch(e) {}
   }
+});
+</script>
+<script>
+/* BUILD_TT_FORCE */
+document.addEventListener('DOMContentLoaded', function() {
+  function run() {
+    if (typeof window.buildTTGrid === 'function') {
+      var g = (typeof window._sampleTT === 'function') ? window._sampleTT() : {};
+      window.buildTTGrid(g);
+    }
+  }
+  run();
+  setTimeout(run, 400);
 });
 </script>
 </body>
