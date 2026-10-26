@@ -92,10 +92,16 @@
         <form action="/teacher/homework" method="POST" style="margin-bottom:14px;">
             <input type="text" name="title" placeholder="Homework title" required>
             <textarea name="description" rows="2" placeholder="Instructions"></textarea>
-            <select name="class_level" id="quizClassSelect" required style="width:100%;margin-bottom:8px;">
-              <option value="">— Select class / section —</option>
-              <% if (typeof selectedClass !== 'undefined' && selectedClass) { %><option value="<%= selectedClass %>" selected><%= selectedClass %></option><% } %>
-            </select>
+            
+<div class="class-multi-box cm-quiz" style="border:1px solid #cbd5e1;border-radius:12px;padding:12px;margin:8px 0 12px;background:#f8fafc;">
+  <div style="font-weight:800;color:#1e3a8a;margin-bottom:8px;">🏫 Class / Section (select one or more)</div>
+  <label style="display:inline-flex;align-items:center;gap:6px;margin:4px 10px 4px 0;font-weight:700;"><input type="checkbox" class="cm-all" value="ALL"> All my classes</label>
+  <label style="display:inline-flex;align-items:center;gap:6px;margin:4px 10px 4px 0;"><input type="checkbox" class="cm-ab" value="A&B"> A &amp; B (both)</label>
+  <div class="cm-list" style="display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:8px;"></div>
+  <input type="hidden" name="class_level" class="cm-hidden" value="">
+  <p class="cm-hint" style="font-size:12px;color:#64748b;margin:8px 0 0;">✅ Tick classes that should receive this quiz/handout.</p>
+</div>
+
             <input type="date" name="due_date">
             <button type="submit">📝 Assign Homework</button>
         </form>
@@ -121,10 +127,16 @@
             <p style="font-size:12px;color:#0369a1;margin:0 0 8px;">Only students in the selected class/section will see this handout or photo.</p>
             <form action="/teacher/handout" method="POST" enctype="multipart/form-data">
                 <input type="text" name="title" placeholder="Handout title" required style="width:100%;margin-bottom:8px;">
-                <select name="class_level" id="handoutClassSelect" required style="width:100%;margin-bottom:8px;">
-                  <option value="">— Select your class / section —</option>
-                </select>
-                <input type="text" id="handoutClassOther" placeholder="Or type class if not listed" style="width:100%;margin-bottom:8px;display:none;">
+                
+<div class="class-multi-box cm-handout" style="border:1px solid #cbd5e1;border-radius:12px;padding:12px;margin:8px 0 12px;background:#f8fafc;">
+  <div style="font-weight:800;color:#1e3a8a;margin-bottom:8px;">🏫 Class / Section (select one or more)</div>
+  <label style="display:inline-flex;align-items:center;gap:6px;margin:4px 10px 4px 0;font-weight:700;"><input type="checkbox" class="cm-all" value="ALL"> All my classes</label>
+  <label style="display:inline-flex;align-items:center;gap:6px;margin:4px 10px 4px 0;"><input type="checkbox" class="cm-ab" value="A&B"> A &amp; B (both)</label>
+  <div class="cm-list" style="display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:8px;"></div>
+  <input type="hidden" name="class_level" class="cm-hidden" value="">
+  <p class="cm-hint" style="font-size:12px;color:#64748b;margin:8px 0 0;">✅ Tick classes that should receive this quiz/handout.</p>
+</div>
+
                 <textarea name="note" rows="2" placeholder="Note / instruction (optional)" style="width:100%;margin-bottom:8px;"></textarea>
                 <label style="font-size:13px;font-weight:bold;">📷 Photo or file</label>
                 <input type="file" name="file" accept="image/*,.pdf,.doc,.docx" style="margin-bottom:8px;">
@@ -143,10 +155,16 @@
                 <span style="color:#666;">ጽሁፍ ብቻ paste ካደረጉ ቀመር ሊበላሽ ይችላል — ፎቶ ሁልጊዜ ይቀራል።</span>
             </div>
             <input type="text" name="title" placeholder="Quiz title" required>
-            <select name="class_level" id="quizClassSelect" required style="width:100%;margin-bottom:8px;">
-              <option value="">— Select class / section —</option>
-              <% if (typeof selectedClass !== 'undefined' && selectedClass) { %><option value="<%= selectedClass %>" selected><%= selectedClass %></option><% } %>
-            </select>
+            
+<div class="class-multi-box cm-quiz" style="border:1px solid #cbd5e1;border-radius:12px;padding:12px;margin:8px 0 12px;background:#f8fafc;">
+  <div style="font-weight:800;color:#1e3a8a;margin-bottom:8px;">🏫 Class / Section (select one or more)</div>
+  <label style="display:inline-flex;align-items:center;gap:6px;margin:4px 10px 4px 0;font-weight:700;"><input type="checkbox" class="cm-all" value="ALL"> All my classes</label>
+  <label style="display:inline-flex;align-items:center;gap:6px;margin:4px 10px 4px 0;"><input type="checkbox" class="cm-ab" value="A&B"> A &amp; B (both)</label>
+  <div class="cm-list" style="display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:8px;"></div>
+  <input type="hidden" name="class_level" class="cm-hidden" value="">
+  <p class="cm-hint" style="font-size:12px;color:#64748b;margin:8px 0 0;">✅ Tick classes that should receive this quiz/handout.</p>
+</div>
+
             <input type="hidden" name="questions_json" id="questionsJson">
             <div id="quizQuestions"></div>
             <button type="button" onclick="addQuizQuestion()" style="background:#8e44ad;margin-top:8px;">➕ Add Question</button>
@@ -339,7 +357,15 @@
             <button type="submit">📥 Import Grades CSV</button>
         </form>
         <div id="homeworkSubList" style="margin-top:12px;font-size:13px;"></div>
-        <p style="margin-top:12px;"><a href="/learning-hub">📚 Learning Hub</a> · <a href="/admin/attendance-report">📋 Attendance</a> · <a href="/qr-scan">📷 QR Attendance</a></p>
+        <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px;">
+          <a href="/learning-hub" style="display:block;text-align:center;background:linear-gradient(135deg,#1d4ed8,#7c3aed);color:#fff;padding:18px 20px;border-radius:14px;text-decoration:none;font-weight:900;font-size:22px;letter-spacing:0.3px;box-shadow:0 8px 20px rgba(29,78,216,.35);">
+            📚 Learning Hub / የትምህርት ማዕከል
+          </a>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;">
+            <a href="/admin/attendance-report" style="background:#0f766e;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:bold;">📋 Attendance</a>
+            <a href="/qr-scan" style="background:#ea580c;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:bold;">📷 QR Attendance</a>
+          </div>
+        </div>
         <div id="classAvg" style="margin-top:10px;font-weight:bold;color:#1f4e79;"></div>
     </div>
 
@@ -1002,6 +1028,111 @@
 })();
 </script>
 
+
+
+<script>
+(function(){
+  function sections(){
+    var s = window.TEACHER_SECTIONS;
+    return Array.isArray(s) ? s : [];
+  }
+  function syncBox(box){
+    var hidden = box.querySelector('.cm-hidden');
+    if (!hidden) return;
+    var all = box.querySelector('.cm-all');
+    var ab = box.querySelector('.cm-ab');
+    var checks = box.querySelectorAll('.cm-list input[type=checkbox]');
+    var vals = [];
+    if (all && all.checked) {
+      vals = sections().slice();
+      if (!vals.length) vals = ['ALL'];
+    } else {
+      if (ab && ab.checked) {
+        // expand A&B for each grade present
+        var grades = {};
+        sections().forEach(function(sec){
+          var m = String(sec).match(/(\d+)/);
+          var g = m ? m[1] : '';
+          if (!g) return;
+          if (!grades[g]) grades[g] = {A:false,B:false,raw:[]};
+          grades[g].raw.push(sec);
+          if (/section\s*a\b|\bA\b/i.test(sec)) grades[g].A = true;
+          if (/section\s*b\b|\bB\b/i.test(sec)) grades[g].B = true;
+        });
+        Object.keys(grades).forEach(function(g){
+          grades[g].raw.forEach(function(x){ if (vals.indexOf(x)<0) vals.push(x); });
+        });
+      }
+      checks.forEach(function(c){ if (c.checked && vals.indexOf(c.value)<0) vals.push(c.value); });
+    }
+    hidden.value = vals.join(', ');
+  }
+  function buildBox(box){
+    var list = box.querySelector('.cm-list');
+    if (!list) return;
+    list.innerHTML = '';
+    var secs = sections();
+    if (!secs.length) {
+      list.innerHTML = '<span style="color:#b91c1c;font-size:13px;">No assigned classes — Admin must assign sections to this teacher.</span>';
+    } else {
+      secs.forEach(function(sec){
+        var lab = document.createElement('label');
+        lab.style.cssText = 'display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e2e8f0;padding:6px 10px;border-radius:8px;';
+        lab.innerHTML = '<input type="checkbox" value=""> <span></span>';
+        lab.querySelector('input').value = sec;
+        lab.querySelector('span').textContent = sec;
+        lab.querySelector('input').addEventListener('change', function(){ syncBox(box); });
+        list.appendChild(lab);
+      });
+    }
+    var all = box.querySelector('.cm-all');
+    var ab = box.querySelector('.cm-ab');
+    if (all) all.addEventListener('change', function(){
+      if (all.checked) {
+        list.querySelectorAll('input').forEach(function(c){ c.checked = true; });
+        if (ab) ab.checked = true;
+      }
+      syncBox(box);
+    });
+    if (ab) ab.addEventListener('change', function(){
+      if (ab.checked) {
+        // check all section A and B variants
+        list.querySelectorAll('input').forEach(function(c){ c.checked = true; });
+        if (all) all.checked = true;
+      }
+      syncBox(box);
+    });
+    // form submit ensure hidden filled
+    var form = box.closest('form');
+    if (form && !form.getAttribute('data-cm')) {
+      form.setAttribute('data-cm','1');
+      form.addEventListener('submit', function(e){
+        syncBox(box);
+        var hidden = box.querySelector('.cm-hidden');
+        if (hidden && !(hidden.value||'').trim()) {
+          e.preventDefault();
+          alert('Select at least one class / section');
+        }
+      });
+    }
+    syncBox(box);
+  }
+  function initAll(){
+    document.querySelectorAll('.class-multi-box').forEach(buildBox);
+  }
+  // refresh when sections load
+  var prev = window.TEACHER_SECTIONS;
+  fetch('/api/teacher/my-sections', { credentials:'same-origin' })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.sections && d.sections.length) window.TEACHER_SECTIONS = d.sections;
+      initAll();
+    })
+    .catch(function(){ initAll(); });
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initAll);
+  else initAll();
+})();
+</script>
 
 </body>
 </html>
