@@ -3997,63 +3997,78 @@ app.get('/admin/certificate', (req, res) => {
 <title>Certificate Designer</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
-*{box-sizing:border-box}body{font-family:Segoe UI,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:16px}
-@page{size:A4 landscape;margin:8mm}
+*{box-sizing:border-box}body{font-family:Segoe UI,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:12px}
+@page{size:A4 landscape;margin:10mm}
 @media print{
-  body{background:#fff!important;padding:0!important}
+  body{background:#fff!important;padding:0!important;margin:0!important}
   .panel,.no-print{display:none!important}
-  .wrap{display:block!important;max-width:none!important}
-  .stage{padding:10mm!important;background:#fff!important}
-  .cert{box-shadow:none!important;width:250mm!important;min-height:165mm!important;margin:0 auto!important}
+  .wrap{display:block!important;max-width:none!important;margin:0!important}
+  .stage{padding:0!important;background:#fff!important;overflow:visible!important}
+  .cert-outer{padding:0!important;background:#fff!important}
+  .cert{box-shadow:none!important;margin:0 auto!important}
 }
-.wrap{max-width:1200px;margin:auto;display:grid;grid-template-columns:320px 1fr;gap:16px}
+.wrap{max-width:1220px;margin:auto;display:grid;grid-template-columns:340px 1fr;gap:14px}
 @media(max-width:900px){.wrap{grid-template-columns:1fr}}
-.panel{background:#1e293b;border-radius:12px;padding:16px;max-height:92vh;overflow:auto}
-label{display:block;font-size:12px;color:#94a3b8;margin:8px 0 4px}
+.panel{background:#1e293b;border-radius:12px;padding:14px;max-height:94vh;overflow:auto}
+label{display:block;font-size:12px;color:#94a3b8;margin:7px 0 3px}
 input,select,textarea{width:100%;padding:8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0}
-button{width:100%;padding:12px;margin-top:10px;border:none;border-radius:8px;font-weight:bold;cursor:pointer;background:#2980b9;color:#fff}
+button{width:100%;padding:11px;margin-top:8px;border:none;border-radius:8px;font-weight:bold;cursor:pointer;background:#2980b9;color:#fff}
 button.gold{background:linear-gradient(135deg,#c9a227,#f0d77b);color:#1f2937}
 button.sec{background:#475569}
+button.danger{background:#b91c1c}
 .stage{overflow:auto;padding:8px}
+.cert-outer{background:#334155;padding:16px;border-radius:12px;display:inline-block;min-width:100%}
 .cert{
-  width:260mm;min-height:170mm;margin:12px auto;position:relative;
-  background:linear-gradient(145deg,#fffef8,#fff 45%,#f8fafc);color:#1e293b;
-  border:12px solid #1f4e79;box-shadow:0 8px 24px rgba(0,0,0,.25);
-  padding:24px 36px;text-align:center;
-  box-sizing:border-box;
+  width:900px;max-width:100%;min-height:620px;margin:0 auto;position:relative;
+  color:#1e293b;text-align:center;padding:28px 40px;
+  border:14px solid #1f4e79;box-sizing:border-box;
 }
-.cert [contenteditable="true"]{outline:1px dashed transparent;border-radius:4px;padding:2px 4px}
-.cert [contenteditable="true"]:hover{outline-color:#93c5fd}
-.cert [contenteditable="true"]:focus{outline-color:#2980b9;background:rgba(41,128,185,.06)}
-/* 12+ modern border styles */
+/* backgrounds */
+.cert.bg1{background:linear-gradient(145deg,#fffef8,#fff 50%,#f1f5f9)}
+.cert.bg2{background:linear-gradient(160deg,#eff6ff,#fff 40%,#dbeafe)}
+.cert.bg3{background:linear-gradient(160deg,#ecfdf5,#fff 45%,#d1fae5)}
+.cert.bg4{background:linear-gradient(160deg,#faf5ff,#fff 45%,#ede9fe)}
+.cert.bg5{background:linear-gradient(160deg,#fff7ed,#fff 45%,#ffedd5)}
+.cert.bg6{background:radial-gradient(circle at top,#fef3c7,#fff 55%)}
+.cert.bg7{background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 40%,#0f172a 100%);color:#f8fafc}
+.cert.bg7 .school,.cert.bg7 .title{color:#93c5fd!important}
+.cert.bg7 .name{color:#fbbf24!important;border-color:#fbbf24!important}
+.cert.bg7 .body,.cert.bg7 .meta,.cert.bg7 .subtitle{color:#cbd5e1!important}
+.cert.bg8{background:repeating-linear-gradient(45deg,#fff,#fff 12px,#f8fafc 12px,#f8fafc 24px)}
+.cert.bg9{background:linear-gradient(180deg,#fff 0%,#fef2f2 100%)}
+.cert.bg10{background:linear-gradient(120deg,#f0fdfa,#fff 50%,#ecfeff)}
+/* borders */
 .cert.b-classic{border:14px solid #1f4e79;outline:6px solid #c9a227;outline-offset:6px}
 .cert.b-double{border:10px double #1f4e79}
 .cert.b-gold{border:12px solid #c9a227;outline:4px solid #1f4e79;outline-offset:8px}
-.cert.b-ribbon{border:8px solid #7c3aed;box-shadow:inset 0 0 0 6px #e9d5ff,0 20px 50px rgba(0,0,0,.35)}
+.cert.b-ribbon{border:8px solid #7c3aed;box-shadow:inset 0 0 0 6px #e9d5ff}
 .cert.b-elegant{border:3px solid #0f172a;outline:10px solid #e2e8f0;outline-offset:4px}
-.cert.b-modern{border:none;box-shadow:0 0 0 12px #0ea5e9,0 0 0 18px #fff,0 0 0 22px #0ea5e9}
+.cert.b-modern{border:8px solid #0ea5e9}
 .cert.b-royal{border:16px ridge #7c3aed}
-.cert.b-emerald{border:12px solid #059669;outline:5px dashed #6ee7b7;outline-offset:8px}
-.cert.b-rose{border:12px solid #e11d48;outline:6px solid #fecdd3;outline-offset:6px}
-.cert.b-navy{border:20px solid #0f172a;border-image:linear-gradient(135deg,#1e3a8a,#c9a227) 1}
-.cert.b-soft{border:10px solid #cbd5e1;border-radius:24px}
-.cert.b-stamp{border:8px solid #b45309;box-shadow:inset 0 0 0 4px #fde68a,0 12px 40px rgba(0,0,0,.3)}
-.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;min-height:90px;gap:12px}
-.topbar .slot{width:110px;height:110px;border:none;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:transparent;padding:0}
-.topbar .slot.empty{border:1px dashed #cbd5e1;background:#f8fafc}
-.topbar .slot img{width:100%;height:100%;object-fit:contain;display:block;border:none;outline:none;box-shadow:none}
-.topbar .slot span{font-size:10px;color:#94a3b8;padding:4px;text-align:center}
-.ornament{font-size:18px;color:#c9a227;letter-spacing:8px}
-.school{font-size:14px;letter-spacing:3px;color:#1f4e79;font-weight:800;text-transform:uppercase}
-.title{font-family:Georgia,serif;font-size:36px;color:#1f4e79;margin:8px 0;font-weight:bold}
+.cert.b-emerald{border:12px solid #059669}
+.cert.b-rose{border:12px solid #e11d48}
+.cert.b-soft{border:10px solid #cbd5e1;border-radius:20px}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;min-height:88px;gap:10px}
+.topbar .slot{width:100px;height:100px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:transparent;border:none;padding:0}
+.topbar .slot.empty{border:1px dashed #cbd5e1;background:#f8fafc;border-radius:10px}
+.topbar .slot img{width:100%;height:100%;object-fit:contain;border:none}
+.topbar .slot span{font-size:10px;color:#94a3b8}
+.ornament{font-size:16px;color:#c9a227;letter-spacing:8px}
+.school{font-size:13px;letter-spacing:3px;color:#1f4e79;font-weight:800;text-transform:uppercase}
+.title{font-size:34px;color:#1f4e79;margin:8px 0;font-weight:bold}
 .subtitle{font-size:14px;color:#64748b}
-.name{font-family:Georgia,serif;font-size:32px;color:#b45309;margin:12px 0;font-weight:bold;border-bottom:2px solid #c9a227;display:inline-block;padding:0 12px 6px}
-.body{font-size:15px;line-height:1.6;color:#334155;max-width:88%;margin:8px auto}
+.name{font-size:30px;color:#b45309;margin:10px 0;font-weight:bold;border-bottom:2px solid #c9a227;display:inline-block;padding:0 10px 4px}
+.body{font-size:15px;line-height:1.55;color:#334155;max-width:90%;margin:8px auto}
 .meta{font-size:13px;color:#475569;margin-top:6px}
-.seal{display:inline-block;margin-top:10px;width:64px;height:64px;border-radius:50%;border:3px solid #c9a227;line-height:58px;font-weight:800;color:#1f4e79;font-size:12px}
-.sigs{display:flex;justify-content:space-between;margin-top:28px;padding:0 40px}
+.seal{display:inline-block;margin-top:8px;width:60px;height:60px;border-radius:50%;border:3px solid #c9a227;line-height:54px;font-weight:800;color:#1f4e79;font-size:11px}
+.sigs{display:flex;justify-content:space-between;margin-top:22px;padding:0 30px}
 .sig{width:40%;border-top:1px solid #94a3b8;padding-top:6px;font-size:12px;color:#64748b}
-h1{font-size:18px;margin:0 0 8px;color:#f8fafc}
+.cert [contenteditable="true"]{outline:1px dashed transparent;border-radius:4px;padding:2px 4px;cursor:text}
+.cert [contenteditable="true"]:hover{outline-color:#93c5fd}
+.cert [contenteditable="true"]:focus{outline-color:#2980b9;background:rgba(41,128,185,.08)}
+.extra-text{position:relative}
+.extra-text .del{position:absolute;right:-6px;top:-6px;background:#e74c3c;color:#fff;border:none;border-radius:50%;width:22px;height:22px;font-size:12px;cursor:pointer;padding:0;line-height:22px}
+h1{font-size:17px;margin:0 0 6px;color:#f8fafc}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 </style></head><body>
 <div class="wrap">
@@ -4062,40 +4077,40 @@ h1{font-size:18px;margin:0 0 8px;color:#f8fafc}
 <form method="GET" action="/admin/certificate">
 <label>Load student / teacher ID</label>
 <input name="student_id" value="${esc(id)}" placeholder="ID">
-<label>Type</label>
 <select name="person_type"><option value="student">Student</option><option value="teacher">Teacher</option></select>
 <button type="submit">Load</button>
 </form>
-<hr style="border-color:#334155;margin:14px 0">
-<label>🏫 School / Org logo (left)</label>
+<hr style="border-color:#334155;margin:12px 0">
+<label>🏫 Org logo (left)</label>
 <input type="file" id="logoFile" accept="image/*">
 <label>📷 Person photo (right)</label>
 <input type="file" id="photoFile" accept="image/*">
-<label>Or photo URL</label>
-<input id="fPhoto" value="${esc(photo)}" oninput="sync()" placeholder="https://... or /uploads/...">
-<label>School name</label>
+<label>Photo URL</label>
+<input id="fPhoto" value="${esc(photo)}" oninput="sync()" placeholder="/uploads/...">
+<label>School</label>
 <input id="fSchool" value="AMANUEL LIGHT & LIFE SCHOOL" oninput="sync()">
 <label>Title</label>
 <input id="fTitle" value="Certificate of Completion" oninput="sync()">
 <label>Subtitle</label>
 <input id="fSub" value="This is proudly presented to" oninput="sync()">
-<label>Person type label</label>
+<label>Person type</label>
 <input id="fPersonType" value="Student" oninput="sync()">
 <label>Full name</label>
 <input id="fName" value="${esc(name)}" oninput="sync()">
-<label>Body text</label>
+<label>Body</label>
 <textarea id="fBody" rows="3" oninput="sync()">for successfully completing the academic requirements of class ${esc(cls)||'—'} with dedication and excellence.</textarea>
-<label>Meta line</label>
+<label>Meta</label>
 <input id="fMeta" value="ID: ${esc(id)||'—'}  ·  Class: ${esc(cls)||'—'}" oninput="sync()">
-<label>Date line</label>
+<label>Date</label>
 <input id="fDate" value="${esc(getFormattedTimestamp())}" oninput="sync()">
-<label>Signature left</label>
-<input id="fSig1" value="Director" oninput="sync()">
-<label>Signature right</label>
-<input id="fSig2" value="School Seal" oninput="sync()">
+<label>Sig left / right</label>
 <div class="row2">
-<div><label>Title size</label><input id="fTitleSize" type="number" value="36" min="18" max="64" oninput="sync()"></div>
-<div><label>Name size</label><input id="fNameSize" type="number" value="32" min="16" max="56" oninput="sync()"></div>
+<input id="fSig1" value="Director" oninput="sync()">
+<input id="fSig2" value="School Seal" oninput="sync()">
+</div>
+<div class="row2">
+<div><label>Title size</label><input id="fTitleSize" type="number" value="34" min="16" max="64" oninput="sync()"></div>
+<div><label>Name size</label><input id="fNameSize" type="number" value="30" min="14" max="56" oninput="sync()"></div>
 </div>
 <div class="row2">
 <div><label>Body size</label><input id="fBodySize" type="number" value="15" min="10" max="28" oninput="sync()"></div>
@@ -4105,40 +4120,48 @@ h1{font-size:18px;margin:0 0 8px;color:#f8fafc}
 <div><label>Name color</label><input id="fNameColor" type="color" value="#b45309" oninput="sync()"></div>
 <div><label><input id="fBoldName" type="checkbox" checked onchange="sync()"> Bold name</label></div>
 </div>
-<label>Font</label>
+<label>Font (8+)</label>
 <select id="fFont" onchange="sync()">
-<option value="Georgia, serif">Georgia</option>
-<option value="Times New Roman, serif">Times</option>
-<option value="Garamond, serif">Garamond</option>
-<option value="Palatino Linotype, serif">Palatino</option>
-<option value="Segoe UI, sans-serif">Segoe UI</option>
-<option value="Trebuchet MS, sans-serif">Trebuchet</option>
+<option value="Georgia, serif">1. Georgia</option>
+<option value="Times New Roman, serif">2. Times New Roman</option>
+<option value="Garamond, serif">3. Garamond</option>
+<option value="Palatino Linotype, serif">4. Palatino</option>
+<option value="Segoe UI, sans-serif">5. Segoe UI</option>
+<option value="Trebuchet MS, sans-serif">6. Trebuchet</option>
+<option value="Verdana, sans-serif">7. Verdana</option>
+<option value="Courier New, monospace">8. Courier New</option>
+<option value="Impact, sans-serif">9. Impact</option>
+<option value="Comic Sans MS, cursive">10. Comic Sans</option>
 </select>
-<label>🎨 Border style (12 modern)</label>
+<label>🎨 Background (10 modern)</label>
+<select id="fBg" onchange="sync()">
+<option value="bg1">1. Classic Cream</option>
+<option value="bg2">2. Soft Blue</option>
+<option value="bg3">3. Mint Green</option>
+<option value="bg4">4. Lavender</option>
+<option value="bg5">5. Warm Peach</option>
+<option value="bg6">6. Golden Glow</option>
+<option value="bg7">7. Dark Elegant</option>
+<option value="bg8">8. Subtle Stripe</option>
+<option value="bg9">9. Soft Rose</option>
+<option value="bg10">10. Aqua Fresh</option>
+</select>
+<label>Border style</label>
 <select id="fBorderStyle" onchange="sync()">
-<option value="b-classic">1. Classic Gold Outline</option>
-<option value="b-double">2. Double Line</option>
-<option value="b-gold">3. Gold Frame</option>
-<option value="b-ribbon">4. Purple Ribbon</option>
-<option value="b-elegant">5. Elegant Grey</option>
-<option value="b-modern">6. Modern Cyan</option>
-<option value="b-royal">7. Royal Ridge</option>
-<option value="b-emerald">8. Emerald Dash</option>
-<option value="b-rose">9. Rose Accent</option>
-<option value="b-navy">10. Navy Strong</option>
-<option value="b-soft">11. Soft Rounded</option>
-<option value="b-stamp">12. Stamp / Wax</option>
+<option value="b-classic">Classic Gold Outline</option>
+<option value="b-double">Double Line</option>
+<option value="b-gold">Gold Frame</option>
+<option value="b-ribbon">Purple Ribbon</option>
+<option value="b-elegant">Elegant</option>
+<option value="b-modern">Modern Cyan</option>
+<option value="b-royal">Royal Ridge</option>
+<option value="b-emerald">Emerald</option>
+<option value="b-rose">Rose</option>
+<option value="b-soft">Soft Rounded</option>
 </select>
-<label>Theme tint</label>
-<select id="fTheme" onchange="sync()">
-<option value="">Default</option>
-<option value="theme-blue">Blue</option>
-<option value="theme-green">Green</option>
-<option value="theme-royal">Royal</option>
-</select>
-<hr style="border-color:#334155;margin:14px 0">
-<label>➕ Add new text on certificate</label>
-<input id="newTextVal" placeholder="Type new text...">
+<hr style="border-color:#334155;margin:12px 0">
+<label>➕ Add new text</label>
+<input id="newTextVal" placeholder="New text...">
 <div class="row2">
 <div><label>Size</label><input id="newTextSize" type="number" value="18" min="10" max="72"></div>
 <div><label>Color</label><input id="newTextColor" type="color" value="#1f4e79"></div>
@@ -4151,20 +4174,27 @@ h1{font-size:18px;margin:0 0 8px;color:#f8fafc}
 <option value="Segoe UI, sans-serif">Segoe UI</option>
 <option value="Garamond, serif">Garamond</option>
 <option value="Courier New, monospace">Courier</option>
+<option value="Verdana, sans-serif">Verdana</option>
+<option value="Trebuchet MS, sans-serif">Trebuchet</option>
+<option value="Palatino Linotype, serif">Palatino</option>
 </select></div>
-<div><label><input id="newTextBold" type="checkbox"> Bold</label>
-<label><input id="newTextItalic" type="checkbox"> Italic</label></div>
+<div>
+<label><input id="newTextBold" type="checkbox"> Bold</label>
+<label><input id="newTextItalic" type="checkbox"> Italic</label>
 </div>
-<button type="button" class="sec" onclick="addCertText()">➕ Add text to certificate</button>
-<button type="button" class="gold" onclick="downloadPdf()">📥 Download Full-Page PDF</button>
+</div>
+<button type="button" class="sec" onclick="addCertText()">➕ Add text</button>
+<button type="button" class="gold" onclick="downloadPdf()">📥 Download Full Page PDF (with border)</button>
 <button type="button" class="sec" onclick="window.print()">🖨️ Print Full Page</button>
-<p style="font-size:12px;margin-top:12px"><a href="/admin" style="color:#93c5fd">← Admin</a></p>
+<p style="font-size:12px;margin-top:10px"><a href="/admin" style="color:#93c5fd">← Admin</a></p>
 </div>
-<div class="stage"><p class="no-print" style="text-align:center;color:#94a3b8;font-size:13px;margin:0 0 8px">✏️ Click any text on the certificate to type/edit directly</p>
-<div class="cert b-classic" id="cert">
+<div class="stage">
+<p class="no-print" style="text-align:center;color:#94a3b8;font-size:13px;margin:0 0 8px">✏️ Click text to edit · Add text · Delete extra text with ×</p>
+<div class="cert-outer">
+<div class="cert bg1 b-classic" id="cert">
   <div class="topbar">
-    <div class="slot empty" id="logoSlot"><span>Org Logo</span><img id="cLogo" alt="" style="display:none"></div>
-    <div style="flex:1;padding:0 12px">
+    <div class="slot empty" id="logoSlot"><span>Logo</span><img id="cLogo" alt="" style="display:none"></div>
+    <div style="flex:1;padding:0 10px">
       <div class="ornament">✦ ◆ ✦</div>
       <div class="school" id="cSchool" contenteditable="true">AMANUEL LIGHT & LIFE SCHOOL</div>
     </div>
@@ -4176,29 +4206,23 @@ h1{font-size:18px;margin:0 0 8px;color:#f8fafc}
   <div class="name" id="cName" contenteditable="true">${esc(name)||'Student Name'}</div>
   <div class="body" id="cBody" contenteditable="true">for successfully completing the academic requirements of class ${esc(cls)||'—'} with dedication and excellence.</div>
   <div class="meta" id="cMeta" contenteditable="true">ID: ${esc(id)||'—'}  ·  Class: ${esc(cls)||'—'}</div>
+  <div id="extraZone"></div>
   <div class="seal">ALLS</div>
   <div class="meta" id="cDate" contenteditable="true">${esc(getFormattedTimestamp())}</div>
   <div class="sigs"><div class="sig"><div id="cSig1" contenteditable="true">Director</div></div><div class="sig"><div id="cSig2" contenteditable="true">School Seal</div></div></div>
 </div>
 </div>
 </div>
+</div>
 <script>
 function readFileTo(imgId, fileInput){
-  var f=fileInput.files&&fileInput.files[0];
-  if(!f) return;
+  var f=fileInput.files&&fileInput.files[0]; if(!f) return;
   var r=new FileReader();
   r.onload=function(){
-    var img=document.getElementById(imgId);
-    var slot=img.parentNode;
-    img.src=r.result;
-    img.style.display='block';
-    img.style.border='none';
-    img.style.outline='none';
-    var span=slot.querySelector('span');
-    if(span) span.style.display='none';
-    slot.classList.remove('empty');
-    slot.style.border='none';
-    slot.style.background='transparent';
+    var img=document.getElementById(imgId); var slot=img.parentNode;
+    img.src=r.result; img.style.display='block';
+    var span=slot.querySelector('span'); if(span) span.style.display='none';
+    slot.classList.remove('empty'); slot.style.border='none'; slot.style.background='transparent';
   };
   r.readAsDataURL(f);
 }
@@ -4206,18 +4230,18 @@ document.getElementById('logoFile').addEventListener('change', function(){ readF
 document.getElementById('photoFile').addEventListener('change', function(){ readFileTo('cPhoto', this); });
 function sync(){
   var c=document.getElementById('cert');
+  var bg=document.getElementById('fBg').value||'bg1';
   var border=document.getElementById('fBorderStyle').value||'b-classic';
-  var theme=document.getElementById('fTheme').value||'';
-  c.className='cert '+border+(theme?(' '+theme):'');
+  c.className='cert '+bg+' '+border;
   ['School','Title','Sub','Name','Body','Meta','Date','Sig1','Sig2','PersonType'].forEach(function(k){
     var f=document.getElementById('f'+k), el=document.getElementById('c'+k);
-    if(f&&el) el.textContent=f.value||'';
+    if(f&&el && document.activeElement!==el) el.textContent=f.value||'';
   });
   var ph=document.getElementById('fPhoto');
   var img=document.getElementById('cPhoto');
   if(ph&&img&&ph.value&&!(document.getElementById('photoFile').files||[]).length){
-    img.src=ph.value; img.style.display='block'; img.style.border='none';
-    var slot=img.parentNode; slot.classList.remove('empty'); slot.style.border='none'; slot.style.background='transparent';
+    img.src=ph.value; img.style.display='block';
+    var slot=img.parentNode; slot.classList.remove('empty'); slot.style.border='none';
     var span=slot.querySelector('span'); if(span) span.style.display='none';
   }
   var font=document.getElementById('fFont');
@@ -4231,11 +4255,10 @@ function sync(){
   var cTitle=document.getElementById('cTitle');
   var cName=document.getElementById('cName');
   var cBody=document.getElementById('cBody');
-  if(cTitle&&ts){ cTitle.style.fontSize=(ts.value||36)+'px'; if(tc) cTitle.style.color=tc.value; }
-  if(cName&&ns){ cName.style.fontSize=(ns.value||32)+'px'; if(nc) cName.style.color=nc.value; cName.style.fontWeight=(bn&&bn.checked)?'bold':'normal'; }
+  if(cTitle&&ts){ cTitle.style.fontSize=(ts.value||34)+'px'; if(tc) cTitle.style.color=tc.value; }
+  if(cName&&ns){ cName.style.fontSize=(ns.value||30)+'px'; if(nc) cName.style.color=nc.value; cName.style.fontWeight=(bn&&bn.checked)?'bold':'normal'; }
   if(cBody&&bs) cBody.style.fontSize=(bs.value||15)+'px';
 }
-var extraTexts=[];
 function addCertText(){
   var val=(document.getElementById('newTextVal').value||'').trim();
   if(!val){ alert('Type text first'); return; }
@@ -4244,33 +4267,39 @@ function addCertText(){
   var font=document.getElementById('newTextFont').value||'Georgia, serif';
   var bold=document.getElementById('newTextBold').checked;
   var italic=document.getElementById('newTextItalic').checked;
-  var cert=document.getElementById('cert');
+  var zone=document.getElementById('extraZone');
+  var wrap=document.createElement('div');
+  wrap.className='extra-text';
+  wrap.style.cssText='margin:8px auto;max-width:90%;position:relative;';
   var div=document.createElement('div');
   div.contentEditable='true';
-  div.className='extra-text';
   div.textContent=val;
-  div.style.cssText='margin:8px auto;max-width:90%;font-size:'+size+'px;color:'+color+';font-family:'+font+
-    ';font-weight:'+(bold?'bold':'normal')+';font-style:'+(italic?'italic':'normal')+
-    ';cursor:text;padding:4px;border-radius:4px;';
-  // insert before seal
-  var seal=cert.querySelector('.seal');
-  if(seal) cert.insertBefore(div, seal);
-  else cert.appendChild(div);
+  div.style.cssText='font-size:'+size+'px;color:'+color+';font-family:'+font+';font-weight:'+(bold?'bold':'normal')+';font-style:'+(italic?'italic':'normal')+';padding:4px;';
+  var del=document.createElement('button');
+  del.type='button'; del.className='del no-print'; del.textContent='×';
+  del.onclick=function(){ wrap.remove(); };
+  wrap.appendChild(del); wrap.appendChild(div);
+  zone.appendChild(wrap);
   document.getElementById('newTextVal').value='';
-  extraTexts.push(div);
 }
 function downloadPdf(){
   var el=document.getElementById('cert');
-  el.style.width='297mm'; el.style.minHeight='200mm'; el.style.maxWidth='none';
+  // Capture cert WITH border: use outer padding parent
+  var outer=document.querySelector('.cert-outer');
+  var target=outer||el;
+  ['School','Title','Sub','Name','Body','Meta','Date','Sig1','Sig2','PersonType'].forEach(function(k){
+    var elc=document.getElementById('c'+k), f=document.getElementById('f'+k);
+    if(elc&&f) f.value=(elc.innerText||elc.textContent||'').trim();
+  });
   var name=(document.getElementById('fName')&&document.getElementById('fName').value)||'student';
   html2pdf().set({
-    margin:0,
-    filename:'Certificate_'+String(name).replace(/\\s+/g,'_')+'.pdf',
-    image:{type:'jpeg',quality:1},
-    html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff',scrollX:0,scrollY:0,width:el.scrollWidth,height:el.scrollHeight},
-    jsPDF:{unit:'mm',format:'a4',orientation:'landscape'},
-    pagebreak:{mode:['avoid-all']}
-  }).from(el).save().catch(function(){ window.print(); });
+    margin: [10,10,10,10],
+    filename: 'Certificate_'+String(name).replace(/\\s+/g,'_')+'.pdf',
+    image: {type:'jpeg', quality:1},
+    html2canvas: {scale:2, useCORS:true, backgroundColor:'#ffffff', logging:false},
+    jsPDF: {unit:'mm', format:'a4', orientation:'landscape'},
+    pagebreak: {mode:['avoid-all']}
+  }).from(target).save().catch(function(){ window.print(); });
 }
 sync();
 </script></body></html>`);
