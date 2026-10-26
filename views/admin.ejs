@@ -374,11 +374,20 @@ try{
                 <p><a href="/admin/timetable-pdf" target="_blank" style="display:inline-block;padding:8px 14px;background:#0f766e;color:#fff;border-radius:8px;text-decoration:none;font-weight:bold;">📄 Download / Print PDF</a></p>
                 <p style="font-size:12px;color:var(--text2);">P1 8:00–8:45 · P2 8:45–9:30 · P3 9:30–10:15 · P4 10:15–11:00 · P5 11:00–11:45 · P6 11:45–12:30 · <b>Break 4:00–4:15 (15 min)</b></p>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-                    <input type="text" id="ttClass" placeholder="Class only e.g. Grade 5A" style="max-width:200px;">
-                    <button type="button" onclick="loadTTGrid()">📂 Load</button>
-                    <span id="ttTeachersHint" style="font-size:12px;color:#64748b;width:100%;margin-top:6px;"></span>
-                    <button type="button" class="btn-green" id="ttSaveBtn" onclick="saveTTGrid()">💾 Save / Update</button>
-                    <button type="button" onclick="loadTTGrid()" style="background:#64748b;color:#fff;">🔄 Refresh</button>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;width:100%;">
+                      <select id="ttClassSelect" style="max-width:240px;padding:8px;border-radius:8px;border:1px solid #94a3b8;">
+                        <option value="">— Classes with schedule —</option>
+                      </select>
+                      <input type="text" id="ttClass" list="ttClassList" placeholder="Or type class e.g. 4A" style="max-width:200px;">
+                      <datalist id="ttClassList"></datalist>
+                      <button type="button" onclick="loadTTGrid()">📂 Load</button>
+                      <button type="button" class="btn-green" id="ttSaveBtn" onclick="saveTTGrid()">💾 Save / Update</button>
+                      <button type="button" onclick="loadTTGrid()" style="background:#64748b;color:#fff;">🔄 Refresh</button>
+                      <button type="button" onclick="loadAllTTClasses()" style="background:#0f766e;color:#fff;">📋 Refresh class list</button>
+                    </div>
+                    <p style="font-size:12px;color:#64748b;margin:6px 0;">Select a class that already has a schedule, or type a new class name then Save. Only that class is edited.</p>
+                    <span id="ttTeachersHint" style="font-size:12px;color:#64748b;width:100%;margin-top:4px;"></span>
+                    <div id="ttAllClassesHint" style="font-size:12px;color:#1f4e79;margin-top:4px;"></div>
                 </div>
                 <p style="font-size:13px;color:#64748b;margin:6px 0;">✏️ Each cell = Subject + Teacher — click to type, then <b>Save Grid</b></p>
                 <div style="overflow-x:auto;">
@@ -1463,17 +1472,51 @@ try{
                 tb.appendChild(tr);
             });
         };
-                window.loadTTGrid = function() {
-            const cls = (document.getElementById('ttClass').value || '').trim();
-            if (!cls) { if (window.showToast) showToast('Class ያስገቡ e.g. 5A or Grade 5A', 'err'); else alert('Enter class'); return; }
+                
+        window.getTTClass = function() {
+            var inp = (document.getElementById('ttClass') && document.getElementById('ttClass').value || '').trim();
+            var sel = (document.getElementById('ttClassSelect') && document.getElementById('ttClassSelect').value || '').trim();
+            return inp || sel || '';
+        };
+        window.loadAllTTClasses = function() {
+            fetch('/api/timetable-classes', { credentials: 'same-origin' })
+              .then(function(r){ return r.json(); })
+              .then(function(d){
+                  var list = d.classes || [];
+                  var sel = document.getElementById('ttClassSelect');
+                  var dl = document.getElementById('ttClassList');
+                  var hint = document.getElementById('ttAllClassesHint');
+                  if (sel) {
+                    var cur = sel.value;
+                    sel.innerHTML = '<option value="">— Classes with schedule —</option>';
+                    list.forEach(function(c){
+                      var o = document.createElement('option');
+                      o.value = c; o.textContent = c;
+                      if (c === cur) o.selected = true;
+                      sel.appendChild(o);
+                    });
+                  }
+                  if (dl) {
+                    dl.innerHTML = list.map(function(c){ return '<option value="'+String(c).replace(/"/g,'&quot;')+'">'; }).join('');
+                  }
+                  if (hint) hint.innerHTML = list.length
+                    ? ('📅 Saved schedules: <b>'+list.join('</b>, <b>')+'</b> — pick one to edit')
+                    : 'No schedules saved yet — type a class name, fill grid, Save';
+              }).catch(function(){});
+        };
+        window.loadTTGrid = function() {
+            const cls = window.getTTClass();
+            if (!cls) { if (window.showToast) showToast('Class ይምረጡ ወይም ይጻፉ e.g. 4A', 'err'); else alert('Select or type class'); return; }
+            // sync fields
+            var inp = document.getElementById('ttClass');
+            if (inp) inp.value = cls;
             fetch('/api/timetable?class=' + encodeURIComponent(cls), { credentials: 'same-origin' })
               .then(function(r){ return r.json(); })
               .then(function(d){
                   window.buildTTGrid(d.grid || {});
-                  if (window.showToast) showToast(d.rows && d.rows.length ? 'Loaded existing schedule — edit & Save' : 'New class schedule — fill & Save', 'info');
+                  if (window.showToast) showToast(d.rows && d.rows.length ? ('Loaded '+cls+' — edit & Save') : ('New schedule for '+cls), 'info');
               })
               .catch(function(){ if (window.showToast) showToast('Load failed', 'err'); });
-            // Teachers for this class
             fetch('/api/teachers-for-class?class=' + encodeURIComponent(cls), { credentials: 'same-origin' })
               .then(function(r){ return r.json(); })
               .then(function(d){
@@ -1482,29 +1525,24 @@ try{
                   if (hint) {
                     hint.innerHTML = list.length
                       ? ('👨‍🏫 Teachers for <b>'+cls+'</b>: ' + list.map(function(t){ return t.name + (t.subject?(' ('+t.subject+')'):''); }).join(', '))
-                      : ('No teachers assigned to '+cls+' yet — type teacher name manually');
+                      : ('No teachers assigned to '+cls+' — type teacher name manually');
                   }
-                  // datalist for teacher inputs
                   var dl = document.getElementById('ttTeacherList');
                   if (!dl) {
                     dl = document.createElement('datalist');
                     dl.id = 'ttTeacherList';
                     document.body.appendChild(dl);
                   }
-                  dl.innerHTML = list.map(function(t){
-                    return '<option value="'+String(t.name||'').replace(/"/g,'&quot;')+'">';
-                  }).join('');
+                  dl.innerHTML = list.map(function(t){ return '<option value="'+String(t.name||'').replace(/"/g,'&quot;')+'">'; }).join('');
                   document.querySelectorAll('#ttGrid input[data-f="teacher"]').forEach(function(inp){
                     inp.setAttribute('list', 'ttTeacherList');
-                    inp.placeholder = 'Teacher (select or type)';
-                  });
-                  document.querySelectorAll('#ttGrid input[data-f="subject"]').forEach(function(inp){
-                    inp.placeholder = 'Subject';
                   });
               }).catch(function(){});
         };
+
+        window._loadTTGridDone = true;
         window.saveTTGrid = function() {
-            const cls = (document.getElementById('ttClass').value || '').trim();
+            const cls = (window.getTTClass ? window.getTTClass() : (document.getElementById('ttClass').value || '').trim());
             if (!cls) { if (window.showToast) showToast('Section ያስገቡ', 'err'); else alert('Enter section'); return; }
             const grid = {};
             window._ttDays.forEach(function(d){ grid[d] = {}; });
@@ -1523,7 +1561,7 @@ try{
             })
             .then(function(r){ return r.json(); })
             .then(function(d){
-                if (d.success) { if (window.showToast) showToast('✅ Updated / Saved ('+d.saved+' slots)'); else alert('Updated'); var b=document.getElementById('ttSaveBtn'); if(b){ var t=b.textContent; b.textContent='✅ Saved'; setTimeout(function(){ b.textContent=t; },1500);} }
+                if (d.success) { if (window.showToast) showToast('✅ Updated / Saved ('+d.saved+' slots)'); else alert('Updated'); var b=document.getElementById('ttSaveBtn'); if(b){ var t=b.textContent; b.textContent='✅ Saved'; setTimeout(function(){ b.textContent=t; },1500);} if(window.loadAllTTClasses) loadAllTTClasses(); }
                 else { if (window.showToast) showToast('Save failed', 'err'); else alert('Failed'); }
             })
             .catch(function(){ if (window.showToast) showToast('Network error', 'err'); });
@@ -1820,6 +1858,17 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   // Save/Update buttons that use fetch — no reload so no jump
 })();
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  if (typeof window.loadAllTTClasses === 'function') window.loadAllTTClasses();
+  var sel = document.getElementById('ttClassSelect');
+  if (sel) sel.addEventListener('change', function(){
+    var inp = document.getElementById('ttClass');
+    if (inp && sel.value) inp.value = sel.value;
+    if (sel.value && typeof window.loadTTGrid === 'function') window.loadTTGrid();
+  });
+});
 </script>
 </body>
 </html>
