@@ -252,8 +252,10 @@ async function initDB() {
         )`);
         await pool.query(`CREATE TABLE IF NOT EXISTS library_resources (
             id SERIAL PRIMARY KEY,
-            title TEXT, category TEXT, class_level TEXT, file_path TEXT, uploaded_by TEXT, created_at TEXT
+            title TEXT, category TEXT, class_level TEXT, file_path TEXT, uploaded_by TEXT, teacher_id TEXT, note TEXT, created_at TEXT
         )`);
+        try { await pool.query(`ALTER TABLE library_resources ADD COLUMN IF NOT EXISTS teacher_id TEXT`); } catch(e) {}
+        try { await pool.query(`ALTER TABLE library_resources ADD COLUMN IF NOT EXISTS note TEXT`); } catch(e) {}
         await pool.query(`CREATE TABLE IF NOT EXISTS quizzes (
             id SERIAL PRIMARY KEY, teacher_id TEXT, teacher_name TEXT, class_level TEXT,
             title TEXT, questions_json TEXT, created_at TEXT
@@ -3093,8 +3095,40 @@ app.post('/library/upload', upload.single('file'), (req, res) => {
         [title || 'Resource', category || 'General', class_level || 'ALL', file, by, getFormattedTimestamp()],
         () => res.redirect(req.get('Referer') || '/admin'));
 });
+app.get('/api/me-student', (req, res) => {
+    if (!req.session.studentId) return res.json({ success: false });
+    db.get(`SELECT student_id, name, class_level FROM students WHERE student_id=?`, [req.session.studentId], (e, s) => {
+        if (!s) return res.json({ success: false });
+        res.json({ success: true, student_id: s.student_id, name: s.name, class_level: s.class_level || '' });
+    });
+});
+
 app.get('/api/library', (req, res) => {
-    db.all(`SELECT * FROM library_items ORDER BY id DESC LIMIT 100`, [], (e, rows) => res.json({ rows: rows || [] }));
+    const cls = (req.query.class || '').trim();
+    const loadItems = (cb) => {
+        db.all(`SELECT id, title, category, class_level, file_path, uploaded_by, created_at FROM library_items ORDER BY id DESC LIMIT 100`, [], (e, rows) => cb(rows || []));
+    };
+    const loadHandouts = (cb) => {
+        db.all(`SELECT id, title, category, class_level, file_path, uploaded_by, teacher_id, note, created_at FROM library_resources ORDER BY id DESC LIMIT 100`, [], (e, rows) => cb(rows || []));
+    };
+    const matchClass = (rowCls, studentCls) => {
+        if (!studentCls) return true;
+        if (!rowCls || rowCls === 'ALL' || rowCls === 'All') return true;
+        const a = String(rowCls).toLowerCase().replace(/grade\s*/g,'').replace(/\s+/g,'');
+        const b = String(studentCls).toLowerCase().replace(/grade\s*/g,'').replace(/\s+/g,'');
+        return a === b || a.includes(b) || b.includes(a) || String(rowCls).includes(studentCls) || String(studentCls).includes(rowCls);
+    };
+    loadItems((items) => {
+        loadHandouts((hands) => {
+            let rows = []
+                .concat((items || []).map(r => ({ ...r, source: 'library' })))
+                .concat((hands || []).map(r => ({ ...r, source: 'handout' })));
+            if (cls) rows = rows.filter(r => matchClass(r.class_level, cls));
+            // newest first if created_at present
+            rows.sort((a,b) => String(b.created_at||'').localeCompare(String(a.created_at||'')));
+            res.json({ rows });
+        });
+    });
 });
 
 // 1 Homework
@@ -3281,45 +3315,85 @@ app.post('/teacher/handout', upload.single('file'), (req, res) => {
     const class_level = (req.body.class_level || '').trim();
     const note = (req.body.note || '').trim();
     const file = req.file ? req.file.filename : '';
+    if (!class_level) return res.redirect('/teacher-dashboard#handout');
     if (!file && !note) return res.redirect('/teacher-dashboard#handout');
     db.get(`SELECT name FROM teachers WHERE id=?`, [req.session.teacherId], (e, t) => {
-        // store as library resource or announcements-like
+        const uploader = (t && t.name) || 'Teacher';
         db.run(
-            `INSERT INTO library_resources (title, category, class_level, file_path, uploaded_by, created_at) VALUES (?,?,?,?,?,?)`,
-            [title, 'Handout', class_level || 'ALL', file || '', (t && t.name) || 'Teacher', new Date().toISOString()],
+            `INSERT INTO library_resources (title, category, class_level, file_path, uploaded_by, teacher_id, note, created_at) VALUES (?,?,?,?,?,?,?,?)`,
+            [title, 'Handout', class_level, file || '', uploader, String(req.session.teacherId), note, new Date().toISOString()],
             (err) => {
-                // fallback if table columns differ - try notifications
                 if (err) {
-                    const body = (note || title) + (file ? ('\\n[File: /uploads/' + file + ']') : '');
+                    console.error('handout insert', err.message || err);
                     db.run(
-                        `INSERT INTO notifications (sender_role, sender_name, target_type, target_id, title, body, created_at) VALUES (?,?,?,?,?,?,?)`,
-                        ['teacher', (t && t.name) || 'Teacher', 'class', class_level || 'ALL', '📎 ' + title, body, new Date().toISOString()],
+                        `INSERT INTO library_resources (title, category, class_level, file_path, uploaded_by, created_at) VALUES (?,?,?,?,?,?)`,
+                        [title, 'Handout', class_level, file || '', uploader, new Date().toISOString()],
                         () => res.redirect('/teacher-dashboard#handout')
                     );
-                } else {
-                    res.redirect('/teacher-dashboard#handout');
-                }
+                } else res.redirect('/teacher-dashboard#handout');
             }
         );
+    });
+});
+
+app.get('/api/teacher/handouts', (req, res) => {
+    if (!req.session.teacherId && !req.session.isAdmin) return res.status(401).json({ success: false });
+    const tid = String(req.session.teacherId || '');
+    db.all(`SELECT * FROM library_resources ORDER BY id DESC LIMIT 100`, [], (e, rows) => {
+        db.get(`SELECT name FROM teachers WHERE id=?`, [tid], (e2, t) => {
+            const name = t ? t.name : '';
+            let list = (rows || []).filter(r => {
+                const cat = String(r.category || '').toLowerCase();
+                return cat === 'handout' || cat === '';
+            });
+            if (tid && !req.session.isAdmin) {
+                list = list.filter(r => String(r.teacher_id || '') === tid || (name && r.uploaded_by === name));
+            }
+            res.json({ success: true, rows: list });
+        });
+    });
+});
+
+app.post('/teacher/handout/:id/delete', (req, res) => {
+    if (!req.session.teacherId && !req.session.isAdmin) return res.json({ success: false });
+    const id = parseInt(req.params.id, 10) || req.params.id;
+    const tid = String(req.session.teacherId || '');
+    db.get(`SELECT * FROM library_resources WHERE id=?`, [id], (e, row) => {
+        if (!row) return res.json({ success: false, error: 'not found' });
+        const finishDel = () => db.run(`DELETE FROM library_resources WHERE id=?`, [id], () => res.json({ success: true }));
+        if (req.session.isAdmin) return finishDel();
+        if (String(row.teacher_id || '') === tid) return finishDel();
+        db.get(`SELECT name FROM teachers WHERE id=?`, [tid], (e2, t) => {
+            if (t && row.uploaded_by === t.name) return finishDel();
+            return res.json({ success: false, error: 'forbidden' });
+        });
     });
 });
 
 // List quizzes
 // List quizzes (questions without answers for students)
 app.get('/api/quizzes', (req, res) => {
+    const cls = (req.query.class || '').trim();
     db.all(`SELECT id, teacher_name, class_level, title, questions_json, created_at FROM quizzes ORDER BY id DESC LIMIT 40`, [], (e, rows) => {
-        res.json({
-            rows: (rows || []).map(r => {
-                let qs = [];
-                try { qs = JSON.parse(r.questions_json || '[]'); } catch (e) {}
-                return {
-                    id: r.id, teacher_name: r.teacher_name, class_level: r.class_level,
-                    title: r.title, created_at: r.created_at,
-                    count: qs.length,
-                    questions: qs.map(q => ({ q: q.q })) // no answers
-                };
-            })
+        let list = (rows || []).map(r => {
+            let qs = [];
+            try { qs = JSON.parse(r.questions_json || '[]'); } catch (err) {}
+            return {
+                id: r.id, teacher_name: r.teacher_name, class_level: r.class_level,
+                title: r.title, created_at: r.created_at,
+                count: Array.isArray(qs) ? qs.length : 0
+            };
         });
+        if (cls) {
+            const norm = (s) => String(s || '').toLowerCase().replace(/grade\s*/g, '').replace(/\s+/g, '');
+            const nc = norm(cls);
+            list = list.filter(r => {
+                if (!r.class_level || r.class_level === 'ALL') return true;
+                const nr = norm(r.class_level);
+                return nr === nc || nr.includes(nc) || nc.includes(nr);
+            });
+        }
+        res.json({ rows: list });
     });
 });
 // Full quiz for taking (student gets questions only)
@@ -3982,6 +4056,7 @@ a{color:#2980b9}
 <button type="button" data-t="exam">📝 Exams</button>
 </div>
 <div class="card panel" id="ann"><h3>Announcements</h3><div id="annList">Loading...</div></div>
+<script>window.STUDENT_CLASS = ${JSON.stringify((typeof studentCls !== 'undefined' ? studentCls : (req.session.studentClass || '')))};</script>
 <div class="card panel hidden" id="lib"><h3>Digital Library</h3><div id="libList">Loading...</div></div>
 <div class="card panel hidden" id="hw"><h3>Homework</h3><div id="hwList">Loading...</div></div>
 <div class="card panel hidden" id="quiz"><h3>Quizzes</h3><div id="quizList">Loading...</div></div>
@@ -3991,7 +4066,9 @@ a{color:#2980b9}
 </div>
 <script src="/socket.io/socket.io.js"></script>
 <script>
-window.STUDENT_ID=${JSON.stringify(hubSid)};
+window.STUDENT_CLASS=(typeof STUDENT_CLASS!=="undefined"?STUDENT_CLASS:"");window.STUDENT_ID=${JSON.stringify(hubSid)};
+// class filter for library/quiz
+if (typeof window.STUDENT_CLASS === 'undefined') window.STUDENT_CLASS = '';
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));
   b.classList.add('on');
@@ -4001,18 +4078,17 @@ document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
 fetch('/api/announcements').then(r=>r.json()).then(d=>{
   document.getElementById('annList').innerHTML=(d.rows||[]).map(a=>'<div style="border-bottom:1px solid #eee;padding:8px 0"><b>'+a.title+'</b><br><small>'+a.created_at+'</small><p>'+a.body+'</p></div>').join('')||'No announcements';
 });
-fetch('/api/library').then(r=>r.json()).then(d=>{
-  document.getElementById('libList').innerHTML=(d.rows||[]).map(i=>'<div style="padding:8px 0;border-bottom:1px solid #eee"><b>'+i.title+'</b> ('+(i.category||'')+') — '+(i.class_level||'')+'<br>'+(i.file_path?'<a href="/uploads/'+i.file_path+'" target="_blank">Download</a>':'')+'</div>').join('')||'Empty library';
-});
-fetch('/api/homework').then(r=>r.json()).then(d=>{
-  document.getElementById('hwList').innerHTML=(d.rows||[]).map(h=>'<div style="padding:8px 0;border-bottom:1px solid #eee"><b>'+h.title+'</b> — '+h.class_level+'<br>'+h.description+'<br><small>Due: '+(h.due_date||'-')+' | '+h.teacher_name+'</small></div>').join('')||'No homework';
-});
-fetch('/api/quizzes').then(r=>r.json()).then(d=>{
-  const box=document.getElementById('quizList');
-  box.innerHTML=(d.rows||[]).map(q=>
-    '<div style="padding:12px;border:1px solid #ddd;border-radius:8px;margin-bottom:10px"><b>'+q.title+'</b> · '+q.class_level+' · '+q.count+' questions<br><small>'+(q.teacher_name||'')+'</small><br><a href="/quiz/'+q.id+'" style="display:inline-block;margin-top:8px;background:#2980b9;color:#fff;padding:8px 14px;border-radius:8px;text-decoration:none;font-weight:bold;">Start Quiz ▶️</a></div>'
-  ).join('')||'No quizzes';
-});
+function renderLib(rows){
+  document.getElementById('libList').innerHTML=(rows||[]).map(i=>{
+    var link=i.file_path?('<a href="/uploads/'+i.file_path+'" target="_blank">'+(String(i.file_path).match(/\.(jpg|jpeg|png|gif|webp)$/i)?'🖼️ View photo':'Download')+'</a>'):'';
+    var note=i.note?('<div style="font-size:13px;color:#475569;margin-top:4px">'+i.note+'</div>'):'';
+    return '<div style="padding:10px 0;border-bottom:1px solid #eee"><b>'+(i.title||'')+'</b> <small>('+(i.category||'')+') · '+(i.class_level||'')+'</small><br><small>'+(i.uploaded_by||'')+'</small><br>'+link+note+'</div>';
+  }).join('')||'No handouts for your class';
+}
+function loadLibAndQuiz(){
+  var cls=window.STUDENT_CLASS||'';
+  fetch('/api/library?class='+encodeURIComponent(cls)).then(r=>r.json()).then(d=>renderLib(d.rows||[])).catch(()=>{});
+  /* quizzes loaded in loadLibAndQuiz */
 fetch('/api/exam-schedule').then(r=>r.json()).then(d=>{
   (document.getElementById('examHubList')||{innerHTML:''}).innerHTML='<table><tr><th>Date</th><th>Time</th><th>Class</th><th>Subject</th><th>Notes</th></tr>'
     +(d.rows||[]).map(x=>'<tr><td>'+(x.exam_date||'')+'</td><td>'+(x.exam_time||'')+'</td><td>'+(x.class_level||'')+'</td><td>'+(x.subject||'')+'</td><td>'+(x.notes||'')+'</td></tr>').join('')+'</table>';
