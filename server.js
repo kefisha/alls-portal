@@ -2162,10 +2162,11 @@ app.get('/teacher-dashboard', (req, res) => {
                                     studentsInClass.map(s => ({ id: s.student_id, name: s.name }))
                                 );
 
+                                const teacherSectionsJson = JSON.stringify(assignedClasses || []);
                                 res.render('teacher', {
                                     lang: 'am', teacher, selectedClass, selectedCourseId: selectedCourseId || 'default',
                                     classOptions, courseOptions, teacherTargetOptions, studentRows, absRows, teacherNotiRows, proctorPanel,
-                                    teacherStudentsJson
+                                    teacherStudentsJson, teacherSectionsJson, assignedClasses
                                 });
                             });
                         });
@@ -3236,28 +3237,31 @@ app.post('/teacher/quiz', upload.any(), (req, res) => {
 
 // Teacher: list my quizzes (with answers for editing)
 app.get('/api/teacher/quizzes', (req, res) => {
-    if (!req.session.teacherId && !req.session.isAdmin) return res.status(401).json({ success: false });
+    if (!req.session.teacherId && !req.session.isAdmin) return res.status(401).json({ success: false, error: 'login' });
     const tid = req.session.teacherId || null;
-    const sql = tid
-        ? `SELECT id, teacher_id, teacher_name, class_level, title, questions_json, created_at FROM quizzes WHERE teacher_id=? ORDER BY id DESC LIMIT 50`
-        : `SELECT id, teacher_id, teacher_name, class_level, title, questions_json, created_at FROM quizzes ORDER BY id DESC LIMIT 50`;
-    const params = tid ? [tid] : [];
-    db.all(sql, params, (e, rows) => {
-        if (e) return res.json({ success: false, error: String(e.message || e) });
-        const list = (rows || []).map(r => {
-            let qs = [];
-            try { qs = JSON.parse(r.questions_json || '[]'); } catch (err) { qs = []; }
-            return {
-                id: r.id,
-                title: r.title,
-                class_level: r.class_level,
-                teacher_name: r.teacher_name,
-                created_at: r.created_at,
-                count: Array.isArray(qs) ? qs.length : 0,
-                questions: qs
-            };
+    db.get(`SELECT name FROM teachers WHERE id=?`, [tid], (e0, trow) => {
+        const tname = trow ? trow.name : '';
+        db.all(`SELECT id, teacher_id, teacher_name, class_level, title, questions_json, created_at FROM quizzes ORDER BY id DESC LIMIT 80`, [], (e, rows) => {
+            if (e) return res.json({ success: false, error: String(e.message || e) });
+            let list = rows || [];
+            if (tid && !req.session.isAdmin) {
+                list = list.filter(r => String(r.teacher_id) === String(tid) || (tname && r.teacher_name === tname));
+            }
+            list = list.map(r => {
+                let qs = [];
+                try { qs = JSON.parse(r.questions_json || '[]'); } catch (err) { qs = []; }
+                return {
+                    id: r.id,
+                    title: r.title,
+                    class_level: r.class_level,
+                    teacher_name: r.teacher_name,
+                    created_at: r.created_at,
+                    count: Array.isArray(qs) ? qs.length : 0,
+                    questions: qs
+                };
+            });
+            res.json({ success: true, quizzes: list });
         });
-        res.json({ success: true, quizzes: list });
     });
 });
 
@@ -3338,12 +3342,19 @@ app.post('/teacher/handout', upload.single('file'), (req, res) => {
 
 app.get('/api/teacher/my-sections', (req, res) => {
     if (!req.session.teacherId) return res.json({ sections: [] });
-    db.get(`SELECT assigned_sections FROM teachers WHERE id=?`, [req.session.teacherId], (e, t) => {
+    db.get(`SELECT assigned_sections, name FROM teachers WHERE id=?`, [req.session.teacherId], (e, t) => {
         let sections = [];
         if (t && t.assigned_sections) {
             sections = String(t.assigned_sections).split(/[,;]+/).map(s => s.trim()).filter(Boolean);
         }
-        res.json({ sections });
+        // also sections from courses taught
+        db.all(`SELECT class_level FROM courses WHERE teacher_id=?`, [req.session.teacherId], (e2, rows) => {
+            (rows || []).forEach(r => {
+                const c = (r.class_level || '').trim();
+                if (c && sections.indexOf(c) === -1) sections.push(c);
+            });
+            res.json({ sections, teacher_name: t ? t.name : '' });
+        });
     });
 });
 
