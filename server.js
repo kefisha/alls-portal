@@ -3844,6 +3844,16 @@ app.post('/admin/timetable', (req, res) => {
         () => res.redirect('/admin#timetable'));
 });
 // Save full grid for one class: body.grid = { Monday: {1:{subject,teacher,room},...}, ... }
+app.post('/admin/timetable-grid/delete', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ success: false });
+    const class_level = (req.body.class_level || '').trim();
+    if (!class_level) return res.json({ success: false, error: 'class required' });
+    db.run(`DELETE FROM timetable WHERE class_level = ?`, [class_level], function(err) {
+        if (err) return res.json({ success: false, error: String(err.message || err) });
+        res.json({ success: true, deleted: this && this.changes });
+    });
+});
+
 app.post('/admin/timetable-grid', (req, res) => {
     if (!req.session.isAdmin) return res.status(401).json({ success: false });
     const class_level = (req.body.class_level || '').trim();
@@ -3924,6 +3934,12 @@ app.get('/api/teachers-for-class', (req, res) => {
             });
         }).map(t => ({ id: t.id, name: t.name, subject: t.subject || '', sections: t.assigned_sections || '' }));
         res.json({ teachers: matched });
+    });
+});
+
+app.get('/api/sections', (req, res) => {
+    db.all(`SELECT id, name, proctor_name FROM sections ORDER BY name`, [], (e, rows) => {
+        res.json({ rows: rows || [], sections: (rows || []).map(r => r.name) });
     });
 });
 
