@@ -3411,8 +3411,9 @@ app.get('/api/quizzes', (req, res) => {
             const nc = norm(cls);
             list = list.filter(r => {
                 if (!r.class_level || r.class_level === 'ALL') return true;
-                const nr = norm(r.class_level);
-                return nr === nc || nr.includes(nc) || nc.includes(nr);
+                // support multi: "Grade 1 - Section A, Grade 2 - Section B"
+                const parts = String(r.class_level).split(/[,;]+/).map(x => norm(x.trim())).filter(Boolean);
+                return parts.some(nr => nr === nc || nr.includes(nc) || nc.includes(nr) || String(r.class_level).toLowerCase().includes(String(cls).toLowerCase()));
             });
         }
         res.json({ rows: list });
