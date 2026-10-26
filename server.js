@@ -3997,6 +3997,8 @@ app.get('/admin/certificate', (req, res) => {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
 *{box-sizing:border-box}body{font-family:Segoe UI,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:16px}
+@page{size:A4 landscape;margin:8mm}
+@media print{body{background:#fff!important;padding:0!important}.panel,.no-print{display:none!important}.wrap{display:block!important;max-width:none!important}.stage{padding:0!important;background:#fff!important}.cert{box-shadow:none!important;width:277mm!important;min-height:180mm!important}}
 .wrap{max-width:1100px;margin:auto;display:grid;grid-template-columns:300px 1fr;gap:16px}
 @media(max-width:800px){.wrap{grid-template-columns:1fr}}
 .panel{background:#1e293b;border-radius:12px;padding:16px;max-height:90vh;overflow:auto}
@@ -4077,7 +4079,7 @@ border:14px solid #1f4e79;outline:6px solid #c9a227;outline-offset:6px;box-shado
 <option value="ridge">Ridge</option>
 </select>
 <button type="button" class="gold" onclick="downloadPdf()">📥 Download Full-Page PDF</button>
-<button type="button" class="sec" onclick="window.print()">🖨️ Print</button>
+<button type="button" class="sec no-print" onclick="printCert()">🖨️ Print Full Page</button>
 <p style="font-size:12px;margin-top:12px"><a href="/admin" style="color:#93c5fd">← Admin</a></p>
 </div>
 <div class="stage"><div class="cert" id="cert">
@@ -4130,10 +4132,21 @@ function sync(){
   if(bd) c.style.borderStyle=bd.value;
 }
 function downloadPdf(){
-  html2pdf().set({margin:4,filename:'Certificate_'+(document.getElementById('fName').value||'student').replace(/\\s+/g,'_')+'.pdf',
-    image:{type:'jpeg',quality:0.98},html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff'},
-    jsPDF:{unit:'mm',format:'a4',orientation:'landscape'}}).from(document.getElementById('cert')).save();
+  var el=document.getElementById('cert');
+  el.style.width='297mm';
+  el.style.minHeight='200mm';
+  el.style.maxWidth='none';
+  var name=(document.getElementById('fName')&&document.getElementById('fName').value)||'student';
+  html2pdf().set({
+    margin:0,
+    filename:'Certificate_'+String(name).replace(/\s+/g,'_')+'.pdf',
+    image:{type:'jpeg',quality:1},
+    html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff',scrollX:0,scrollY:0,width:el.scrollWidth,height:el.scrollHeight},
+    jsPDF:{unit:'mm',format:'a4',orientation:'landscape'},
+    pagebreak:{mode:['avoid-all']}
+  }).from(el).save().catch(function(){ window.print(); });
 }
+function printCert(){ window.print(); }
 sync();
 </script></body></html>`);
     };
@@ -4222,6 +4235,22 @@ async function seedDemoQuiz() {
             ['DEMO', 'System', 'ALL', 'Demo Math Quiz (5 questions)', JSON.stringify(qs), new Date().toISOString()]
         );
         console.log('DEMO_MATH_QUIZ seeded');
+        const ec = await pool.query('SELECT COUNT(*)::int AS c FROM exam_schedule');
+        if ((ec.rows[0] && ec.rows[0].c) === 0) {
+            const demos = [
+                ['Grade 8A', 'Mathematics', '2026-11-10', '09:00', 'Mid-term'],
+                ['Grade 8A', 'English', '2026-11-12', '09:00', 'Mid-term'],
+                ['Grade 9B', 'Physics', '2026-11-11', '10:30', 'Mid-term'],
+                ['Grade 10A', 'Chemistry', '2026-11-13', '09:00', 'Final practice']
+            ];
+            for (const d of demos) {
+                await pool.query(
+                    `INSERT INTO exam_schedule (class_level, subject, exam_date, exam_time, notes) VALUES ($1,$2,$3,$4,$5)`,
+                    d
+                );
+            }
+            console.log('DEMO_EXAM_SCHEDULE seeded');
+        }
     } catch (e) { console.error('seed demo quiz', e.message); }
 }
 
