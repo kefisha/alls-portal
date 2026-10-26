@@ -3213,13 +3213,10 @@ app.get('/api/quizzes', (req, res) => {
 });
 // Full quiz for taking (student gets questions only)
 app.get('/api/quiz/:id', (req, res) => {
-    const qid = parseInt(req.params.id, 10) || req.params.id;
-    db.get(`SELECT id, title, class_level, teacher_name, questions_json FROM quizzes WHERE id=?`, [qid], (e, quiz) => {
-        if (e) {
-            console.error('api/quiz error', e);
-            return res.json({ success: false, error: String(e.message || e) });
-        }
-        if (!quiz) return res.json({ success: false, error: 'not found' });
+    const raw = String(req.params.id || '').trim();
+    const qidNum = parseInt(raw, 10);
+    const tryLoad = (quiz) => {
+        if (!quiz) return res.json({ success: false, error: 'not found', id: raw });
         let qs = [];
         try {
             qs = typeof quiz.questions_json === 'string' ? JSON.parse(quiz.questions_json || '[]') : (quiz.questions_json || []);
@@ -3228,13 +3225,22 @@ app.get('/api/quiz/:id', (req, res) => {
             qs = [];
         }
         if (!Array.isArray(qs)) qs = [];
-        const questions = qs.map(q => ({
-            q: (q && q.q) ? String(q.q) : '',
-            type: (q && q.type) || (q && q.options ? 'mcq' : 'text'),
-            options: (q && q.options) || null,
-            image: (q && q.image) || null,
-            optImages: (q && q.optImages) || null
-        }));
+        // Normalize shapes from teacher builder
+        const questions = qs.map(q => {
+            if (!q) return { q: '', type: 'text', options: null };
+            let options = q.options || null;
+            if (!options && (q.A || q.B || q.C || q.D)) {
+                options = { A: q.A || '', B: q.B || '', C: q.C || '', D: q.D || '' };
+            }
+            return {
+                q: String(q.q || q.question || ''),
+                type: q.type || (options ? 'mcq' : 'text'),
+                options: options,
+                image: q.image || null,
+                optImages: q.optImages || null,
+                a: q.a || q.answer || ''
+            };
+        }).filter(q => q.q);
         res.json({
             success: true,
             id: quiz.id,
@@ -3242,6 +3248,18 @@ app.get('/api/quiz/:id', (req, res) => {
             class_level: quiz.class_level,
             teacher_name: quiz.teacher_name,
             questions: questions
+        });
+    };
+    db.get(`SELECT id, title, class_level, teacher_name, questions_json FROM quizzes WHERE id=?`, [isNaN(qidNum) ? raw : qidNum], (e, quiz) => {
+        if (e) {
+            console.error('api/quiz error', e);
+            return res.json({ success: false, error: String(e.message || e) });
+        }
+        if (quiz) return tryLoad(quiz);
+        // fallback: cast text id
+        db.get(`SELECT id, title, class_level, teacher_name, questions_json FROM quizzes WHERE CAST(id AS TEXT)=?`, [raw], (e2, quiz2) => {
+            if (e2) return res.json({ success: false, error: String(e2.message || e2) });
+            tryLoad(quiz2);
         });
     });
 });
@@ -3294,12 +3312,11 @@ app.post('/student/quiz-attempt', (req, res) => {
 // Telegram-style quiz page
 app.get('/quiz/:id', (req, res) => {
     if (!req.session.studentId && !req.session.teacherId && !req.session.isAdmin) return res.redirect('/?error=login');
-    const qid = req.params.id;
+    const qid = String(req.params.id || '').trim();
     res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Quiz</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <style>
 body{font-family:Segoe UI,sans-serif;background:linear-gradient(135deg,#1f4e79,#0d2b45);min-height:100vh;margin:0;padding:16px;color:#333}
 .card{background:#fff;max-width:520px;margin:20px auto;border-radius:16px;padding:22px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
@@ -3309,120 +3326,123 @@ h2{color:#1f4e79;margin:0 0 8px;font-size:20px}
 .qbox{font-size:16px;line-height:1.6;margin-bottom:14px;min-height:50px;white-space:pre-wrap;word-break:break-word}
 .opt{display:block;width:100%;text-align:left;padding:12px 14px;margin:8px 0;border:2px solid #cbd5e1;border-radius:10px;background:#f8fafc;font-size:15px;cursor:pointer;box-sizing:border-box}
 .opt.selected{border-color:#2980b9;background:#e8f4fd}
-.opt:hover{border-color:#94a3b8}
 button{width:100%;padding:14px;margin-top:12px;border:none;border-radius:10px;font-weight:bold;font-size:16px;cursor:pointer;background:#2980b9;color:#fff}
-button:disabled{opacity:.5;cursor:not-allowed}
+button:disabled{opacity:.5}
 button.sec{background:#64748b}
 .meta{font-size:13px;color:#64748b}
-.review{text-align:left;font-size:14px}
-.ok{color:#16a34a}.bad{color:#dc2626}
 .score{font-size:42px;font-weight:800;color:#1f4e79;text-align:center}
+.ok{color:#16a34a}.bad{color:#dc2626}
 .desc{white-space:pre-wrap;background:#f1f5f9;padding:10px;border-radius:8px;margin-top:6px;font-size:13px}
 </style></head><body>
 <div class="card" id="app"><p class="meta">Loading quiz...</p></div>
 <script>
-const quizId=${JSON.stringify(String(qid))};
-let questions=[], idx=0, answers=[], selected=null;
-function renderMath(el){
-  if(window.renderMathInElement){
-    try{ renderMathInElement(el,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false},{left:'\\\\(',right:'\\\\)',display:false},{left:'\\\\[',right:'\\\\]',display:true}],throwOnError:false}); }catch(e){}
-  }
-}
+(function(){
+var quizId = ${JSON.stringify(qid)};
+var questions = [];
+var idx = 0;
+var answers = [];
+var selected = null;
+var title = 'Quiz';
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+
 function showQ(){
-  const app=document.getElementById('app');
-  if(idx>=questions.length){ return finish(); }
-  selected=null;
-  const q=questions[idx];
-  const pct=Math.round((idx/questions.length)*100);
-  let optsHtml='';
-  if(q.options || q.optImages){
+  var app = document.getElementById('app');
+  if (idx >= questions.length) { finish(); return; }
+  selected = null;
+  var q = questions[idx] || {};
+  var pct = Math.round((idx / questions.length) * 100);
+  var optsHtml = '';
+  if (q.options) {
     ['A','B','C','D'].forEach(function(L){
-      const t=(q.options&&q.options[L])?q.options[L]:'';
-      const im=(q.optImages&&q.optImages[L])?q.optImages[L]:'';
-      if(!t && !im) return;
-      optsHtml+='<button type="button" class="opt" data-val="'+L+'"><b>'+L+'.</b> <span class="opttext"></span>'+(im?'<img src="/uploads/'+im+'" style="max-width:100%;max-height:120px;display:block;margin-top:6px;border-radius:6px;">':'')+'</button>';
+      var t = q.options[L];
+      if (t === undefined || t === null || t === '') return;
+      optsHtml += '<button type="button" class="opt" data-val="'+L+'"><b>'+L+'.</b> '+esc(t)+'</button>';
     });
-  } else {
-    optsHtml='<input type="text" id="ans" placeholder="Your answer..." style="width:100%;padding:14px;border:2px solid #cbd5e1;border-radius:10px;font-size:16px;box-sizing:border-box;">';
   }
-  var imgHtml=q.image?('<img src="/uploads/'+q.image+'" style="max-width:100%;border-radius:8px;margin-bottom:10px;">'):'';
-  app.innerHTML='<h2 id="title"></h2><div class="meta">Question '+(idx+1)+' / '+questions.length+'</div><div class="progress"><div class="bar" style="width:'+pct+'%"></div></div>'+imgHtml+'<div class="qbox" id="qtext"></div>'+optsHtml+'<button type="button" id="nextBtn" disabled>'+(idx===questions.length-1?'Finish ✅':'Next ➡️')+'</button><button type="button" class="sec" onclick="location.href=\\'/learning-hub\\'">Exit</button>';
-  document.getElementById('title').textContent=window._quizTitle||'Quiz';
-  const qt=document.getElementById('qtext');
-  var qraw=q.q||'';
-  if(qraw && qraw.indexOf('$')===-1 && /\\(lim|frac|sum|int|sqrt|to)/.test(qraw)){
-    try{ if(window.katex){ katex.render(qraw, qt, {throwOnError:false, displayMode:true}); } else { qt.textContent=qraw; renderMath(qt); } }
-    catch(e){ qt.textContent=qraw; renderMath(qt); }
-  } else {
-    qt.textContent=qraw;
-    renderMath(qt);
+  if (!optsHtml) {
+    optsHtml = '<input type="text" id="ans" placeholder="Your answer..." style="width:100%;padding:14px;border:2px solid #cbd5e1;border-radius:10px;font-size:16px;box-sizing:border-box;">';
   }
-  if(q.options || q.optImages){
-    const buttons=app.querySelectorAll('.opt');
-    let oi=0;
-    ['A','B','C','D'].forEach(function(L){
-      const t=(q.options&&q.options[L])?q.options[L]:'';
-      const im=(q.optImages&&q.optImages[L])?q.optImages[L]:'';
-      if(!t && !im) return;
-      const btn=buttons[oi++];
-      const sp=btn.querySelector('.opttext');
-      sp.textContent=t||'';
-      if(t) renderMath(sp);
-      btn.onclick=function(){
-        buttons.forEach(b=>b.classList.remove('selected'));
-        btn.classList.add('selected');
-        selected=L;
-        document.getElementById('nextBtn').disabled=false;
-      };
-    });
-  } else {
-    const inp=document.getElementById('ans');
-    inp.oninput=function(){ document.getElementById('nextBtn').disabled=!inp.value.trim(); };
-    inp.focus();
+  var imgHtml = q.image ? ('<img src="/uploads/'+esc(q.image)+'" style="max-width:100%;border-radius:8px;margin-bottom:10px;">') : '';
+  app.innerHTML = '<h2>'+esc(title)+'</h2><div class="meta">Question '+(idx+1)+' / '+questions.length+'</div><div class="progress"><div class="bar" style="width:'+pct+'%"></div></div>'+imgHtml+'<div class="qbox" id="qtext"></div>'+optsHtml+'<button type="button" id="nextBtn" disabled>'+(idx===questions.length-1?'Finish ✅':'Next ➡️')+'</button><button type="button" class="sec" id="exitBtn">Exit</button>';
+  document.getElementById('qtext').textContent = q.q || '';
+  document.getElementById('exitBtn').onclick = function(){ location.href='/learning-hub'; };
+  var nextBtn = document.getElementById('nextBtn');
+  app.querySelectorAll('.opt').forEach(function(btn){
+    btn.onclick = function(){
+      app.querySelectorAll('.opt').forEach(function(b){ b.classList.remove('selected'); });
+      btn.classList.add('selected');
+      selected = btn.getAttribute('data-val');
+      nextBtn.disabled = false;
+    };
+  });
+  var ans = document.getElementById('ans');
+  if (ans) {
+    ans.oninput = function(){ nextBtn.disabled = !(ans.value||'').trim(); };
   }
-  document.getElementById('nextBtn').onclick=function(){
-    if(q.options){ answers[idx]=selected; }
-    else { answers[idx]=document.getElementById('ans').value; }
+  nextBtn.onclick = function(){
+    var val = selected;
+    if (ans) val = (ans.value||'').trim();
+    answers[idx] = val || '';
     idx++;
     showQ();
   };
 }
+
 function finish(){
-  fetch('/student/quiz-attempt',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({quiz_id:quizId,answers:answers})})
-  .then(r=>r.json()).then(d=>{
-    const app=document.getElementById('app');
-    if(!d.success){ app.innerHTML='<p>Error submitting</p>'; return; }
-    let html='<div class="score">'+d.percent+'%</div><p style="text-align:center;font-weight:bold">'+d.score+' / '+d.total+' correct</p><div class="progress"><div class="bar" style="width:'+d.percent+'%"></div></div><div class="review">';
+  var app = document.getElementById('app');
+  app.innerHTML = '<p class="meta">Submitting...</p>';
+  fetch('/student/quiz-attempt', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quiz_id: quizId, answers: answers })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if (!d || !d.success) {
+      app.innerHTML = '<p>Error submitting.</p><button type="button" onclick="location.href=\\'/learning-hub\\'">Back</button>';
+      return;
+    }
+    var html = '<div class="score">'+(d.percent||0)+'%</div><p style="text-align:center;font-weight:bold">'+(d.score||0)+' / '+(d.total||0)+' correct</p>';
+    html += '<div class="progress"><div class="bar" style="width:'+(d.percent||0)+'%"></div></div>';
     (d.review||[]).forEach(function(r,i){
-      html+='<div style="border-top:1px solid #eee;padding:10px 0"><b>Q'+(i+1)+'.</b> <span class="qpart"></span><br>';
-      html+=(r.ok?'<span class="ok">✅ Correct</span>':'<span class="bad">❌ Wrong</span>');
-      html+='<br>Your: <b class="yourpart"></b><br>Answer: <b class="corrpart"></b>';
-      if(r.desc) html+='<div class="desc descp"></div>';
-      html+='</div>';
+      html += '<div style="border-top:1px solid #eee;padding:10px 0;text-align:left"><b>Q'+(i+1)+'.</b> '+esc(r.q)+'<br>';
+      html += r.ok ? '<span class="ok">✅ Correct</span>' : '<span class="bad">❌ Wrong</span>';
+      html += '<br>Your: <b>'+esc(r.your||'-')+'</b><br>Answer: <b>'+esc(r.correct||'-')+'</b>';
+      if (r.desc) html += '<div class="desc">'+esc(r.desc)+'</div>';
+      html += '</div>';
     });
-    html+='</div><button onclick="location.href=\\'/learning-hub\\'">Back to Hub</button>';
-    app.innerHTML=html;
-    app.querySelectorAll('.review > div').forEach(function(div,i){
-      const r=d.review[i]; if(!r) return;
-      const qp=div.querySelector('.qpart'); if(qp){ qp.textContent=r.q; renderMath(qp); }
-      const yp=div.querySelector('.yourpart'); if(yp){ yp.textContent=r.your||'-'; renderMath(yp); }
-      const cp=div.querySelector('.corrpart'); if(cp){ cp.textContent=r.correct||'-'; renderMath(cp); }
-      const dp=div.querySelector('.descp'); if(dp&&r.desc){ dp.textContent=r.desc; renderMath(dp); }
-    });
+    html += '<button type="button" onclick="location.href=\\'/learning-hub\\'">Back to Hub</button>';
+    app.innerHTML = html;
+  })
+  .catch(function(){
+    app.innerHTML = '<p>Submit failed.</p><button type="button" onclick="location.href=\\'/learning-hub\\'">Back</button>';
   });
 }
-fetch('/api/quiz/'+encodeURIComponent(quizId),{credentials:'same-origin'})
-.then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
-.then(function(d){
-  if(!d || !d.success){ document.getElementById('app').innerHTML='<p>Quiz not found or empty.</p><a href="/learning-hub" style="color:#2980b9">Back</a>'; return; }
-  window._quizTitle=d.title||'Quiz';
-  questions=d.questions||[];
-  if(!questions.length){ document.getElementById('app').innerHTML='<p>No questions in this quiz.</p><a href="/learning-hub" style="color:#2980b9">Back</a>'; return; }
-  showQ();
-})
-.catch(function(err){
-  document.getElementById('app').innerHTML='<p>Failed to load quiz.</p><p class="meta">'+String(err)+'</p><button type="button" onclick="location.reload()">Retry</button>';
-});
+
+fetch('/api/quiz/' + encodeURIComponent(quizId), { credentials: 'same-origin' })
+  .then(function(r){
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  })
+  .then(function(d){
+    if (!d || !d.success) {
+      document.getElementById('app').innerHTML = '<p>Quiz not found.</p><p class="meta">'+esc(d && d.error ? d.error : '')+'</p><a href="/learning-hub" style="color:#2980b9">Back</a>';
+      return;
+    }
+    title = d.title || 'Quiz';
+    questions = d.questions || [];
+    if (!questions.length) {
+      document.getElementById('app').innerHTML = '<p>No questions in this quiz.</p><a href="/learning-hub" style="color:#2980b9">Back</a>';
+      return;
+    }
+    showQ();
+  })
+  .catch(function(err){
+    document.getElementById('app').innerHTML = '<p>Failed to load quiz.</p><p class="meta">'+esc(err)+'</p><button type="button" onclick="location.reload()">Retry</button><br><a href="/learning-hub" style="color:#2980b9">Back</a>';
+  });
+})();
 </script></body></html>`);
 });
 
