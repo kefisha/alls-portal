@@ -3315,24 +3315,28 @@ app.get('/quiz/:id', (req, res) => {
     const qid = String(req.params.id || '').trim();
     res.send(`<!DOCTYPE html><html lang="am"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Quiz</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <style>
 body{font-family:Segoe UI,sans-serif;background:linear-gradient(135deg,#1f4e79,#0d2b45);min-height:100vh;margin:0;padding:16px;color:#333}
 .card{background:#fff;max-width:520px;margin:20px auto;border-radius:16px;padding:22px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
 h2{color:#1f4e79;margin:0 0 8px;font-size:20px}
 .progress{height:8px;background:#e2e8f0;border-radius:8px;overflow:hidden;margin:12px 0 18px}
 .bar{height:100%;background:#27ae60;width:0%;transition:.3s}
-.qbox{font-size:16px;line-height:1.6;margin-bottom:14px;min-height:50px;white-space:pre-wrap;word-break:break-word}
-.opt{display:block;width:100%;text-align:left;padding:12px 14px;margin:8px 0;border:2px solid #cbd5e1;border-radius:10px;background:#f8fafc;font-size:15px;cursor:pointer;box-sizing:border-box}
-.opt.selected{border-color:#2980b9;background:#e8f4fd}
-button{width:100%;padding:14px;margin-top:12px;border:none;border-radius:10px;font-weight:bold;font-size:16px;cursor:pointer;background:#2980b9;color:#fff}
-button:disabled{opacity:.5}
-button.sec{background:#64748b}
+.qbox{font-size:17px;line-height:1.6;margin-bottom:14px;min-height:48px;white-space:pre-wrap;word-break:break-word;font-weight:600;color:#0f172a}
+.opt{display:block;width:100%;text-align:left;padding:14px 16px;margin:10px 0;border:2px solid #3b82f6;border-radius:12px;background:#dbeafe;color:#1e3a8a;font-size:16px;font-weight:600;cursor:pointer;box-sizing:border-box}
+.opt:hover{background:#bfdbfe;border-color:#2563eb}
+.opt.selected{border-color:#1d4ed8;background:#93c5fd;color:#1e3a8a;box-shadow:0 0 0 3px rgba(37,99,235,.35)}
+button#nextBtn{width:100%;padding:14px;margin-top:12px;border:none;border-radius:10px;font-weight:bold;font-size:16px;cursor:pointer;background:#2980b9;color:#fff}
+button#nextBtn:disabled{opacity:.45;cursor:not-allowed}
+button.sec{width:100%;padding:14px;margin-top:10px;border:none;border-radius:10px;font-weight:bold;font-size:16px;cursor:pointer;background:#64748b;color:#fff}
 .meta{font-size:13px;color:#64748b}
+.timer{display:inline-flex;align-items:center;gap:6px;font-weight:800;font-size:18px;padding:8px 14px;border-radius:999px;background:#ecfdf5;color:#047857;border:2px solid #34d399}
+.timer.warn{background:#fef2f2;color:#b91c1c;border-color:#f87171;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+.toprow{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
 .score{font-size:42px;font-weight:800;color:#1f4e79;text-align:center}
-.ok{color:#16a34a}.bad{color:#dc2626}
+.ok{color:#16a34a;font-weight:bold}.bad{color:#dc2626;font-weight:bold}
 .desc{white-space:pre-wrap;background:#f1f5f9;padding:10px;border-radius:8px;margin-top:6px;font-size:13px}
+.review-item{border-top:1px solid #e2e8f0;padding:12px 0;text-align:left}
 </style></head><body>
 <div class="card" id="app"><p class="meta">Loading quiz...</p></div>
 <script>
@@ -3343,12 +3347,45 @@ var idx = 0;
 var answers = [];
 var selected = null;
 var title = 'Quiz';
+var timerSec = 0;
+var timerId = null;
+var SECONDS_PER_Q = 60;
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function fmt(t){ var m=Math.floor(t/60), s=t%60; return m+':'+(s<10?'0':'')+s; }
+
+function stopTimer(){ if(timerId){ clearInterval(timerId); timerId=null; } }
+
+function startTimer(){
+  stopTimer();
+  timerSec = SECONDS_PER_Q;
+  var el = document.getElementById('timer');
+  if (el) {
+    el.textContent = '⏱️ '+fmt(timerSec);
+    el.className = 'timer';
+  }
+  timerId = setInterval(function(){
+    timerSec--;
+    var t = document.getElementById('timer');
+    if (!t) return;
+    if (timerSec <= 15) t.className = 'timer warn';
+    else t.className = 'timer';
+    if (timerSec <= 0) {
+      t.textContent = '⏱️ 0:00';
+      stopTimer();
+      // auto-advance with current/empty answer
+      answers[idx] = selected || '';
+      idx++;
+      showQ();
+      return;
+    }
+    t.textContent = '⏱️ '+fmt(timerSec);
+  }, 1000);
+}
 
 function showQ(){
   var app = document.getElementById('app');
-  if (idx >= questions.length) { finish(); return; }
+  if (idx >= questions.length) { stopTimer(); finish(); return; }
   selected = null;
   var q = questions[idx] || {};
   var pct = Math.round((idx / questions.length) * 100);
@@ -3361,12 +3398,18 @@ function showQ(){
     });
   }
   if (!optsHtml) {
-    optsHtml = '<input type="text" id="ans" placeholder="Your answer..." style="width:100%;padding:14px;border:2px solid #cbd5e1;border-radius:10px;font-size:16px;box-sizing:border-box;">';
+    optsHtml = '<input type="text" id="ans" placeholder="Your answer..." style="width:100%;padding:14px;border:2px solid #3b82f6;border-radius:12px;font-size:16px;box-sizing:border-box;background:#eff6ff;">';
   }
   var imgHtml = q.image ? ('<img src="/uploads/'+esc(q.image)+'" style="max-width:100%;border-radius:8px;margin-bottom:10px;">') : '';
-  app.innerHTML = '<h2>'+esc(title)+'</h2><div class="meta">Question '+(idx+1)+' / '+questions.length+'</div><div class="progress"><div class="bar" style="width:'+pct+'%"></div></div>'+imgHtml+'<div class="qbox" id="qtext"></div>'+optsHtml+'<button type="button" id="nextBtn" disabled>'+(idx===questions.length-1?'Finish ✅':'Next ➡️')+'</button><button type="button" class="sec" id="exitBtn">Exit</button>';
+  app.innerHTML =
+    '<div class="toprow"><h2 style="margin:0">'+esc(title)+'</h2><div class="timer" id="timer">⏱️ 1:00</div></div>'+
+    '<div class="meta">Question '+(idx+1)+' / '+questions.length+' · 1 min each</div>'+
+    '<div class="progress"><div class="bar" style="width:'+pct+'%"></div></div>'+
+    imgHtml+'<div class="qbox" id="qtext"></div>'+optsHtml+
+    '<button type="button" id="nextBtn" disabled>'+(idx===questions.length-1?'Finish ✅':'Next ➡️')+'</button>'+
+    '<button type="button" class="sec" id="exitBtn">Exit</button>';
   document.getElementById('qtext').textContent = q.q || '';
-  document.getElementById('exitBtn').onclick = function(){ location.href='/learning-hub'; };
+  document.getElementById('exitBtn').onclick = function(){ stopTimer(); location.href='/learning-hub'; };
   var nextBtn = document.getElementById('nextBtn');
   app.querySelectorAll('.opt').forEach(function(btn){
     btn.onclick = function(){
@@ -3384,9 +3427,11 @@ function showQ(){
     var val = selected;
     if (ans) val = (ans.value||'').trim();
     answers[idx] = val || '';
+    stopTimer();
     idx++;
     showQ();
   };
+  startTimer();
 }
 
 function finish(){
@@ -3401,46 +3446,53 @@ function finish(){
   .then(function(r){ return r.json(); })
   .then(function(d){
     if (!d || !d.success) {
-      app.innerHTML = '<p>Error submitting.</p><button type="button" onclick="location.href=\\'/learning-hub\\'">Back</button>';
+      app.innerHTML = '<p>Error submitting.</p><button type="button" class="sec" onclick="location.href=\\'/learning-hub\\'">Back</button>';
       return;
     }
-    var html = '<div class="score">'+(d.percent||0)+'%</div><p style="text-align:center;font-weight:bold">'+(d.score||0)+' / '+(d.total||0)+' correct</p>';
+    var html = '<div class="score">'+(d.percent||0)+'%</div>';
+    html += '<p style="text-align:center;font-weight:bold;font-size:18px">'+(d.score||0)+' / '+(d.total||0)+' correct</p>';
     html += '<div class="progress"><div class="bar" style="width:'+(d.percent||0)+'%"></div></div>';
+    html += '<h3 style="color:#1f4e79;margin:16px 0 8px">Review</h3>';
     (d.review||[]).forEach(function(r,i){
-      html += '<div style="border-top:1px solid #eee;padding:10px 0;text-align:left"><b>Q'+(i+1)+'.</b> '+esc(r.q)+'<br>';
-      html += r.ok ? '<span class="ok">✅ Correct</span>' : '<span class="bad">❌ Wrong</span>';
-      html += '<br>Your: <b>'+esc(r.your||'-')+'</b><br>Answer: <b>'+esc(r.correct||'-')+'</b>';
+      html += '<div class="review-item"><b>Q'+(i+1)+'.</b> '+esc(r.q)+'<br>';
+      if (r.ok) {
+        html += '<span class="ok">✅ Correct</span>';
+      } else {
+        html += '<span class="bad">❌ Wrong</span>';
+        html += '<br>Your answer: <b>'+esc(r.your||'—')+'</b>';
+        html += '<br>Correct answer: <b style="color:#16a34a">'+esc(r.correct||'—')+'</b>';
+      }
+      if (r.ok) {
+        html += '<br>Answer: <b style="color:#16a34a">'+esc(r.correct||'—')+'</b>';
+      }
       if (r.desc) html += '<div class="desc">'+esc(r.desc)+'</div>';
       html += '</div>';
     });
-    html += '<button type="button" onclick="location.href=\\'/learning-hub\\'">Back to Hub</button>';
+    html += '<button type="button" onclick="location.href=\\'/learning-hub\\'" style="width:100%;padding:14px;margin-top:14px;border:none;border-radius:10px;font-weight:bold;background:#2980b9;color:#fff">Back to Hub</button>';
     app.innerHTML = html;
   })
   .catch(function(){
-    app.innerHTML = '<p>Submit failed.</p><button type="button" onclick="location.href=\\'/learning-hub\\'">Back</button>';
+    app.innerHTML = '<p>Submit failed.</p><button type="button" class="sec" onclick="location.href=\\'/learning-hub\\'">Back</button>';
   });
 }
 
 fetch('/api/quiz/' + encodeURIComponent(quizId), { credentials: 'same-origin' })
-  .then(function(r){
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    return r.json();
-  })
+  .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
   .then(function(d){
     if (!d || !d.success) {
-      document.getElementById('app').innerHTML = '<p>Quiz not found.</p><p class="meta">'+esc(d && d.error ? d.error : '')+'</p><a href="/learning-hub" style="color:#2980b9">Back</a>';
+      document.getElementById('app').innerHTML = '<p>Quiz not found.</p><a href="/learning-hub" style="color:#2980b9">Back</a>';
       return;
     }
     title = d.title || 'Quiz';
     questions = d.questions || [];
     if (!questions.length) {
-      document.getElementById('app').innerHTML = '<p>No questions in this quiz.</p><a href="/learning-hub" style="color:#2980b9">Back</a>';
+      document.getElementById('app').innerHTML = '<p>No questions.</p><a href="/learning-hub" style="color:#2980b9">Back</a>';
       return;
     }
     showQ();
   })
   .catch(function(err){
-    document.getElementById('app').innerHTML = '<p>Failed to load quiz.</p><p class="meta">'+esc(err)+'</p><button type="button" onclick="location.reload()">Retry</button><br><a href="/learning-hub" style="color:#2980b9">Back</a>';
+    document.getElementById('app').innerHTML = '<p>Failed to load quiz.</p><p class="meta">'+esc(err)+'</p><button type="button" onclick="location.reload()">Retry</button>';
   });
 })();
 </script></body></html>`);
