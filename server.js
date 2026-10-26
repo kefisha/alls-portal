@@ -3927,6 +3927,13 @@ app.get('/api/teachers-for-class', (req, res) => {
     });
 });
 
+app.get('/api/timetable-classes', (req, res) => {
+    db.all(`SELECT DISTINCT class_level FROM timetable WHERE class_level IS NOT NULL AND class_level != '' ORDER BY class_level`, [], (e, rows) => {
+        const classes = (rows || []).map(r => r.class_level).filter(Boolean);
+        res.json({ classes });
+    });
+});
+
 app.get('/api/timetable', (req, res) => {
     const cls = req.query.class || '';
     db.all(`SELECT * FROM timetable ORDER BY day_of_week, period_no`, [], (e, rows) => {
