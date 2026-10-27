@@ -317,6 +317,18 @@ async function initDB() {
             id SERIAL PRIMARY KEY, title TEXT, body TEXT, audience TEXT DEFAULT 'ALL',
             created_by TEXT, created_at TEXT
         )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS staff_leave (
+            id SERIAL PRIMARY KEY,
+            teacher_id TEXT, teacher_name TEXT,
+            start_date TEXT, end_date TEXT, reason TEXT,
+            status TEXT DEFAULT 'pending', admin_reply TEXT,
+            created_at TEXT, reviewed_at TEXT
+        )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS photo_gallery (
+            id SERIAL PRIMARY KEY,
+            title TEXT, category TEXT DEFAULT 'events',
+            caption TEXT, file_path TEXT, uploaded_by TEXT, created_at TEXT
+        )`);
         await pool.query(`CREATE TABLE IF NOT EXISTS exam_schedule (
             id SERIAL PRIMARY KEY, class_level TEXT, subject TEXT, exam_date TEXT,
             exam_time TEXT, room TEXT, notes TEXT, created_at TEXT
@@ -5466,4 +5478,247 @@ async function seedDemoQuiz() {
 }
 
 setTimeout(function(){ seedDemoQuiz(); }, 3000);
+
+// ===== Staff leave =====
+app.post('/teacher/leave-request', (req, res) => {
+    if (!req.session.teacherId) return res.status(401).json({ success: false });
+    const { start_date, end_date, reason } = req.body;
+    if (!start_date || !end_date) return res.json({ success: false, error: 'dates required' });
+    db.get(`SELECT name FROM teachers WHERE id=?`, [req.session.teacherId], (e, t) => {
+        db.run(`INSERT INTO staff_leave (teacher_id, teacher_name, start_date, end_date, reason, status, created_at) VALUES (?,?,?,?,?,?,?)`,
+            [req.session.teacherId, t ? t.name : '', start_date, end_date, reason || '', 'pending', new Date().toISOString()],
+            () => res.json({ success: true }));
+    });
+});
+app.get('/api/teacher/my-leave', (req, res) => {
+    if (!req.session.teacherId) return res.status(401).json({ rows: [] });
+    db.all(`SELECT * FROM staff_leave WHERE teacher_id=? ORDER BY id DESC LIMIT 20`, [req.session.teacherId], (e, rows) => res.json({ rows: rows || [] }));
+});
+app.get('/api/admin/leave-requests', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ rows: [] });
+    db.all(`SELECT * FROM staff_leave ORDER BY id DESC LIMIT 50`, [], (e, rows) => res.json({ rows: rows || [] }));
+});
+app.post('/admin/leave-review', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ success: false });
+    const { id, action, reply } = req.body;
+    const status = action === 'approve' ? 'approved' : 'rejected';
+    db.run(`UPDATE staff_leave SET status=?, admin_reply=?, reviewed_at=? WHERE id=?`,
+        [status, reply || '', new Date().toISOString(), id],
+        () => res.json({ success: true }));
+});
+
+// ===== Admin dashboard widgets =====
+app.get('/api/admin/dashboard-stats', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ success: false });
+    const out = {};
+    db.get(`SELECT COUNT(*) as c FROM students`, [], (e1, s) => {
+        out.students = s ? s.c : 0;
+        db.get(`SELECT COUNT(*) as c FROM teachers`, [], (e2, t) => {
+            out.teachers = t ? t.c : 0;
+            db.get(`SELECT COUNT(*) as c FROM pending_students`, [], (e3, p) => {
+                out.pending = p ? p.c : 0;
+                db.get(`SELECT COUNT(*) as c FROM grade_locks WHERE locked=1`, [], (e4, g) => {
+                    out.locked_grades = g ? g.c : 0;
+                    db.get(`SELECT COUNT(*) as c FROM staff_leave WHERE status='pending'`, [], (e5, l) => {
+                        out.leave_pending = l ? l.c : 0;
+                        db.get(`SELECT COUNT(*) as c FROM rereg_requests WHERE status='pending'`, [], (e6, r) => {
+                            out.rereg_pending = r ? r.c : 0;
+                            const today = new Date().toISOString().slice(0, 10);
+                            db.get(`SELECT COUNT(*) as c FROM daily_attendance WHERE date=? AND status='Present'`, [today], (e7, a) => {
+                                out.present_today = a ? a.c : 0;
+                                res.json({ success: true, stats: out });
+                            });
+                        });
+                    });
+                });
+            });
+        });
+    });
+});
+
+// ===== Transfer certificate (simple printable) =====
+app.get('/admin/transfer-certificate', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    const q = (req.query.q || req.query.student_id || '').trim();
+    const renderPage = (student) => {
+        const name = student ? (student.name || '') : '';
+        const id = student ? (student.student_id || '') : '';
+        const cls = student ? (student.class_level || '') : '';
+        const gender = student ? (student.gender || '') : '';
+        const today = new Date().toLocaleDateString('en-GB');
+        res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Transfer Certificate</title>
+<style>
+body{font-family:Georgia,serif;background:#f1f5f9;margin:0;padding:16px}
+.wrap{max-width:800px;margin:auto}
+.no-print{margin-bottom:12px}
+.cert{background:#fff;border:8px double #1e3a8a;padding:28px 32px;min-height:480px}
+h1{text-align:center;color:#1e3a8a;margin:0 0 4px;font-size:22px}
+h2{text-align:center;color:#b45309;margin:8px 0 20px;font-size:20px;letter-spacing:1px}
+p{line-height:1.7;font-size:15px}
+.meta{margin-top:24px;font-size:14px}
+.sigs{display:flex;justify-content:space-between;margin-top:48px}
+.sig{text-align:center;width:40%}
+.sig div{border-top:1px solid #333;margin-top:40px;padding-top:6px}
+@media print{body{background:#fff;padding:0}.no-print{display:none}.cert{border-width:6px}}
+input,button{padding:10px;margin:4px 0;font-size:15px}
+button{background:#1d4ed8;color:#fff;border:none;border-radius:8px;font-weight:bold;cursor:pointer}
+</style></head><body><div class="wrap">
+<div class="no-print">
+<form method="GET" action="/admin/transfer-certificate">
+<input name="q" placeholder="Student ID or name" value="${q.replace(/"/g,'&quot;')}" style="width:70%">
+<button type="submit">Load</button>
+</form>
+<button onclick="window.print()" style="background:#027a48;margin-left:8px">🖨️ Print</button>
+<a href="/admin" style="margin-left:12px">← Admin</a>
+</div>
+<div class="cert">
+<h1>AMANUEL LIGHT &amp; LIFE SCHOOL</h1>
+<p style="text-align:center;margin:0;font-size:13px;color:#64748b">Transfer Certificate</p>
+<h2>TRANSFER CERTIFICATE</h2>
+<p>This is to certify that <b contenteditable="true">${name || '________________'}</b>
+(Student ID: <b contenteditable="true">${id || '________'}</b>),
+${gender ? ('Gender: <b>'+gender+'</b>,') : ''}
+was a bonafide student of this school in class <b contenteditable="true">${cls || '________'}</b>.</p>
+<p>He/She is leaving the school with effect from <b contenteditable="true">${today}</b>.
+To the best of our knowledge his/her character is <b contenteditable="true">Good</b>.</p>
+<p>We wish him/her success in future studies.</p>
+<div class="meta">Date: <b contenteditable="true">${today}</b> &nbsp; · &nbsp; Place: <b contenteditable="true">School Office</b></div>
+<div class="sigs">
+<div class="sig"><div>Class Teacher</div></div>
+<div class="sig"><div>Director / Principal</div></div>
+</div>
+</div>
+</div></body></html>`);
+    };
+    if (!q) return renderPage(null);
+    db.get(`SELECT * FROM students WHERE UPPER(student_id)=UPPER(?) OR UPPER(name) LIKE UPPER(?)`, [q, '%'+q+'%'], (e, s) => {
+        if (s) return renderPage(s);
+        db.all(`SELECT * FROM students WHERE UPPER(name) LIKE UPPER(?) LIMIT 1`, ['%'+q+'%'], (e2, rows) => {
+            renderPage(rows && rows[0] ? rows[0] : null);
+        });
+    });
+});
+
+
+
+// ===== Photo Gallery =====
+app.get('/api/gallery', (req, res) => {
+    const cat = (req.query.category || '').trim();
+    db.all(`SELECT * FROM photo_gallery ORDER BY id DESC LIMIT 120`, [], (e, rows) => {
+        let list = rows || [];
+        if (cat) list = list.filter(r => String(r.category || '').toLowerCase() === cat.toLowerCase());
+        res.json({ success: true, rows: list });
+    });
+});
+app.post('/admin/gallery-upload', upload.single('photo'), (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ success: false });
+    if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
+    const title = (req.body.title || '').trim() || req.file.originalname;
+    const category = (req.body.category || 'events').trim();
+    const caption = (req.body.caption || '').trim();
+    db.run(`INSERT INTO photo_gallery (title, category, caption, file_path, uploaded_by, created_at) VALUES (?,?,?,?,?,?)`,
+        [title, category, caption, req.file.filename, 'Admin', getFormattedTimestamp()],
+        () => res.json({ success: true }));
+});
+app.post('/admin/gallery-delete', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ success: false });
+    const id = req.body.id;
+    db.run(`DELETE FROM photo_gallery WHERE id=?`, [id], () => res.json({ success: true }));
+});
+app.get('/gallery', (req, res) => {
+    // public-ish: any logged in role
+    if (!req.session.isAdmin && !req.session.teacherId && !req.session.studentId) return res.redirect('/');
+    db.all(`SELECT * FROM photo_gallery ORDER BY id DESC LIMIT 120`, [], (e, rows) => {
+        const items = (rows || []).map(r => `
+          <div class="g-item">
+            <img src="/uploads/${r.file_path}" alt="${(r.title||'').replace(/"/g,'')}">
+            <div class="meta"><b>${r.title || ''}</b><br><small>${r.category || ''} · ${r.created_at || ''}</small>
+            ${r.caption ? '<p>'+r.caption+'</p>' : ''}</div>
+          </div>`).join('');
+        res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Photo Gallery</title>
+<style>
+body{font-family:Segoe UI,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:16px}
+h1{color:#93c5fd;text-align:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;max-width:1000px;margin:auto}
+.g-item{background:#1e293b;border-radius:12px;overflow:hidden;border:1px solid #334155}
+.g-item img{width:100%;height:140px;object-fit:cover;display:block}
+.meta{padding:10px;font-size:13px}
+a{color:#93c5fd}
+.tabs a{display:inline-block;margin:6px;padding:8px 12px;background:#1e3a5f;border-radius:8px;text-decoration:none;color:#fff;font-weight:bold}
+</style></head><body>
+<h1>📷 Photo Gallery</h1>
+<p style="text-align:center"><a class="tabs" href="/gallery">All</a>
+<a class="tabs" href="/gallery?category=events">Events</a>
+<a class="tabs" href="/gallery?category=sports">Sports</a>
+<a class="tabs" href="/gallery?category=school">School life</a></p>
+<div class="grid" id="grid">${items || '<p style="grid-column:1/-1;text-align:center">No photos yet</p>'}</div>
+<p style="text-align:center;margin-top:20px"><a href="javascript:history.back()">⬅️ Back</a></p>
+<script>
+(function(){
+  var q=new URLSearchParams(location.search).get('category');
+  if(!q) return;
+  fetch('/api/gallery?category='+encodeURIComponent(q)).then(r=>r.json()).then(function(d){
+    var g=document.getElementById('grid');
+    if(!(d.rows||[]).length){ g.innerHTML='<p style="grid-column:1/-1;text-align:center">No photos</p>'; return; }
+    g.innerHTML=d.rows.map(function(r){
+      return '<div class="g-item"><img src="/uploads/'+r.file_path+'" alt=""><div class="meta"><b>'+(r.title||'')+'</b><br><small>'+(r.category||'')+'</small>'+(r.caption?('<p>'+r.caption+'</p>'):'')+'</div></div>';
+    }).join('');
+  });
+})();
+</script></body></html>`);
+    });
+});
+
+// ===== Alumni =====
+app.get('/api/admin/alumni', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ rows: [] });
+    db.all(`SELECT student_id, name, class_level, status, year_average, year_result, phone, gender FROM students WHERE status='Graduated' OR class_level ILIKE '%Graduat%' OR promoted_to='Graduated' ORDER BY name`, [], (e, rows) => {
+        // also from archives last grade 12
+        db.all(`SELECT student_id, student_name as name, class_level, total_score as year_average, academic_year FROM academic_archives WHERE class_level ILIKE '%Grade 12%' ORDER BY academic_year DESC, student_name`, [], (e2, arch) => {
+            const seen = new Set((rows || []).map(r => r.student_id));
+            const extra = (arch || []).filter(a => !seen.has(a.student_id)).map(a => ({
+                student_id: a.student_id, name: a.name, class_level: a.class_level,
+                status: 'Alumni', year_average: a.year_average, year_result: a.academic_year, phone: '', gender: ''
+            }));
+            res.json({ success: true, rows: (rows || []).concat(extra) });
+        });
+    });
+});
+app.get('/admin/alumni', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    res.redirect('/admin#alumniBox');
+});
+
+// ===== Report builder (CSV) =====
+app.get('/api/admin/report-builder', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).send('Unauthorized');
+    const entity = (req.query.entity || 'students').toLowerCase();
+    const cols = String(req.query.cols || '').split(',').map(s => s.trim()).filter(Boolean);
+    const allowedStudents = ['student_id','name','mother_name','gender','age','phone','emergency_phone','region','zone','woreda','kebele','class_level','status','year_average','year_result','promoted_to','payment_type'];
+    const allowedTeachers = ['id','name','phone','subject','gender','assigned_sections','assigned_grades','is_proctor','emergency_phone'];
+    const allowed = entity === 'teachers' ? allowedTeachers : allowedStudents;
+    const useCols = cols.length ? cols.filter(c => allowed.includes(c)) : allowed.slice(0, 8);
+    if (!useCols.length) return res.status(400).send('No valid columns');
+    const table = entity === 'teachers' ? 'teachers' : 'students';
+    // safe column list only from allowlist
+    const sqlCols = useCols.join(', ');
+    db.all(`SELECT ${sqlCols} FROM ${table}`, [], (e, rows) => {
+        if (e) return res.status(500).send('DB error');
+        const lines = [useCols.join(',')];
+        (rows || []).forEach(r => {
+            lines.push(useCols.map(c => {
+                let v = r[c];
+                if (v === null || v === undefined) return '""';
+                return '"' + String(v).replace(/"/g, '""') + '"';
+            }).join(','));
+        });
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${entity}_report.csv"`);
+        res.send('\uFEFF' + lines.join('\n'));
+    });
+});
+
+
 httpServer.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
