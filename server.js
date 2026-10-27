@@ -287,6 +287,13 @@ async function initDB() {
         try { await pool.query(`INSERT INTO school_settings (key, value) VALUES ('pass_mark_1_4', '56') ON CONFLICT (key) DO NOTHING`); } catch(e) {}
         try { await pool.query(`INSERT INTO school_settings (key, value) VALUES ('pass_mark_5_8', '60') ON CONFLICT (key) DO NOTHING`); } catch(e) {}
         try { await pool.query(`INSERT INTO school_settings (key, value) VALUES ('pass_mark_9_12', '65') ON CONFLICT (key) DO NOTHING`); } catch(e) {}
+        try { await pool.query(`INSERT INTO school_settings (key, value) VALUES ('current_academic_year', '2019 E.C') ON CONFLICT (key) DO NOTHING`); } catch(e) {}
+        await pool.query(`CREATE TABLE IF NOT EXISTS unlock_requests (
+            id SERIAL PRIMARY KEY,
+            teacher_id TEXT, teacher_name TEXT, class_level TEXT, course_code TEXT,
+            reason TEXT, status TEXT DEFAULT 'pending', admin_reply TEXT,
+            created_at TEXT, reviewed_at TEXT
+        )`);
         await pool.query(`CREATE TABLE IF NOT EXISTS rereg_requests (
             id SERIAL PRIMARY KEY,
             student_id TEXT, student_name TEXT, current_class TEXT, target_class TEXT,
@@ -3046,8 +3053,131 @@ app.get('/admin/master-roster/:year/:className', (req, res) => {
 
 app.post('/admin/archive-year', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
-    db.run(`DELETE FROM course_assessments`, [], () => res.redirect('/admin'));
+    const year = (req.body.academic_year || '').trim() || '2019 E.C';
+    const nowStr = new Date().toISOString();
+    // Full archive into academic_archives + history, then clear current grades for new year
+    db.all(`SELECT * FROM students`, [], (e1, students = []) => {
+        db.all(`SELECT * FROM course_assessments`, [], (e2, assessments = []) => {
+            let i = 0;
+            const nextSt = () => {
+                if (i >= students.length) {
+                    db.run(`DELETE FROM course_assessments`, [], () => {
+                        db.run(`DELETE FROM grade_locks`, [], () => {
+                            db.run(`INSERT INTO school_settings (key,value) VALUES ('current_academic_year',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+                                [year], () => res.redirect('/admin?archived=1&year=' + encodeURIComponent(year)));
+                        });
+                    });
+                    return;
+                }
+                const st = students[i++];
+                const mine = (assessments || []).filter(a => a.student_id === st.student_id);
+                const summary = mine.map(a => (a.course_title || a.course_code) + ':' + (a.total || 0)).join('; ');
+                const total = mine.length ? mine.reduce((s,a)=>s+(Number(a.total)||0),0)/mine.length : 0;
+                db.run(`INSERT INTO academic_archives (academic_year, student_id, student_name, class_level, courses_summary, total_score, archived_date) VALUES (?,?,?,?,?,?,?)`,
+                    [year, st.student_id, st.name, st.class_level, summary, total, nowStr], () => {
+                        let j = 0;
+                        const nextG = () => {
+                            if (j >= mine.length) return nextSt();
+                            const row = mine[j++];
+                            db.run(`INSERT INTO student_class_history (student_id, class_level, academic_year, course_code, course_title, quiz, assignment, project, mid, final, total, saved_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+                                [st.student_id, st.class_level||'', year, row.course_code||'', row.course_title||'', row.quiz||0, row.assignment||0, row.project||0, row.mid||0, row.final||0, row.total||0, nowStr],
+                                nextG);
+                        };
+                        if (!mine.length) return nextSt();
+                        nextG();
+                    });
+            };
+            nextSt();
+        });
+    });
 });
+
+app.get('/api/admin/academic-years', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ years: [] });
+    db.all(`SELECT DISTINCT academic_year FROM academic_archives ORDER BY academic_year DESC`, [], (e, rows) => {
+        db.get(`SELECT value FROM school_settings WHERE key='current_academic_year'`, [], (e2, cur) => {
+            res.json({
+                success: true,
+                current: cur ? cur.value : '2019 E.C',
+                years: (rows || []).map(r => r.academic_year).filter(Boolean)
+            });
+        });
+    });
+});
+
+app.get('/api/admin/year-archive', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ rows: [] });
+    const year = (req.query.year || '').trim();
+    if (!year) return res.json({ success: true, rows: [] });
+    db.all(`SELECT * FROM academic_archives WHERE academic_year=? ORDER BY class_level, student_name`, [year], (e, rows) => {
+        res.json({ success: true, year, rows: rows || [] });
+    });
+});
+
+app.post('/admin/set-current-year', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ success: false });
+    const year = (req.body.academic_year || '').trim();
+    if (!year) return res.json({ success: false });
+    db.run(`INSERT INTO school_settings (key,value) VALUES ('current_academic_year',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+        [year], () => res.json({ success: true, current: year }));
+});
+
+// Teacher requests unlock for a class (after submit lock)
+app.post('/teacher/request-unlock', (req, res) => {
+    if (!req.session.teacherId) return res.status(401).json({ success: false });
+    const class_level = (req.body.class_level || '').trim();
+    const course_code = (req.body.course_code || '').trim();
+    const reason = (req.body.reason || '').trim();
+    if (!class_level) return res.json({ success: false, error: 'class required' });
+    db.get(`SELECT name FROM teachers WHERE id=?`, [req.session.teacherId], (e, t) => {
+        db.run(`INSERT INTO unlock_requests (teacher_id, teacher_name, class_level, course_code, reason, status, created_at) VALUES (?,?,?,?,?,?,?)`,
+            [req.session.teacherId, t ? t.name : '', class_level, course_code, reason, 'pending', new Date().toISOString()],
+            () => res.json({ success: true }));
+    });
+});
+
+app.get('/api/admin/unlock-requests', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ rows: [] });
+    db.all(`SELECT * FROM unlock_requests ORDER BY id DESC LIMIT 50`, [], (e, rows) => res.json({ rows: rows || [] }));
+});
+
+app.post('/admin/unlock-request-review', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ success: false });
+    const { id, action, reply } = req.body; // approve | reject
+    db.get(`SELECT * FROM unlock_requests WHERE id=?`, [id], (e, row) => {
+        if (!row) return res.json({ success: false });
+        if (action === 'approve') {
+            // Unlock by class (and optional course)
+            const unlockCb = () => {
+                db.run(`UPDATE unlock_requests SET status='approved', admin_reply=?, reviewed_at=? WHERE id=?`,
+                    [reply || 'Approved', new Date().toISOString(), id],
+                    () => res.json({ success: true }));
+            };
+            if (row.course_code) {
+                db.run(`UPDATE grade_locks SET locked=0, unlocked_at=? WHERE class_level=? AND course_code=?`,
+                    [new Date().toISOString(), row.class_level, row.course_code], unlockCb);
+            } else {
+                db.run(`UPDATE grade_locks SET locked=0, unlocked_at=? WHERE class_level=?`,
+                    [new Date().toISOString(), row.class_level], unlockCb);
+            }
+        } else {
+            db.run(`UPDATE unlock_requests SET status='rejected', admin_reply=?, reviewed_at=? WHERE id=?`,
+                [reply || 'Rejected', new Date().toISOString(), id],
+                () => res.json({ success: true }));
+        }
+    });
+});
+
+// Admin unlock whole class (all courses in that class)
+app.post('/admin/grade-unlock-class', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ success: false });
+    const class_level = (req.body.class_level || '').trim();
+    if (!class_level) return res.json({ success: false });
+    db.run(`UPDATE grade_locks SET locked=0, unlocked_at=? WHERE class_level=?`,
+        [new Date().toISOString(), class_level],
+        () => res.json({ success: true }));
+});
+
 
 
 function gradeBandFromClass(classLevel) {
