@@ -378,103 +378,55 @@ try{
                         <option value="">— Select class 1–12 / section —</option>
                         <option value="Grade 1 - Section A">Grade 1 - Section A</option>
                         <option value="Grade 1 - Section B">Grade 1 - Section B</option>
-                        <option value="1A">1A</option>
-                        <option value="1B">1B</option>
                         <option value="Grade 2 - Section A">Grade 2 - Section A</option>
                         <option value="Grade 2 - Section B">Grade 2 - Section B</option>
-                        <option value="2A">2A</option>
-                        <option value="2B">2B</option>
                         <option value="Grade 3 - Section A">Grade 3 - Section A</option>
                         <option value="Grade 3 - Section B">Grade 3 - Section B</option>
-                        <option value="3A">3A</option>
-                        <option value="3B">3B</option>
                         <option value="Grade 4 - Section A">Grade 4 - Section A</option>
                         <option value="Grade 4 - Section B">Grade 4 - Section B</option>
-                        <option value="4A">4A</option>
-                        <option value="4B">4B</option>
                         <option value="Grade 5 - Section A">Grade 5 - Section A</option>
                         <option value="Grade 5 - Section B">Grade 5 - Section B</option>
-                        <option value="5A">5A</option>
-                        <option value="5B">5B</option>
                         <option value="Grade 6 - Section A">Grade 6 - Section A</option>
                         <option value="Grade 6 - Section B">Grade 6 - Section B</option>
-                        <option value="6A">6A</option>
-                        <option value="6B">6B</option>
                         <option value="Grade 7 - Section A">Grade 7 - Section A</option>
                         <option value="Grade 7 - Section B">Grade 7 - Section B</option>
-                        <option value="7A">7A</option>
-                        <option value="7B">7B</option>
                         <option value="Grade 8 - Section A">Grade 8 - Section A</option>
                         <option value="Grade 8 - Section B">Grade 8 - Section B</option>
-                        <option value="8A">8A</option>
-                        <option value="8B">8B</option>
                         <option value="Grade 9 - Section A">Grade 9 - Section A</option>
                         <option value="Grade 9 - Section B">Grade 9 - Section B</option>
-                        <option value="9A">9A</option>
-                        <option value="9B">9B</option>
                         <option value="Grade 10 - Section A">Grade 10 - Section A</option>
                         <option value="Grade 10 - Section B">Grade 10 - Section B</option>
-                        <option value="10A">10A</option>
-                        <option value="10B">10B</option>
                         <option value="Grade 11 - Section A">Grade 11 - Section A</option>
                         <option value="Grade 11 - Section B">Grade 11 - Section B</option>
-                        <option value="11A">11A</option>
-                        <option value="11B">11B</option>
                         <option value="Grade 12 - Section A">Grade 12 - Section A</option>
                         <option value="Grade 12 - Section B">Grade 12 - Section B</option>
-                        <option value="12A">12A</option>
-                        <option value="12B">12B</option>
                       </select>
                       <input type="text" id="ttClass" list="ttClassList" placeholder="Or type class e.g. 4A" style="max-width:200px;">
                       <datalist id="ttClassList">
                       <option value="Grade 1 - Section A">
-                      <option value="1A">
                       <option value="Grade 1 - Section B">
-                      <option value="1B">
                       <option value="Grade 2 - Section A">
-                      <option value="2A">
                       <option value="Grade 2 - Section B">
-                      <option value="2B">
                       <option value="Grade 3 - Section A">
-                      <option value="3A">
                       <option value="Grade 3 - Section B">
-                      <option value="3B">
                       <option value="Grade 4 - Section A">
-                      <option value="4A">
                       <option value="Grade 4 - Section B">
-                      <option value="4B">
                       <option value="Grade 5 - Section A">
-                      <option value="5A">
                       <option value="Grade 5 - Section B">
-                      <option value="5B">
                       <option value="Grade 6 - Section A">
-                      <option value="6A">
                       <option value="Grade 6 - Section B">
-                      <option value="6B">
                       <option value="Grade 7 - Section A">
-                      <option value="7A">
                       <option value="Grade 7 - Section B">
-                      <option value="7B">
                       <option value="Grade 8 - Section A">
-                      <option value="8A">
                       <option value="Grade 8 - Section B">
-                      <option value="8B">
                       <option value="Grade 9 - Section A">
-                      <option value="9A">
                       <option value="Grade 9 - Section B">
-                      <option value="9B">
                       <option value="Grade 10 - Section A">
-                      <option value="10A">
                       <option value="Grade 10 - Section B">
-                      <option value="10B">
                       <option value="Grade 11 - Section A">
-                      <option value="11A">
                       <option value="Grade 11 - Section B">
-                      <option value="11B">
                       <option value="Grade 12 - Section A">
-                      <option value="12A">
                       <option value="Grade 12 - Section B">
-                      <option value="12B">
                       </datalist>
                       <button type="button" onclick="loadTTGrid()">📂 Load</button>
                       <button type="button" class="btn-green" id="ttSaveBtn" onclick="saveTTGrid()">💾 Save / Update</button>
@@ -484,6 +436,7 @@ try{
                     </div>
                     <p style="font-size:12px;color:#64748b;margin:6px 0;">Select a class that already has a schedule, or type a new class name then Save. Only that class is edited.</p>
                     <span id="ttTeachersHint" style="font-size:12px;color:#64748b;width:100%;margin-top:4px;"></span>
+                    <div id="ttSelectedClassLabel" style="display:none;margin:10px 0;padding:12px 14px;background:#eff6ff;border:2px solid #2563eb;border-radius:12px;font-size:18px;font-weight:900;color:#1e3a8a;"></div>
                     <div id="ttAllClassesHint" style="font-size:12px;color:#1f4e79;margin-top:4px;"></div>
                 </div>
                 <p style="font-size:13px;color:#64748b;margin:6px 0;">✏️ Each cell = Subject + Teacher — click to type, then <b>Save Grid</b></p>
@@ -1570,6 +1523,24 @@ try{
             });
         };
                 
+        
+        window.showTTClassLabel = function(cls) {
+            var lab = document.getElementById('ttSelectedClassLabel');
+            var h3 = document.querySelector('#timetable h3');
+            if (lab) {
+                if (cls) {
+                    lab.style.display = 'block';
+                    lab.innerHTML = '📌 Editing schedule for: <span style="color:#1d4ed8">' + cls + '</span>';
+                } else {
+                    lab.style.display = 'none';
+                    lab.innerHTML = '';
+                }
+            }
+            if (h3 && cls) {
+                h3.innerHTML = '📅 Timetable — <b style="color:#1d4ed8">' + cls + '</b> · Mon–Fri · P1–6';
+            }
+        };
+
         window.getTTClass = function() {
             var inp = (document.getElementById('ttClass') && document.getElementById('ttClass').value || '').trim();
             var sel = (document.getElementById('ttClassSelect') && document.getElementById('ttClassSelect').value || '').trim();
@@ -1581,15 +1552,17 @@ try{
             for (var g = 1; g <= 12; g++) {
                 grades.push('Grade ' + g + ' - Section A');
                 grades.push('Grade ' + g + ' - Section B');
-                grades.push(g + 'A');
-                grades.push(g + 'B');
             }
             function fill(list) {
                 var all = grades.slice();
                 (list || []).forEach(function(c){
-                    if (c && all.indexOf(c) === -1) all.push(c);
+                    if (!c) return;
+                    var m = String(c).match(/^(\d{1,2})\s*([ABab])$/);
+                    if (m) c = 'Grade ' + m[1] + ' - Section ' + m[2].toUpperCase();
+                    if (all.indexOf(c) === -1) all.push(c);
                 });
-                all.sort();
+                var seen = {};
+                all = all.filter(function(x){ if (seen[x]) return false; seen[x]=1; return true; });
                 var sel = document.getElementById('ttClassSelect');
                 var dl = document.getElementById('ttClassList');
                 var hint = document.getElementById('ttAllClassesHint');
@@ -1604,7 +1577,6 @@ try{
                     });
                 }
                 if (dl) dl.innerHTML = all.map(function(c){ return '<option value="'+String(c).replace(/"/g,'&quot;')+'">'; }).join('');
-                // mark which have saved schedule
                 fetch('/api/timetable-classes', { credentials: 'same-origin' })
                   .then(function(r){ return r.json(); })
                   .then(function(d){
@@ -1616,10 +1588,9 @@ try{
                       }
                       if (hint) hint.innerHTML = saved.length
                         ? ('📅 Has schedule: <b>'+saved.join('</b>, <b>')+'</b>')
-                        : 'Pick Grade 1–12 section, fill grid, Save. ✓ = already saved.';
+                        : 'Pick a class, fill grid, Save. ✓ = already saved.';
                   }).catch(function(){});
             }
-            // also sections from DB
             fetch('/api/sections', { credentials: 'same-origin' })
               .then(function(r){ return r.json(); })
               .then(function(d){
@@ -1628,7 +1599,6 @@ try{
               })
               .catch(function(){ fill([]); });
         };
-
         window.loadTTGrid = function() {
             const cls = window.getTTClass();
             if (!cls) { if (window.showToast) showToast('Class ይምረጡ ወይም ይጻፉ e.g. 4A', 'err'); else alert('Select or type class'); return; }
@@ -1639,6 +1609,7 @@ try{
               .then(function(r){ return r.json(); })
               .then(function(d){
                   window.buildTTGrid(d.grid || {});
+                  if (window.showTTClassLabel) showTTClassLabel(cls);
                   if (window.showToast) showToast(d.rows && d.rows.length ? ('Loaded '+cls+' — edit & Save') : ('New schedule for '+cls), 'info');
               })
               .catch(function(){ if (window.showToast) showToast('Load failed', 'err'); });
@@ -2013,6 +1984,7 @@ document.addEventListener('DOMContentLoaded', function() {
     sel.addEventListener('change', function(){
       var inp = document.getElementById('ttClass');
       if (inp) inp.value = sel.value || '';
+      if (window.showTTClassLabel) showTTClassLabel(sel.value || '');
       if (sel.value && typeof window.loadTTGrid === 'function') {
         try { window.loadTTGrid(); } catch(e) { console.error(e); }
       }
