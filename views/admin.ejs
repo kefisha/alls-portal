@@ -212,6 +212,26 @@ try{
         </div>
 
         <h2>👑 <span class="am">የዲሬክተር / አድሚን መቆጣጠሪያ</span><span class="en">Director / Admin Dashboard</span></h2>
+
+<div id="dashWidgets" class="widget-grid">
+  <div class="widget"><div class="n" id="wStudents">—</div><div class="l">Students</div></div>
+  <div class="widget"><div class="n" id="wTeachers">—</div><div class="l">Teachers</div></div>
+  <div class="widget"><div class="n" id="wPending">—</div><div class="l">Pending reg</div></div>
+  <div class="widget"><div class="n" id="wPresent">—</div><div class="l">Present today</div></div>
+  <div class="widget"><div class="n" id="wLocked">—</div><div class="l">Locked grades</div></div>
+  <div class="widget"><div class="n" id="wLeave">—</div><div class="l">Leave requests</div></div>
+</div>
+<script>
+fetch('/api/admin/dashboard-stats',{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
+  if(!d.success||!d.stats) return;
+  var s=d.stats;
+  var set=function(id,v){ var el=document.getElementById(id); if(el) el.textContent=v; };
+  set('wStudents', s.students); set('wTeachers', s.teachers);
+  set('wPending', s.pending); set('wPresent', s.present_today);
+  set('wLocked', s.locked_grades); set('wLeave', s.leave_pending);
+}).catch(function(){});
+</script>
+
 <!-- 🏆 Roster & Report Card Center -->
         <div class="card" style="border-color: #d35400; background: linear-gradient(to bottom, #ffffff, #fffdf9);">
             <h3 style="color: #d35400; border-bottom-color: #fdebd0;">
@@ -2147,6 +2167,35 @@ function loadYearArchive(){
 loadYears();
 </script>
 
+
+<div class="card" id="leaveAdminBox" style="border-top:4px solid #7c3aed;">
+  <h3>🏖️ Staff leave · 📄 Transfer certificate</h3>
+  <p style="margin:0 0 10px"><a href="/admin/transfer-certificate" style="display:inline-block;background:#1d4ed8;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:bold;">📄 Open Transfer Certificate</a></p>
+  <h4 style="margin:12px 0 8px">Pending leave requests</h4>
+  <div id="leaveAdminList">Loading...</div>
+</div>
+<script>
+function loadLeaveAdmin(){
+  fetch('/api/admin/leave-requests',{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
+    var box=document.getElementById('leaveAdminList'); if(!box) return;
+    var rows=d.rows||[];
+    if(!rows.length){ box.innerHTML='<p style="color:#64748b">No leave requests</p>'; return; }
+    box.innerHTML=rows.map(function(r){
+      return '<div style="padding:10px 0;border-bottom:1px solid #e9d5ff"><b>'+(r.teacher_name||r.teacher_id)+'</b> · '+r.start_date+' → '+r.end_date+
+        '<br><small>'+(r.reason||'')+' · <b>'+r.status+'</b></small>'+
+        (r.status==='pending'?('<div style="margin-top:6px"><button type="button" onclick="reviewLeave('+r.id+',\'approve\')" style="background:#059669;color:#fff;border:none;padding:6px 10px;border-radius:6px">✅ Approve</button> '+
+        '<button type="button" onclick="reviewLeave('+r.id+',\'reject\')" style="background:#dc2626;color:#fff;border:none;padding:6px 10px;border-radius:6px">❌ Reject</button></div>'):'')+
+        '</div>';
+    }).join('');
+  });
+}
+function reviewLeave(id, action){
+  fetch('/admin/leave-review',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id,action:action,reply:action})})
+    .then(r=>r.json()).then(function(){ loadLeaveAdmin(); });
+}
+loadLeaveAdmin();
+</script>
+
 <div class="card" id="passMarkBox" style="border-top:4px solid #7c3aed;">
   <h3>🎯 Pass marks by band · Promote · Director board</h3>
   <p style="font-size:13px;color:#64748b;">እያንዳንዱ ቡድን የራሱ pass mark — 1–4 / 5–8 / 9–12 የተለያየ ማስቀመጥ ይችላሉ።</p>
@@ -2200,6 +2249,101 @@ fetch('/api/admin/pass-mark',{credentials:'same-origin'}).then(r=>r.json()).then
   if(d.pass_mark_9_12!=null) document.getElementById('pm912').value=d.pass_mark_9_12;
   syncPromoteMarks();
 });
+</script>
+
+
+<div class="card" id="galleryBox" style="border-top:4px solid #db2777;">
+  <h3>📷 Photo Gallery (Events · Sports · School)</h3>
+  <form id="galForm" style="display:grid;gap:8px;max-width:480px;">
+    <input type="text" id="galTitle" placeholder="Title" style="padding:10px;">
+    <select id="galCat" style="padding:10px;">
+      <option value="events">Events</option>
+      <option value="sports">Sports</option>
+      <option value="school">School life</option>
+    </select>
+    <input type="text" id="galCap" placeholder="Caption (optional)" style="padding:10px;">
+    <input type="file" id="galFile" accept="image/*" required>
+    <button type="button" onclick="uploadGallery()" style="background:#db2777;color:#fff;border:none;padding:12px;border-radius:8px;font-weight:bold;">📤 Upload photo</button>
+  </form>
+  <p style="margin:12px 0;"><a href="/gallery" target="_blank" style="font-weight:bold;color:#db2777;">➡️ Open Gallery page</a></p>
+  <div id="galAdminList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-top:10px;"></div>
+</div>
+
+<div class="card" id="alumniBox" style="border-top:4px solid #7c3aed;">
+  <h3>🎓 Alumni (Graduated students)</h3>
+  <button type="button" onclick="loadAlumni()" style="background:#7c3aed;color:#fff;border:none;padding:10px 14px;border-radius:8px;font-weight:bold;">Refresh list</button>
+  <div id="alumniList" style="margin-top:12px;max-height:360px;overflow:auto;font-size:13px;">Click refresh</div>
+</div>
+
+<div class="card" id="reportBuilderBox" style="border-top:4px solid #0369a1;">
+  <h3>📊 Report builder → Excel (CSV)</h3>
+  <p style="font-size:13px;color:#64748b;">Columns ይምረጡ → Download CSV (Excel ይከፍታል)</p>
+  <label><b>Entity</b></label>
+  <select id="rbEntity" onchange="rbRenderCols()" style="padding:10px;margin:6px 0;max-width:240px;">
+    <option value="students">Students</option>
+    <option value="teachers">Teachers</option>
+  </select>
+  <div id="rbCols" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:10px 0;"></div>
+  <button type="button" onclick="downloadReport()" style="background:#0369a1;color:#fff;border:none;padding:12px 16px;border-radius:8px;font-weight:bold;">⬇️ Download CSV</button>
+</div>
+<script>
+(function(){
+  var studentCols=['student_id','name','mother_name','gender','age','phone','emergency_phone','region','zone','woreda','kebele','class_level','status','year_average','year_result','promoted_to','payment_type'];
+  var teacherCols=['id','name','phone','subject','gender','assigned_sections','assigned_grades','is_proctor','emergency_phone'];
+  window.rbRenderCols=function(){
+    var ent=document.getElementById('rbEntity').value;
+    var cols=ent==='teachers'?teacherCols:studentCols;
+    var box=document.getElementById('rbCols');
+    box.innerHTML=cols.map(function(c){
+      return '<label style="display:flex;align-items:center;gap:6px;background:#f1f5f9;padding:8px;border-radius:8px;font-size:12px;"><input type="checkbox" class="rbCol" value="'+c+'" '+(c==='student_id'||c==='name'||c==='id'||c==='class_level'?'checked':'')+'> '+c+'</label>';
+    }).join('');
+  };
+  window.downloadReport=function(){
+    var ent=document.getElementById('rbEntity').value;
+    var cols=[].slice.call(document.querySelectorAll('.rbCol:checked')).map(function(x){return x.value;});
+    if(!cols.length){ alert('Select at least one column'); return; }
+    window.location='/api/admin/report-builder?entity='+encodeURIComponent(ent)+'&cols='+encodeURIComponent(cols.join(','));
+  };
+  window.uploadGallery=function(){
+    var f=document.getElementById('galFile').files[0];
+    if(!f){ alert('Choose photo'); return; }
+    var fd=new FormData();
+    fd.append('photo', f);
+    fd.append('title', document.getElementById('galTitle').value||'');
+    fd.append('category', document.getElementById('galCat').value||'events');
+    fd.append('caption', document.getElementById('galCap').value||'');
+    fetch('/admin/gallery-upload',{method:'POST',credentials:'same-origin',body:fd})
+      .then(r=>r.json()).then(function(d){ if(d.success){ alert('Uploaded'); loadGalAdmin(); } else alert('Failed'); });
+  };
+  window.loadGalAdmin=function(){
+    fetch('/api/gallery',{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
+      var box=document.getElementById('galAdminList');
+      box.innerHTML=(d.rows||[]).map(function(r){
+        return '<div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;font-size:11px;">'+
+          '<img src="/uploads/'+r.file_path+'" style="width:100%;height:80px;object-fit:cover;">'+
+          '<div style="padding:6px"><b>'+(r.title||'')+'</b><br>'+(r.category||'')+
+          '<br><button type="button" onclick="delGal('+r.id+')" style="margin-top:4px;background:#e11d48;color:#fff;border:none;border-radius:4px;padding:4px 8px;">Delete</button></div></div>';
+      }).join('')||'<span style="color:#94a3b8">No photos</span>';
+    });
+  };
+  window.delGal=function(id){
+    if(!confirm('Delete?')) return;
+    fetch('/admin/gallery-delete',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id})})
+      .then(r=>r.json()).then(function(){ loadGalAdmin(); });
+  };
+  window.loadAlumni=function(){
+    fetch('/api/admin/alumni',{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
+      var box=document.getElementById('alumniList');
+      var rows=d.rows||[];
+      if(!rows.length){ box.innerHTML='<p style="color:#64748b">No alumni yet (promote Grade 12 → Graduated).</p>'; return; }
+      box.innerHTML='<table style="width:100%;border-collapse:collapse"><tr><th>ID</th><th>Name</th><th>Class</th><th>Status</th><th>Avg</th><th>Phone</th></tr>'+
+        rows.map(function(r){
+          return '<tr><td>'+r.student_id+'</td><td style="text-align:left">'+r.name+'</td><td>'+(r.class_level||'')+'</td><td>'+(r.status||'Alumni')+'</td><td>'+(r.year_average!=null?r.year_average:'-')+'</td><td>'+(r.phone||'')+'</td></tr>';
+        }).join('')+'</table>';
+    });
+  };
+  rbRenderCols(); loadGalAdmin(); loadAlumni();
+})();
 </script>
 
 </body>
