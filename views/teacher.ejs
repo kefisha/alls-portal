@@ -106,6 +106,16 @@
             <button type="submit">📝 Assign Homework</button>
         </form>
         
+        
+        <div id="quizAnalyticsBox" style="margin:14px 0;padding:14px;border:2px solid #7c3aed;border-radius:12px;background:#faf5ff;">
+            <h4 style="margin:0 0 10px;color:#6d28d9;">📊 Quiz Analytics</h4>
+            <div id="quizAnalyticsList"><span style="color:#64748b;">Loading...</span></div>
+        </div>
+        <div id="lessonPlanLib" style="margin:14px 0;padding:14px;border:2px solid #0f766e;border-radius:12px;background:#f0fdfa;">
+            <h4 style="margin:0 0 10px;color:#0f766e;">📋 Lesson Plan Library</h4>
+            <div id="lessonPlanList"><span style="color:#64748b;">Loading...</span></div>
+        </div>
+
         <!-- My Quizzes: edit / add / delete previous -->
         <div id="myQuizzesBox" style="margin:14px 0;padding:14px;border:2px solid #8e44ad;border-radius:12px;background:#faf5ff;">
             <h4 style="margin:0 0 10px;color:#8e44ad;">📚 My Quizzes (previous) — Edit · Add · Delete</h4>
@@ -417,7 +427,12 @@
                 </table>
             </div>
 
-            <div style="margin-top:20px; padding:15px; background:#f0fdf4; border:2px solid #27ae60; border-radius:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+            <% if (typeof query !== 'undefined' && query.submitted) { %>
+        <div style="padding:12px;background:#fef3c7;border:2px solid #f59e0b;border-radius:10px;margin:12px 0;font-weight:bold;color:#92400e;">
+          ✅ Grades submitted to Admin — editing is locked until Admin unlocks or auto-backup runs.
+        </div>
+        <% } %>
+        <div style="margin-top:20px; padding:15px; background:#f0fdf4; border:2px solid #27ae60; border-radius:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
                 <div>
                     <strong style="color:#166534; font-size:15px;">📤 <span class="am">የክፍሉን ውጤት ለአድሚን ያስረክቡ፦</span><span class="en">Submit Final Class Grades to Admin:</span></strong>
                 </div>
@@ -1131,6 +1146,43 @@
     .catch(function(){ initAll(); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initAll);
   else initAll();
+})();
+</script>
+
+
+<script>
+(function(){
+  function loadQuizAnalytics(){
+    var box=document.getElementById('quizAnalyticsList'); if(!box) return;
+    fetch('/api/teacher/quiz-analytics',{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
+      if(!d.success||!(d.quizzes||[]).length){ box.innerHTML='<p style="margin:0;color:#64748b">No quiz data yet.</p>'; return; }
+      box.innerHTML=d.quizzes.map(function(q){
+        var recent=(q.recent||[]).map(function(a){ return '<div style="font-size:12px">'+a.student+': <b>'+a.percent+'%</b> ('+a.score+'/'+a.total+')</div>'; }).join('');
+        return '<div style="border-bottom:1px solid #e9d5ff;padding:10px 0"><b>'+q.title+'</b> · '+q.class_level+
+          '<br><small>Questions: '+q.questions+' · Attempts: '+q.attempts+' · Avg: <b>'+q.avg_percent+'%</b></small>'+
+          (recent?('<div style="margin-top:6px">'+recent+'</div>'):'')+'</div>';
+      }).join('');
+    }).catch(function(){ box.innerHTML='Failed to load analytics'; });
+  }
+  function loadLessonPlans(){
+    var box=document.getElementById('lessonPlanList'); if(!box) return;
+    fetch('/api/lesson-plans',{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
+      var rows=d.rows||[];
+      if(!rows.length){ box.innerHTML='<p style="margin:0;color:#64748b">No lesson plans yet. Save one below.</p>'; return; }
+      box.innerHTML=rows.map(function(p){
+        return '<div style="border-bottom:1px solid #99f6e4;padding:8px 0"><b>'+(p.week_label||'Plan')+'</b> · '+(p.class_level||'')+
+          '<br><small>'+(p.teacher_name||'')+' · '+(p.created_at||'')+'</small>'+
+          '<div style="white-space:pre-wrap;font-size:13px;margin-top:4px">'+(p.content||'')+'</div>'+
+          '<button type="button" onclick="deleteLesson('+p.id+')" style="margin-top:6px;background:#e11d48;color:#fff;border:none;border-radius:6px;padding:4px 10px">🗑️ Delete</button></div>';
+      }).join('');
+    }).catch(function(){ box.innerHTML='Failed'; });
+  }
+  window.deleteLesson=function(id){
+    if(!confirm('Delete lesson plan?')) return;
+    fetch('/teacher/lesson-plan/'+id+'/delete',{method:'POST',credentials:'same-origin'}).then(r=>r.json()).then(function(d){ if(d.success) loadLessonPlans(); });
+  };
+  loadQuizAnalytics();
+  loadLessonPlans();
 })();
 </script>
 
