@@ -264,6 +264,25 @@ async function initDB() {
             id SERIAL PRIMARY KEY, quiz_id INTEGER, student_id TEXT, student_name TEXT,
             answers_json TEXT, score REAL, total REAL, created_at TEXT
         )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS grade_locks (
+            id SERIAL PRIMARY KEY,
+            class_level TEXT, course_code TEXT, teacher_id TEXT,
+            locked INTEGER DEFAULT 1, locked_at TEXT, unlocked_at TEXT,
+            UNIQUE(class_level, course_code)
+        )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS student_class_history (
+            id SERIAL PRIMARY KEY,
+            student_id TEXT, class_level TEXT, academic_year TEXT,
+            course_code TEXT, course_title TEXT,
+            quiz REAL, assignment REAL, project REAL, mid REAL, final REAL, total REAL,
+            saved_at TEXT
+        )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS rereg_requests (
+            id SERIAL PRIMARY KEY,
+            student_id TEXT, student_name TEXT, current_class TEXT, target_class TEXT,
+            amount TEXT, slip_file TEXT, status TEXT DEFAULT 'pending',
+            note TEXT, created_at TEXT, reviewed_at TEXT
+        )`);
         await pool.query(`CREATE TABLE IF NOT EXISTS lesson_plans (
             id SERIAL PRIMARY KEY, teacher_id TEXT, teacher_name TEXT, class_level TEXT,
             week_label TEXT, content TEXT, created_at TEXT
@@ -2166,7 +2185,8 @@ app.get('/teacher-dashboard', (req, res) => {
                                 res.render('teacher', {
                                     lang: 'am', teacher, selectedClass, selectedCourseId: selectedCourseId || 'default',
                                     classOptions, courseOptions, teacherTargetOptions, studentRows, absRows, teacherNotiRows, proctorPanel,
-                                    teacherStudentsJson, teacherSectionsJson, assignedClasses
+                                    teacherStudentsJson, teacherSectionsJson, assignedClasses,
+                                    query: req.query || {}
                                 });
                             });
                         });
@@ -2232,7 +2252,7 @@ app.post('/teacher/absence-feedback', (req, res) => {
 app.post('/teacher/save-grade', (req, res) => {
     if (!req.session.teacherId) return res.json({ error: 'Unauthorized' });
     let courseId = req.body.course_id || req.query.course_id || '';
-    let selectedCls = req.query.cls || '';
+    let selectedCls = req.query.cls || req.body.class_level || '';
     let { student_id, quiz, mid, final, assignment, project } = req.body;
     
     // Teacher can set any marks they want (0–100 each)
@@ -2244,6 +2264,7 @@ app.post('/teacher/save-grade', (req, res) => {
     let total = Number((q + a + p + m + f).toFixed(2));
 
     const saveAssessmentRecord = (code, title) => {
+        const doSave = () => {
         db.get(`SELECT id FROM course_assessments WHERE student_id = ? AND course_code = ?`, [student_id, code], (err, row) => {
             if (row) {
                 db.run(`UPDATE course_assessments SET teacher_id=?, quiz=?, assignment=?, project=?, mid=?, final=?, total=?, remark=? WHERE id=?`, 
@@ -2252,6 +2273,21 @@ app.post('/teacher/save-grade', (req, res) => {
                 db.run(`INSERT INTO course_assessments (student_id, teacher_id, course_code, course_title, quiz, assignment, project, mid, final, total, remark) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
                 [student_id, req.session.teacherId, code, title, q, a, p, m, f, total, total >= 50 ? 'Pass' : 'Fail'], () => res.json({ success: true, total: total }));
             }
+        });
+        };
+        // lock check: if submitted to admin, cannot edit until admin unlocks
+        db.get(`SELECT class_level FROM students WHERE student_id=?`, [student_id], (e0, stRow) => {
+            const cls = selectedCls || (stRow && stRow.class_level) || '';
+            db.get(`SELECT locked FROM grade_locks WHERE course_code=? AND locked=1 AND (class_level=? OR class_level IS NULL)`, [code, cls], (e1, lock) => {
+                if (lock && Number(lock.locked) === 1) {
+                    return res.json({ success: false, error: 'Grades locked after submit. Admin must unlock (or run backup unlock).' });
+                }
+                // also check grade_submissions without unlock
+                db.get(`SELECT id FROM grade_locks WHERE class_level=? AND course_code=? AND locked=1`, [cls, code], (e2, lock2) => {
+                    if (lock2) return res.json({ success: false, error: 'Grades locked after submit to Admin. Wait for admin unlock.' });
+                    doSave();
+                });
+            });
         });
     };
 
@@ -2312,7 +2348,36 @@ app.post('/teacher/submit-final-grades', (req, res) => {
                  ON CONFLICT (academic_year, class_level, course_code)
                  DO UPDATE SET teacher_id = EXCLUDED.teacher_id, teacher_name = EXCLUDED.teacher_name, submitted_at = EXCLUDED.submitted_at`,
                 [yearStr, class_level, cId, cCode, cTitle, teacher.id, teacher.name, nowStr]
-            ).then(() => {
+            ).then(async () => {
+                try {
+                    await pool.query(
+                        `INSERT INTO grade_locks (class_level, course_code, teacher_id, locked, locked_at)
+                         VALUES ($1,$2,$3,1,$4)
+                         ON CONFLICT (class_level, course_code)
+                         DO UPDATE SET locked=1, teacher_id=EXCLUDED.teacher_id, locked_at=EXCLUDED.locked_at, unlocked_at=NULL`,
+                        [class_level, cCode, teacher.id, nowStr]
+                    );
+                    // archive current assessments for this class into history
+                    const stRows = await pool.query(`SELECT student_id, name, class_level FROM students`);
+                    const students = (stRows.rows || []).filter(s => {
+                        const a = String(s.class_level||'').toLowerCase();
+                        const b = String(class_level||'').toLowerCase();
+                        return a === b || a.includes(b) || b.includes(a);
+                    });
+                    for (const s of students) {
+                        const g = await pool.query(
+                            `SELECT * FROM course_assessments WHERE student_id=$1 AND course_code=$2`,
+                            [s.student_id, cCode]
+                        );
+                        const row = (g.rows && g.rows[0]) || null;
+                        if (!row) continue;
+                        await pool.query(
+                            `INSERT INTO student_class_history (student_id, class_level, academic_year, course_code, course_title, quiz, assignment, project, mid, final, total, saved_at)
+                             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+                            [s.student_id, class_level, yearStr, cCode, cTitle, row.quiz||0, row.assignment||0, row.project||0, row.mid||0, row.final||0, row.total||0, nowStr]
+                        );
+                    }
+                } catch (e) { console.error('lock/history', e.message || e); }
                 res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(class_level)}&course_id=${course_id}&submitted=1`);
             }).catch(e => {
                 res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(class_level)}&course_id=${course_id}`);
@@ -3737,8 +3802,172 @@ app.post('/teacher/lesson-plan', (req, res) => {
             () => res.redirect('/teacher-dashboard#lesson'));
     });
 });
+
+// Grade unlock by admin
+app.get('/api/admin/grade-locks', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ rows: [] });
+    db.all(`SELECT * FROM grade_locks ORDER BY id DESC LIMIT 100`, [], (e, rows) => res.json({ rows: rows || [] }));
+});
+app.post('/admin/grade-unlock', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ success: false });
+    const { class_level, course_code } = req.body;
+    db.run(`UPDATE grade_locks SET locked=0, unlocked_at=? WHERE class_level=? AND course_code=?`,
+        [new Date().toISOString(), class_level, course_code],
+        () => res.json({ success: true }));
+});
+app.post('/admin/grade-unlock-all', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ success: false });
+    db.run(`UPDATE grade_locks SET locked=0, unlocked_at=? WHERE locked=1`, [new Date().toISOString()], () => res.json({ success: true }));
+});
+
+// Quiz analytics for teacher
+app.get('/api/teacher/quiz-analytics', (req, res) => {
+    if (!req.session.teacherId && !req.session.isAdmin) return res.status(401).json({ success: false });
+    const tid = req.session.teacherId;
+    db.all(`SELECT id, title, class_level, teacher_id, teacher_name, questions_json FROM quizzes ORDER BY id DESC LIMIT 40`, [], (e, quizzes) => {
+        let list = quizzes || [];
+        if (tid && !req.session.isAdmin) {
+            list = list.filter(q => String(q.teacher_id) === String(tid) || false);
+        }
+        db.all(`SELECT * FROM quiz_attempts ORDER BY id DESC LIMIT 500`, [], (e2, attempts) => {
+            attempts = attempts || [];
+            const out = list.map(q => {
+                let qs = [];
+                try { qs = JSON.parse(q.questions_json || '[]'); } catch (err) { qs = []; }
+                const att = attempts.filter(a => String(a.quiz_id) === String(q.id));
+                const scores = att.map(a => Number(a.score) || 0);
+                const totals = att.map(a => Number(a.total) || qs.length || 1);
+                const avg = scores.length ? (scores.reduce((x,y)=>x+y,0) / scores.length) : 0;
+                const avgPct = scores.length ? Math.round((scores.reduce((x,y,i)=>x+(totals[i]? (scores[i]/totals[i])*100 : 0),0)/scores.length)) : 0;
+                // hard questions from review JSON if present
+                return {
+                    id: q.id, title: q.title, class_level: q.class_level,
+                    questions: qs.length, attempts: att.length,
+                    avg_score: Math.round(avg * 10) / 10,
+                    avg_percent: avgPct,
+                    recent: att.slice(0, 8).map(a => ({
+                        student: a.student_name || a.student_id,
+                        score: a.score, total: a.total, percent: a.total ? Math.round((a.score/a.total)*100) : 0
+                    }))
+                };
+            });
+            res.json({ success: true, quizzes: out });
+        });
+    });
+});
+
+// Student academic history by class
+app.get('/api/student/history', (req, res) => {
+    const sid = req.session.studentId || req.query.student_id;
+    if (!sid) return res.status(401).json({ success: false });
+    if (req.session.studentId && req.session.studentId !== sid && !req.session.isAdmin && !req.session.teacherId) {
+        return res.status(401).json({ success: false });
+    }
+    const cls = (req.query.class || '').trim();
+    db.all(`SELECT * FROM student_class_history WHERE student_id=? ORDER BY id DESC`, [sid], (e, rows) => {
+        let list = rows || [];
+        if (cls) list = list.filter(r => String(r.class_level||'').toLowerCase().includes(cls.toLowerCase()) || String(cls).toLowerCase().includes(String(r.class_level||'').toLowerCase()));
+        const classes = [...new Set((rows||[]).map(r => r.class_level).filter(Boolean))];
+        res.json({ success: true, rows: list, classes });
+    });
+});
+
+// Re-registration (existing student next class) — pay then admin approve
+app.post('/student/rereg-request', upload.single('slip'), (req, res) => {
+    if (!req.session.studentId) return res.redirect('/');
+    const target_class = (req.body.target_class || '').trim();
+    const amount = (req.body.amount || '').trim();
+    const note = (req.body.note || '').trim();
+    const slip = req.file ? req.file.filename : '';
+    if (!target_class || !slip) return res.redirect('/student-dashboard#rereg');
+    db.get(`SELECT name, class_level FROM students WHERE student_id=?`, [req.session.studentId], (e, s) => {
+        db.run(
+            `INSERT INTO rereg_requests (student_id, student_name, current_class, target_class, amount, slip_file, status, note, created_at) VALUES (?,?,?,?,?,?,?,?,?)`,
+            [req.session.studentId, s ? s.name : '', s ? s.class_level : '', target_class, amount, slip, 'pending', note, new Date().toISOString()],
+            () => res.redirect('/student-dashboard#rereg')
+        );
+    });
+});
+app.get('/api/admin/rereg-requests', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ rows: [] });
+    db.all(`SELECT * FROM rereg_requests ORDER BY id DESC LIMIT 100`, [], (e, rows) => res.json({ rows: rows || [] }));
+});
+app.post('/admin/rereg-review', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ success: false });
+    const { id, action } = req.body; // approve | reject
+    db.get(`SELECT * FROM rereg_requests WHERE id=?`, [id], (e, row) => {
+        if (!row) return res.json({ success: false });
+        if (action === 'approve') {
+            db.run(`UPDATE rereg_requests SET status='approved', reviewed_at=? WHERE id=?`, [new Date().toISOString(), id], () => {
+                // allow student portal to show register unlocked — status approved
+                res.json({ success: true });
+            });
+        } else {
+            db.run(`UPDATE rereg_requests SET status='rejected', reviewed_at=? WHERE id=?`, [new Date().toISOString(), id], () => res.json({ success: true }));
+        }
+    });
+});
+app.get('/api/student/rereg-status', (req, res) => {
+    if (!req.session.studentId) return res.json({ success: false });
+    db.all(`SELECT * FROM rereg_requests WHERE student_id=? ORDER BY id DESC LIMIT 5`, [req.session.studentId], (e, rows) => {
+        res.json({ success: true, rows: rows || [] });
+    });
+});
+
+// Daily auto-backup (JSON file to /tmp or uploads/backups)
+const fsAutoB = require('fs');
+const pathAutoB = require('path');
+function runAutoBackup() {
+    try {
+        const dir = pathAutoB.join(__dirname, 'uploads', 'backups');
+        if (!fsAutoB.existsSync(dir)) fsAutoB.mkdirSync(dir, { recursive: true });
+        const tables = ['students','teachers','courses','course_assessments','quizzes','quiz_attempts','timetable','notifications','library_resources','lesson_plans','homework','grade_locks','student_class_history','rereg_requests'];
+        const out = { created_at: new Date().toISOString(), tables: {} };
+        let i = 0;
+        const next = () => {
+            if (i >= tables.length) {
+                const name = 'auto_backup_' + new Date().toISOString().slice(0,10) + '.json';
+                fsAutoB.writeFileSync(pathAutoB.join(dir, name), JSON.stringify(out, null, 2));
+                console.log('Auto backup saved', name);
+                // unlock grades after successful backup (admin policy)
+                db.run(`UPDATE grade_locks SET locked=0, unlocked_at=? WHERE locked=1`, [new Date().toISOString()], () => {});
+                return;
+            }
+            const t = tables[i++];
+            db.all(`SELECT * FROM ${t}`, [], (e, rows) => {
+                out.tables[t] = e ? { error: String(e.message||e) } : (rows || []);
+                next();
+            });
+        };
+        next();
+    } catch (e) { console.error('auto backup', e.message || e); }
+}
+// every 24h + once 2 min after start
+setTimeout(runAutoBackup, 120000);
+setInterval(runAutoBackup, 24 * 60 * 60 * 1000);
+app.post('/admin/run-backup-now', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ success: false });
+    runAutoBackup();
+    res.json({ success: true, message: 'Backup started; grade locks will unlock after backup.' });
+});
+
+
 app.get('/api/lesson-plans', (req, res) => {
-    db.all(`SELECT * FROM lesson_plans ORDER BY id DESC LIMIT 40`, [], (e, rows) => res.json({ rows: rows || [] }));
+    const cls = (req.query.class || '').trim();
+    db.all(`SELECT * FROM lesson_plans ORDER BY id DESC LIMIT 80`, [], (e, rows) => {
+        let list = rows || [];
+        if (cls) list = list.filter(r => !r.class_level || String(r.class_level).toLowerCase().includes(cls.toLowerCase()) || cls.toLowerCase().includes(String(r.class_level).toLowerCase()));
+        res.json({ rows: list });
+    });
+});
+app.post('/teacher/lesson-plan/:id/delete', (req, res) => {
+    if (!req.session.teacherId && !req.session.isAdmin) return res.json({ success: false });
+    const id = req.params.id;
+    db.get(`SELECT teacher_id FROM lesson_plans WHERE id=?`, [id], (e, row) => {
+        if (!row) return res.json({ success: false });
+        if (!req.session.isAdmin && String(row.teacher_id) !== String(req.session.teacherId)) return res.json({ success: false });
+        db.run(`DELETE FROM lesson_plans WHERE id=?`, [id], () => res.json({ success: true }));
+    });
 });
 
 // 6 Bulk grade import CSV: student_id,quiz,assignment,project,mid,final
