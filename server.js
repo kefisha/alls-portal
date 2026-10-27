@@ -3047,23 +3047,49 @@ app.post('/admin/promote-students', (req, res) => {
         "Grade 7": "Grade 8", "Grade 8": "Grade 9", "Grade 9": "Grade 10",
         "Grade 10": "Grade 11", "Grade 11": "Grade 12", "Grade 12": "Graduated"
     };
-    db.all(`SELECT student_id, class_level FROM students`, [], (err, students = []) => {
-        students.forEach(st => {
-            let match = st.class_level ? st.class_level.match(/(Grade \d+)/i) : null;
-            if (match && gradeMap[match[0]]) {
-                let newGrade = gradeMap[match[0]];
-                let newClassLevel = st.class_level.replace(match[0], newGrade);
-                if (newGrade === "Graduated") {
-                    db.run(`UPDATE students SET status = 'Graduated' WHERE student_id = ?`, [st.student_id]);
+    const yearStr = (req.body && req.body.academic_year) || (new Date().getFullYear() + ' E.C');
+    const nowStr = new Date().toISOString();
+    db.all(`SELECT student_id, name, class_level FROM students`, [], (err, students = []) => {
+        db.all(`SELECT * FROM course_assessments`, [], (e2, assessments = []) => {
+            // 1) Archive current class results so they appear under Previous class
+            const archiveNext = (idx) => {
+                if (idx >= students.length) return promoteNext(0);
+                const st = students[idx];
+                const mine = (assessments || []).filter(a => a.student_id === st.student_id);
+                let j = 0;
+                const saveOne = () => {
+                    if (j >= mine.length) return archiveNext(idx + 1);
+                    const row = mine[j++];
+                    db.run(
+                        `INSERT INTO student_class_history (student_id, class_level, academic_year, course_code, course_title, quiz, assignment, project, mid, final, total, saved_at)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+                        [st.student_id, st.class_level || '', yearStr, row.course_code || '', row.course_title || '', row.quiz || 0, row.assignment || 0, row.project || 0, row.mid || 0, row.final || 0, row.total || 0, nowStr],
+                        saveOne
+                    );
+                };
+                if (!mine.length) return archiveNext(idx + 1);
+                saveOne();
+            };
+            const promoteNext = (idx) => {
+                if (idx >= students.length) return res.redirect('/admin?promoted=1');
+                const st = students[idx];
+                let match = st.class_level ? st.class_level.match(/(Grade \d+)/i) : null;
+                if (match && gradeMap[match[0]]) {
+                    let newGrade = gradeMap[match[0]];
+                    let newClassLevel = st.class_level.replace(match[0], newGrade);
+                    if (newGrade === "Graduated") {
+                        db.run(`UPDATE students SET status = 'Graduated' WHERE student_id = ?`, [st.student_id], () => promoteNext(idx + 1));
+                    } else {
+                        db.run(`UPDATE students SET class_level = ? WHERE student_id = ?`, [newClassLevel, st.student_id], () => promoteNext(idx + 1));
+                    }
                 } else {
-                    db.run(`UPDATE students SET class_level = ? WHERE student_id = ?`, [newClassLevel, st.student_id]);
+                    promoteNext(idx + 1);
                 }
-            }
+            };
+            archiveNext(0);
         });
-        res.redirect('/admin');
     });
 });
-
 
 // ===== QR Attendance =====
 app.get('/qr-scan', (req, res) => {
@@ -3580,7 +3606,7 @@ app.post('/student/quiz-attempt', (req, res) => {
             const sname = s ? s.name : (req.session.teacherId ? 'Teacher' : 'Admin');
             if (req.session.studentId) {
                 db.run(`INSERT INTO quiz_attempts (quiz_id, student_id, student_name, answers_json, score, total, created_at) VALUES (?,?,?,?,?,?,?)`,
-                    [quiz_id, sid, sname, JSON.stringify(ans), score, total, getFormattedTimestamp()],
+                    [quiz_id, sid, sname, JSON.stringify({ answers: ans, review: review }), score, total, getFormattedTimestamp()],
                     () => res.json({ success: true, score, total, percent, review }));
             } else {
                 res.json({ success: true, score, total, percent, review });
@@ -3820,16 +3846,16 @@ app.post('/admin/grade-unlock-all', (req, res) => {
     db.run(`UPDATE grade_locks SET locked=0, unlocked_at=? WHERE locked=1`, [new Date().toISOString()], () => res.json({ success: true }));
 });
 
-// Quiz analytics for teacher
+// Quiz analytics for teacher (includes wrong answers per question)
 app.get('/api/teacher/quiz-analytics', (req, res) => {
     if (!req.session.teacherId && !req.session.isAdmin) return res.status(401).json({ success: false });
     const tid = req.session.teacherId;
     db.all(`SELECT id, title, class_level, teacher_id, teacher_name, questions_json FROM quizzes ORDER BY id DESC LIMIT 40`, [], (e, quizzes) => {
         let list = quizzes || [];
         if (tid && !req.session.isAdmin) {
-            list = list.filter(q => String(q.teacher_id) === String(tid) || false);
+            list = list.filter(q => String(q.teacher_id) === String(tid));
         }
-        db.all(`SELECT * FROM quiz_attempts ORDER BY id DESC LIMIT 500`, [], (e2, attempts) => {
+        db.all(`SELECT * FROM quiz_attempts ORDER BY id DESC LIMIT 800`, [], (e2, attempts) => {
             attempts = attempts || [];
             const out = list.map(q => {
                 let qs = [];
@@ -3837,14 +3863,51 @@ app.get('/api/teacher/quiz-analytics', (req, res) => {
                 const att = attempts.filter(a => String(a.quiz_id) === String(q.id));
                 const scores = att.map(a => Number(a.score) || 0);
                 const totals = att.map(a => Number(a.total) || qs.length || 1);
-                const avg = scores.length ? (scores.reduce((x,y)=>x+y,0) / scores.length) : 0;
                 const avgPct = scores.length ? Math.round((scores.reduce((x,y,i)=>x+(totals[i]? (scores[i]/totals[i])*100 : 0),0)/scores.length)) : 0;
-                // hard questions from review JSON if present
+                // Per-question wrong stats
+                const qStats = qs.map((qq, qi) => {
+                    const correct = String((qq && qq.a) || '').trim().toUpperCase();
+                    let wrong = 0, right = 0;
+                    const wrongAnswers = {};
+                    att.forEach(a => {
+                        let payload = null;
+                        try { payload = JSON.parse(a.answers_json || 'null'); } catch (err) { payload = null; }
+                        let given = '';
+                        if (payload && Array.isArray(payload.answers)) given = String(payload.answers[qi] || '').trim();
+                        else if (payload && Array.isArray(payload)) given = String(payload[qi] || '').trim();
+                        else if (Array.isArray(payload)) given = String(payload[qi] || '').trim();
+                        // legacy: plain array json
+                        if (!given && payload && payload.review && payload.review[qi]) {
+                            // ignore
+                        }
+                        if (payload && payload.review && payload.review[qi] && payload.review[qi].ok === false) {
+                            wrong++;
+                            const y = payload.review[qi].your || given || '?';
+                            wrongAnswers[y] = (wrongAnswers[y] || 0) + 1;
+                            return;
+                        }
+                        if (payload && payload.review && payload.review[qi] && payload.review[qi].ok === true) {
+                            right++;
+                            return;
+                        }
+                        if (given && correct && given.toUpperCase() === correct) right++;
+                        else { wrong++; const y = given || '(blank)'; wrongAnswers[y] = (wrongAnswers[y] || 0) + 1; }
+                    });
+                    const wrongList = Object.keys(wrongAnswers).map(k => k + ' ×' + wrongAnswers[k]).join(', ');
+                    return {
+                        index: qi + 1,
+                        q: (qq && qq.q) ? String(qq.q).slice(0, 180) : ('Q' + (qi + 1)),
+                        correct: correct,
+                        right: right,
+                        wrong: wrong,
+                        wrong_answers: wrongList
+                    };
+                });
                 return {
                     id: q.id, title: q.title, class_level: q.class_level,
                     questions: qs.length, attempts: att.length,
-                    avg_score: Math.round(avg * 10) / 10,
                     avg_percent: avgPct,
+                    question_stats: qStats,
                     recent: att.slice(0, 8).map(a => ({
                         student: a.student_name || a.student_id,
                         score: a.score, total: a.total, percent: a.total ? Math.round((a.score/a.total)*100) : 0
