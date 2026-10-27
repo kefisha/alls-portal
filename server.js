@@ -3162,7 +3162,7 @@ app.post('/admin/promote-students', async (req, res) => {
             archiveNext(0);
         });
     });
-    }); // loadPassMarks
+    }); // end loadPassMarks
 });
 
 // Apply next class after registration approval or student confirms
@@ -3225,8 +3225,7 @@ app.post('/admin/pass-mark', (req, res) => {
 // Director / Admin pass-fail boards: 1-4, 5-8, 9-12
 app.get('/admin/pass-fail-board', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
-    db.get(`SELECT value FROM school_settings WHERE key='pass_mark'`, [], (e0, pmRow) => {
-        let passMark = pmRow ? (parseFloat(pmRow.value) || 50) : 50;
+    loadPassMarks((marks) => {
         db.all(`SELECT student_id, name, class_level, status, promoted_to, year_average, year_result FROM students ORDER BY class_level, name`, [], (e, students = []) => {
             db.all(`SELECT student_id, total FROM course_assessments`, [], (e2, assessments = []) => {
                 const avgMap = {};
@@ -3240,26 +3239,23 @@ app.get('/admin/pass-fail-board', (req, res) => {
                         const arr = avgMap[s.student_id] || [];
                         avg = arr.length ? Math.round((arr.reduce((x,y)=>x+y,0)/arr.length)*10)/10 : 0;
                     }
-                    const result = (s.year_result) || (avg >= passMark ? 'Pass' : 'Fail');
-                    const gMatch = String(s.class_level || '').match(/Grade\s*(\d+)/i);
-                    const g = gMatch ? parseInt(gMatch[1], 10) : 0;
-                    let band = 'other';
-                    if (g >= 1 && g <= 4) band = '1-4';
-                    else if (g >= 5 && g <= 8) band = '5-8';
-                    else if (g >= 9 && g <= 12) band = '9-12';
-                    return { ...s, avg, result, band, grade: g };
+                    const pm = passMarkForClass(s.class_level || '', marks);
+                    const result = (s.year_result) || (avg >= pm ? 'Pass' : 'Fail');
+                    const band = gradeBandFromClass(s.class_level || '');
+                    return { ...s, avg, result, band, pm };
                 });
                 const bandHtml = (band, title) => {
                     const list = rows.filter(r => r.band === band);
-                    const pass = list.filter(r => r.result === 'Pass' || r.avg >= passMark);
-                    const fail = list.filter(r => !(r.result === 'Pass' || r.avg >= passMark));
+                    const passMark = band === '1-4' ? marks['1-4'] : band === '5-8' ? marks['5-8'] : marks['9-12'];
+                    const pass = list.filter(r => r.result === 'Pass' || r.avg >= r.pm);
+                    const fail = list.filter(r => !(r.result === 'Pass' || r.avg >= r.pm));
                     const rowFn = (r, ok) => `<tr>
                         <td>${r.student_id}</td><td style="text-align:left">${r.name}</td>
                         <td>${r.class_level || ''}</td><td><b>${r.avg}</b></td>
                         <td style="color:${ok?'#047857':'#b91c1c'};font-weight:bold">${ok?'PASS':'FAIL'}</td>
                         <td>${r.promoted_to || (ok ? '→ next' : 'stay')}</td></tr>`;
                     return `<div class="card"><h3>${title}</h3>
-                      <p>Pass mark for this band: <b>${passMark}</b> · Students: ${list.length} · Pass: <b style="color:#047857">${pass.length}</b> · Fail: <b style="color:#b91c1c">${fail.length}</b></p>
+                      <p>Pass mark: <b>${passMark}</b> · Students: ${list.length} · Pass: <b style="color:#047857">${pass.length}</b> · Fail: <b style="color:#b91c1c">${fail.length}</b></p>
                       <h4 style="color:#047857">✅ Pass</h4>
                       <div style="overflow-x:auto"><table><tr><th>ID</th><th>Name</th><th>Class</th><th>Avg</th><th>Result</th><th>Next</th></tr>
                       ${pass.map(r=>rowFn(r,true)).join('') || '<tr><td colspan="6">None</td></tr>'}</table></div>
@@ -3282,7 +3278,7 @@ a.btn{display:inline-block;background:#1d4ed8;color:#fff;padding:10px 14px;borde
 <h1>🎓 Director Pass / Fail Board</h1>
 <p><a class="btn" href="/admin">⬅️ Admin</a>
 <a class="btn" href="/admin/director-report" style="background:#0f766e">Director Report</a></p>
-<p>Band pass marks — <b>1–4: ${marks['1-4']}</b> · <b>5–8: ${marks['5-8']}</b> · <b>9–12: ${marks['9-12']}</b></p>
+<p>Band marks — <b>1–4: ${marks['1-4']}</b> · <b>5–8: ${marks['5-8']}</b> · <b>9–12: ${marks['9-12']}</b></p>
 ${bandHtml('1-4','📗 Grades 1–4')}
 ${bandHtml('5-8','📘 Grades 5–8')}
 ${bandHtml('9-12','📙 Grades 9–12')}
