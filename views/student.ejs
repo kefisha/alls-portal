@@ -428,12 +428,32 @@
   <button type="button" onclick="loadHist()" style="padding:10px 14px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-weight:bold;">View</button>
   <div id="histResult" style="margin-top:12px;font-size:14px;"></div>
 </div>
+<div class="card" id="nextclass" style="border:3px solid #7c3aed;margin:16px 0;padding:20px;background:linear-gradient(180deg,#faf5ff,#ffffff);border-radius:16px;box-shadow:0 10px 28px rgba(124,58,237,.2);">
+  <h2 style="color:#6d28d9;font-size:26px;margin:0 0 8px;font-weight:900;">🎓 Next Class Registration</h2>
+  <p style="font-size:15px;color:#5b21b6;margin:0 0 12px;">After Admin <b>Promote all students</b>, if you <b>PASS</b> your next class form appears here automatically.</p>
+  <div id="promoBox" style="display:none;padding:16px;border-radius:14px;background:#ecfdf5;border:2px solid #10b981;">
+    <div style="font-size:20px;font-weight:900;color:#047857;">✅ You PASSED</div>
+    <div style="font-size:16px;margin-top:8px;">Current: <b id="promoFrom">—</b></div>
+    <div style="font-size:22px;margin-top:6px;color:#1d4ed8;">Next class: <b id="promoTo">—</b></div>
+    <div style="margin-top:6px;">Year average: <b id="promoAvg">—</b></div>
+    <form action="/student/confirm-next-class" method="POST" style="margin-top:14px;">
+      <button type="submit" style="width:100%;padding:16px;font-size:18px;font-weight:900;border:none;border-radius:12px;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;cursor:pointer;">
+        Confirm & move to next class →
+      </button>
+    </form>
+  </div>
+  <div id="failBox" style="display:none;padding:16px;border-radius:14px;background:#fef2f2;border:2px solid #ef4444;">
+    <div style="font-size:20px;font-weight:900;color:#b91c1c;">❌ Not promoted</div>
+    <div style="margin-top:8px;">You stay in <b id="failClass">—</b>. Year average: <b id="failAvg">—</b></div>
+  </div>
+  <div id="waitPromo" style="padding:12px;color:#64748b;font-size:14px;">Waiting for year-end promotion...</div>
+</div>
 <div class="card" id="rereg" style="border-top:4px solid #0369a1;margin:16px 0;padding:16px;background:#fff;border-radius:12px;">
-  <h3 style="color:#0369a1;">📝 Next class registration (existing students)</h3>
-  <p style="font-size:13px;color:#475569;">Pay school fee → upload slip → wait Admin ✅ approve → then you can register for next class.</p>
+  <h3 style="color:#0369a1;font-size:20px;">📝 Fee payment for next year (optional / existing path)</h3>
+  <p style="font-size:13px;color:#475569;">Pay school fee → upload slip → Admin ✅ approve.</p>
   <div id="reregStatus" style="margin:8px 0;font-weight:bold;"></div>
   <form id="reregForm" action="/student/rereg-request" method="POST" enctype="multipart/form-data" style="display:none;">
-    <input type="text" name="target_class" placeholder="Target class e.g. Grade 3 - Section A" required style="width:100%;margin:6px 0;padding:10px;">
+    <input type="text" name="target_class" id="reregTarget" placeholder="Target class" required style="width:100%;margin:6px 0;padding:10px;">
     <input type="text" name="amount" placeholder="Amount paid (ETB)" style="width:100%;margin:6px 0;padding:10px;">
     <input type="text" name="note" placeholder="Transaction ref / note" style="width:100%;margin:6px 0;padding:10px;">
     <label>Bank slip / screenshot *</label>
@@ -441,8 +461,7 @@
     <button type="submit" style="padding:12px 16px;background:#0369a1;color:#fff;border:none;border-radius:8px;font-weight:bold;">Submit payment for approval</button>
   </form>
   <div id="reregApproved" style="display:none;padding:12px;background:#ecfdf5;border:2px solid #10b981;border-radius:10px;margin-top:10px;">
-    ✅ Payment approved — <b>You can register</b> for the next class.
-    <br><a href="/student-register" style="display:inline-block;margin-top:10px;background:#059669;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:bold;">Open registration form</a>
+    ✅ Payment approved.
   </div>
 </div>
 <script>
@@ -488,6 +507,32 @@ function loadRereg(){
   });
 }
 loadHistClasses(); loadRereg();
+
+</script>
+
+
+<script>
+fetch('/api/student/promotion-status',{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
+  if(!d.success) return;
+  var wait=document.getElementById('waitPromo');
+  var ok=document.getElementById('promoBox');
+  var bad=document.getElementById('failBox');
+  if(d.can_register_next){
+    if(wait) wait.style.display='none';
+    if(ok){ ok.style.display='block';
+      document.getElementById('promoFrom').textContent=d.class_level||'';
+      document.getElementById('promoTo').textContent=d.promoted_to||'';
+      document.getElementById('promoAvg').textContent=(d.year_average!=null?d.year_average:'—');
+      var rt=document.getElementById('reregTarget'); if(rt) rt.value=d.promoted_to||'';
+    }
+  } else if(String(d.status)==='Failed' || String(d.year_result)==='Fail'){
+    if(wait) wait.style.display='none';
+    if(bad){ bad.style.display='block';
+      document.getElementById('failClass').textContent=d.class_level||'';
+      document.getElementById('failAvg').textContent=(d.year_average!=null?d.year_average:'—');
+    }
+  }
+}).catch(function(){});
 </script>
 
 </body>
