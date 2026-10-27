@@ -284,6 +284,9 @@ async function initDB() {
             key TEXT PRIMARY KEY, value TEXT
         )`);
         try { await pool.query(`INSERT INTO school_settings (key, value) VALUES ('pass_mark', '50') ON CONFLICT (key) DO NOTHING`); } catch(e) {}
+        try { await pool.query(`INSERT INTO school_settings (key, value) VALUES ('pass_mark_1_4', '56') ON CONFLICT (key) DO NOTHING`); } catch(e) {}
+        try { await pool.query(`INSERT INTO school_settings (key, value) VALUES ('pass_mark_5_8', '60') ON CONFLICT (key) DO NOTHING`); } catch(e) {}
+        try { await pool.query(`INSERT INTO school_settings (key, value) VALUES ('pass_mark_9_12', '65') ON CONFLICT (key) DO NOTHING`); } catch(e) {}
         await pool.query(`CREATE TABLE IF NOT EXISTS rereg_requests (
             id SERIAL PRIMARY KEY,
             student_id TEXT, student_name TEXT, current_class TEXT, target_class TEXT,
@@ -3046,6 +3049,36 @@ app.post('/admin/archive-year', (req, res) => {
     db.run(`DELETE FROM course_assessments`, [], () => res.redirect('/admin'));
 });
 
+
+function gradeBandFromClass(classLevel) {
+    const gMatch = String(classLevel || '').match(/Grade\s*(\d+)/i);
+    const g = gMatch ? parseInt(gMatch[1], 10) : 0;
+    if (g >= 1 && g <= 4) return '1-4';
+    if (g >= 5 && g <= 8) return '5-8';
+    if (g >= 9 && g <= 12) return '9-12';
+    return 'other';
+}
+function loadPassMarks(cb) {
+    db.all(`SELECT key, value FROM school_settings WHERE key IN ('pass_mark','pass_mark_1_4','pass_mark_5_8','pass_mark_9_12')`, [], (e, rows) => {
+        const map = {};
+        (rows || []).forEach(r => { map[r.key] = parseFloat(r.value); });
+        const fallback = (!isNaN(map.pass_mark) ? map.pass_mark : 50);
+        cb({
+            '1-4': !isNaN(map.pass_mark_1_4) ? map.pass_mark_1_4 : fallback,
+            '5-8': !isNaN(map.pass_mark_5_8) ? map.pass_mark_5_8 : fallback,
+            '9-12': !isNaN(map.pass_mark_9_12) ? map.pass_mark_9_12 : fallback,
+            fallback
+        });
+    });
+}
+function passMarkForClass(classLevel, marks) {
+    const band = gradeBandFromClass(classLevel);
+    if (band === '1-4') return marks['1-4'];
+    if (band === '5-8') return marks['5-8'];
+    if (band === '9-12') return marks['9-12'];
+    return marks.fallback;
+}
+
 app.post('/admin/promote-students', async (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const gradeMap = {
@@ -3054,14 +3087,14 @@ app.post('/admin/promote-students', async (req, res) => {
         "Grade 7": "Grade 8", "Grade 8": "Grade 9", "Grade 9": "Grade 10",
         "Grade 10": "Grade 11", "Grade 11": "Grade 12", "Grade 12": "Graduated"
     };
-    let passMark = 50;
-    try {
-        const pm = await pool.query(`SELECT value FROM school_settings WHERE key='pass_mark'`);
-        if (pm.rows && pm.rows[0]) passMark = parseFloat(pm.rows[0].value) || 50;
-    } catch (e) {}
-    if (req.body && req.body.pass_mark) {
-        passMark = parseFloat(req.body.pass_mark) || passMark;
-        try { await pool.query(`INSERT INTO school_settings (key,value) VALUES ('pass_mark',$1) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value`, [String(passMark)]); } catch (e) {}
+    loadPassMarks((marks) => {
+    if (req.body) {
+        const b1 = parseFloat(req.body.pass_mark_1_4);
+        const b2 = parseFloat(req.body.pass_mark_5_8);
+        const b3 = parseFloat(req.body.pass_mark_9_12);
+        if (!isNaN(b1)) { marks['1-4'] = b1; db.run(`INSERT INTO school_settings (key,value) VALUES ('pass_mark_1_4',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, [String(b1)]); }
+        if (!isNaN(b2)) { marks['5-8'] = b2; db.run(`INSERT INTO school_settings (key,value) VALUES ('pass_mark_5_8',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, [String(b2)]); }
+        if (!isNaN(b3)) { marks['9-12'] = b3; db.run(`INSERT INTO school_settings (key,value) VALUES ('pass_mark_9_12',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, [String(b3)]); }
     }
     const yearStr = (req.body && req.body.academic_year) || (new Date().getFullYear() + ' E.C');
     const nowStr = new Date().toISOString();
@@ -3101,11 +3134,12 @@ app.post('/admin/promote-students', async (req, res) => {
                 saveOne();
             };
             const decideNext = (idx) => {
-                if (idx >= students.length) return res.redirect('/admin?promoted=1&pass=' + passMark);
+                if (idx >= students.length) return res.redirect('/admin?promoted=1');
                 const stu = students[idx];
                 const avg = avgOf(stu.student_id);
                 const nc = nextClass(stu.class_level || '');
-                const passed = avg >= passMark;
+                const pm = passMarkForClass(stu.class_level || '', marks);
+                    const passed = avg >= pm;
                 if (!nc) {
                     db.run(`UPDATE students SET year_average=?, year_result=? WHERE student_id=?`, [avg, passed ? 'Pass' : 'Fail', stu.student_id], () => decideNext(idx + 1));
                     return;
@@ -3128,6 +3162,7 @@ app.post('/admin/promote-students', async (req, res) => {
             archiveNext(0);
         });
     });
+    }); // loadPassMarks
 });
 
 // Apply next class after registration approval or student confirms
@@ -3163,23 +3198,35 @@ app.get('/api/student/promotion-status', (req, res) => {
 
 app.get('/api/admin/pass-mark', (req, res) => {
     if (!req.session.isAdmin) return res.status(401).json({ success: false });
-    db.get(`SELECT value FROM school_settings WHERE key='pass_mark'`, [], (e, row) => {
-        res.json({ success: true, pass_mark: row ? parseFloat(row.value) : 50 });
+    loadPassMarks((marks) => {
+        res.json({ success: true, pass_mark_1_4: marks['1-4'], pass_mark_5_8: marks['5-8'], pass_mark_9_12: marks['9-12'], pass_mark: marks.fallback });
     });
 });
 app.post('/admin/pass-mark', (req, res) => {
     if (!req.session.isAdmin) return res.status(401).json({ success: false });
-    const v = parseFloat(req.body.pass_mark);
-    if (isNaN(v) || v < 0 || v > 100) return res.json({ success: false, error: 'invalid' });
-    db.run(`INSERT INTO school_settings (key, value) VALUES ('pass_mark', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
-        [String(v)], () => res.json({ success: true, pass_mark: v }));
+    const pairs = [
+        ['pass_mark_1_4', req.body.pass_mark_1_4],
+        ['pass_mark_5_8', req.body.pass_mark_5_8],
+        ['pass_mark_9_12', req.body.pass_mark_9_12]
+    ];
+    let i = 0;
+    const next = () => {
+        if (i >= pairs.length) {
+            return loadPassMarks((m) => res.json({ success: true, pass_mark_1_4: m['1-4'], pass_mark_5_8: m['5-8'], pass_mark_9_12: m['9-12'] }));
+        }
+        const [k, raw] = pairs[i++];
+        const v = parseFloat(raw);
+        if (isNaN(v) || v < 0 || v > 100) return next();
+        db.run(`INSERT INTO school_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, [k, String(v)], next);
+    };
+    next();
 });
 
 // Director / Admin pass-fail boards: 1-4, 5-8, 9-12
 app.get('/admin/pass-fail-board', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     db.get(`SELECT value FROM school_settings WHERE key='pass_mark'`, [], (e0, pmRow) => {
-        const passMark = pmRow ? (parseFloat(pmRow.value) || 50) : 50;
+        let passMark = pmRow ? (parseFloat(pmRow.value) || 50) : 50;
         db.all(`SELECT student_id, name, class_level, status, promoted_to, year_average, year_result FROM students ORDER BY class_level, name`, [], (e, students = []) => {
             db.all(`SELECT student_id, total FROM course_assessments`, [], (e2, assessments = []) => {
                 const avgMap = {};
@@ -3212,7 +3259,7 @@ app.get('/admin/pass-fail-board', (req, res) => {
                         <td style="color:${ok?'#047857':'#b91c1c'};font-weight:bold">${ok?'PASS':'FAIL'}</td>
                         <td>${r.promoted_to || (ok ? '→ next' : 'stay')}</td></tr>`;
                     return `<div class="card"><h3>${title}</h3>
-                      <p>Pass mark: <b>${passMark}</b> · Students: ${list.length} · Pass: <b style="color:#047857">${pass.length}</b> · Fail: <b style="color:#b91c1c">${fail.length}</b></p>
+                      <p>Pass mark for this band: <b>${passMark}</b> · Students: ${list.length} · Pass: <b style="color:#047857">${pass.length}</b> · Fail: <b style="color:#b91c1c">${fail.length}</b></p>
                       <h4 style="color:#047857">✅ Pass</h4>
                       <div style="overflow-x:auto"><table><tr><th>ID</th><th>Name</th><th>Class</th><th>Avg</th><th>Result</th><th>Next</th></tr>
                       ${pass.map(r=>rowFn(r,true)).join('') || '<tr><td colspan="6">None</td></tr>'}</table></div>
@@ -3235,7 +3282,7 @@ a.btn{display:inline-block;background:#1d4ed8;color:#fff;padding:10px 14px;borde
 <h1>🎓 Director Pass / Fail Board</h1>
 <p><a class="btn" href="/admin">⬅️ Admin</a>
 <a class="btn" href="/admin/director-report" style="background:#0f766e">Director Report</a></p>
-<p>Threshold (pass mark): <b style="font-size:22px;color:#1d4ed8">${passMark}</b> — average of subject totals</p>
+<p>Band pass marks — <b>1–4: ${marks['1-4']}</b> · <b>5–8: ${marks['5-8']}</b> · <b>9–12: ${marks['9-12']}</b></p>
 ${bandHtml('1-4','📗 Grades 1–4')}
 ${bandHtml('5-8','📘 Grades 5–8')}
 ${bandHtml('9-12','📙 Grades 9–12')}
