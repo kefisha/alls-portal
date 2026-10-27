@@ -190,6 +190,9 @@ async function initDB() {
         }
 
         try { await pool.query(`ALTER TABLE sections ADD COLUMN class_monitor TEXT`); } catch(e) {}
+        try { await pool.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS promoted_to TEXT`); } catch(e) {}
+        try { await pool.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS year_average REAL`); } catch(e) {}
+        try { await pool.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS year_result TEXT`); } catch(e) {}
         try { await pool.query(`ALTER TABLE notifications ADD COLUMN attachment TEXT`); } catch(e) {}
         try { await pool.query(`ALTER TABLE absence_requests ADD COLUMN attachment TEXT`); } catch(e) {}
 
@@ -277,6 +280,10 @@ async function initDB() {
             quiz REAL, assignment REAL, project REAL, mid REAL, final REAL, total REAL,
             saved_at TEXT
         )`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS school_settings (
+            key TEXT PRIMARY KEY, value TEXT
+        )`);
+        try { await pool.query(`INSERT INTO school_settings (key, value) VALUES ('pass_mark', '50') ON CONFLICT (key) DO NOTHING`); } catch(e) {}
         await pool.query(`CREATE TABLE IF NOT EXISTS rereg_requests (
             id SERIAL PRIMARY KEY,
             student_id TEXT, student_name TEXT, current_class TEXT, target_class TEXT,
@@ -3039,7 +3046,7 @@ app.post('/admin/archive-year', (req, res) => {
     db.run(`DELETE FROM course_assessments`, [], () => res.redirect('/admin'));
 });
 
-app.post('/admin/promote-students', (req, res) => {
+app.post('/admin/promote-students', async (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const gradeMap = {
         "Grade 1": "Grade 2", "Grade 2": "Grade 3", "Grade 3": "Grade 4",
@@ -3047,15 +3054,38 @@ app.post('/admin/promote-students', (req, res) => {
         "Grade 7": "Grade 8", "Grade 8": "Grade 9", "Grade 9": "Grade 10",
         "Grade 10": "Grade 11", "Grade 11": "Grade 12", "Grade 12": "Graduated"
     };
+    let passMark = 50;
+    try {
+        const pm = await pool.query(`SELECT value FROM school_settings WHERE key='pass_mark'`);
+        if (pm.rows && pm.rows[0]) passMark = parseFloat(pm.rows[0].value) || 50;
+    } catch (e) {}
+    if (req.body && req.body.pass_mark) {
+        passMark = parseFloat(req.body.pass_mark) || passMark;
+        try { await pool.query(`INSERT INTO school_settings (key,value) VALUES ('pass_mark',$1) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value`, [String(passMark)]); } catch (e) {}
+    }
     const yearStr = (req.body && req.body.academic_year) || (new Date().getFullYear() + ' E.C');
     const nowStr = new Date().toISOString();
+
     db.all(`SELECT student_id, name, class_level FROM students`, [], (err, students = []) => {
         db.all(`SELECT * FROM course_assessments`, [], (e2, assessments = []) => {
-            // 1) Archive current class results so they appear under Previous class
+            const avgOf = (sid) => {
+                const mine = (assessments || []).filter(a => a.student_id === sid);
+                if (!mine.length) return 0;
+                const sum = mine.reduce((s, a) => s + (Number(a.total) || 0), 0);
+                return Math.round((sum / mine.length) * 10) / 10;
+            };
+            const nextClass = (classLevel) => {
+                let match = classLevel ? classLevel.match(/(Grade \d+)/i) : null;
+                if (!match || !gradeMap[match[0]]) return null;
+                const newGrade = gradeMap[match[0]];
+                if (newGrade === 'Graduated') return 'Graduated';
+                return classLevel.replace(match[0], newGrade);
+            };
+            // Archive all current results
             const archiveNext = (idx) => {
-                if (idx >= students.length) return promoteNext(0);
-                const st = students[idx];
-                const mine = (assessments || []).filter(a => a.student_id === st.student_id);
+                if (idx >= students.length) return decideNext(0);
+                const stu = students[idx];
+                const mine = (assessments || []).filter(a => a.student_id === stu.student_id);
                 let j = 0;
                 const saveOne = () => {
                     if (j >= mine.length) return archiveNext(idx + 1);
@@ -3063,30 +3093,154 @@ app.post('/admin/promote-students', (req, res) => {
                     db.run(
                         `INSERT INTO student_class_history (student_id, class_level, academic_year, course_code, course_title, quiz, assignment, project, mid, final, total, saved_at)
                          VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-                        [st.student_id, st.class_level || '', yearStr, row.course_code || '', row.course_title || '', row.quiz || 0, row.assignment || 0, row.project || 0, row.mid || 0, row.final || 0, row.total || 0, nowStr],
+                        [stu.student_id, stu.class_level || '', yearStr, row.course_code || '', row.course_title || '', row.quiz || 0, row.assignment || 0, row.project || 0, row.mid || 0, row.final || 0, row.total || 0, nowStr],
                         saveOne
                     );
                 };
                 if (!mine.length) return archiveNext(idx + 1);
                 saveOne();
             };
-            const promoteNext = (idx) => {
-                if (idx >= students.length) return res.redirect('/admin?promoted=1');
-                const st = students[idx];
-                let match = st.class_level ? st.class_level.match(/(Grade \d+)/i) : null;
-                if (match && gradeMap[match[0]]) {
-                    let newGrade = gradeMap[match[0]];
-                    let newClassLevel = st.class_level.replace(match[0], newGrade);
-                    if (newGrade === "Graduated") {
-                        db.run(`UPDATE students SET status = 'Graduated' WHERE student_id = ?`, [st.student_id], () => promoteNext(idx + 1));
+            const decideNext = (idx) => {
+                if (idx >= students.length) return res.redirect('/admin?promoted=1&pass=' + passMark);
+                const stu = students[idx];
+                const avg = avgOf(stu.student_id);
+                const nc = nextClass(stu.class_level || '');
+                const passed = avg >= passMark;
+                if (!nc) {
+                    db.run(`UPDATE students SET year_average=?, year_result=? WHERE student_id=?`, [avg, passed ? 'Pass' : 'Fail', stu.student_id], () => decideNext(idx + 1));
+                    return;
+                }
+                if (passed) {
+                    if (nc === 'Graduated') {
+                        db.run(`UPDATE students SET status='Graduated', year_average=?, year_result='Pass', promoted_to='Graduated' WHERE student_id=?`,
+                            [avg, stu.student_id], () => decideNext(idx + 1));
                     } else {
-                        db.run(`UPDATE students SET class_level = ? WHERE student_id = ?`, [newClassLevel, st.student_id], () => promoteNext(idx + 1));
+                        // Keep current class until student completes next-class registration; mark promoted target
+                        db.run(`UPDATE students SET status='Promoted', year_average=?, year_result='Pass', promoted_to=? WHERE student_id=?`,
+                            [avg, nc, stu.student_id], () => decideNext(idx + 1));
                     }
                 } else {
-                    promoteNext(idx + 1);
+                    // Fail — stay in same class
+                    db.run(`UPDATE students SET status='Failed', year_average=?, year_result='Fail', promoted_to=? WHERE student_id=?`,
+                        [avg, stu.class_level || '', stu.student_id], () => decideNext(idx + 1));
                 }
             };
             archiveNext(0);
+        });
+    });
+});
+
+// Apply next class after registration approval or student confirms
+app.post('/student/confirm-next-class', (req, res) => {
+    if (!req.session.studentId) return res.redirect('/');
+    db.get(`SELECT * FROM students WHERE student_id=?`, [req.session.studentId], (e, s) => {
+        if (!s) return res.redirect('/student-dashboard');
+        if (String(s.status) !== 'Promoted' || !s.promoted_to || s.promoted_to === 'Graduated') {
+            return res.redirect('/student-dashboard#nextclass');
+        }
+        db.run(`UPDATE students SET class_level=?, status='Active', promoted_to=NULL WHERE student_id=?`,
+            [s.promoted_to, s.student_id],
+            () => res.redirect('/student-dashboard?nextclass=1'));
+    });
+});
+
+app.get('/api/student/promotion-status', (req, res) => {
+    if (!req.session.studentId) return res.json({ success: false });
+    db.get(`SELECT student_id, name, class_level, status, promoted_to, year_average, year_result FROM students WHERE student_id=?`,
+        [req.session.studentId], (e, s) => {
+            if (!s) return res.json({ success: false });
+            res.json({
+                success: true,
+                class_level: s.class_level,
+                status: s.status,
+                promoted_to: s.promoted_to,
+                year_average: s.year_average,
+                year_result: s.year_result,
+                can_register_next: String(s.status) === 'Promoted' && s.promoted_to && s.promoted_to !== 'Graduated'
+            });
+        });
+});
+
+app.get('/api/admin/pass-mark', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ success: false });
+    db.get(`SELECT value FROM school_settings WHERE key='pass_mark'`, [], (e, row) => {
+        res.json({ success: true, pass_mark: row ? parseFloat(row.value) : 50 });
+    });
+});
+app.post('/admin/pass-mark', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ success: false });
+    const v = parseFloat(req.body.pass_mark);
+    if (isNaN(v) || v < 0 || v > 100) return res.json({ success: false, error: 'invalid' });
+    db.run(`INSERT INTO school_settings (key, value) VALUES ('pass_mark', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+        [String(v)], () => res.json({ success: true, pass_mark: v }));
+});
+
+// Director / Admin pass-fail boards: 1-4, 5-8, 9-12
+app.get('/admin/pass-fail-board', (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.get(`SELECT value FROM school_settings WHERE key='pass_mark'`, [], (e0, pmRow) => {
+        const passMark = pmRow ? (parseFloat(pmRow.value) || 50) : 50;
+        db.all(`SELECT student_id, name, class_level, status, promoted_to, year_average, year_result FROM students ORDER BY class_level, name`, [], (e, students = []) => {
+            db.all(`SELECT student_id, total FROM course_assessments`, [], (e2, assessments = []) => {
+                const avgMap = {};
+                (assessments || []).forEach(a => {
+                    if (!avgMap[a.student_id]) avgMap[a.student_id] = [];
+                    avgMap[a.student_id].push(Number(a.total) || 0);
+                });
+                const rows = (students || []).map(s => {
+                    let avg = s.year_average;
+                    if (avg === null || avg === undefined || avg === '') {
+                        const arr = avgMap[s.student_id] || [];
+                        avg = arr.length ? Math.round((arr.reduce((x,y)=>x+y,0)/arr.length)*10)/10 : 0;
+                    }
+                    const result = (s.year_result) || (avg >= passMark ? 'Pass' : 'Fail');
+                    const gMatch = String(s.class_level || '').match(/Grade\s*(\d+)/i);
+                    const g = gMatch ? parseInt(gMatch[1], 10) : 0;
+                    let band = 'other';
+                    if (g >= 1 && g <= 4) band = '1-4';
+                    else if (g >= 5 && g <= 8) band = '5-8';
+                    else if (g >= 9 && g <= 12) band = '9-12';
+                    return { ...s, avg, result, band, grade: g };
+                });
+                const bandHtml = (band, title) => {
+                    const list = rows.filter(r => r.band === band);
+                    const pass = list.filter(r => r.result === 'Pass' || r.avg >= passMark);
+                    const fail = list.filter(r => !(r.result === 'Pass' || r.avg >= passMark));
+                    const rowFn = (r, ok) => `<tr>
+                        <td>${r.student_id}</td><td style="text-align:left">${r.name}</td>
+                        <td>${r.class_level || ''}</td><td><b>${r.avg}</b></td>
+                        <td style="color:${ok?'#047857':'#b91c1c'};font-weight:bold">${ok?'PASS':'FAIL'}</td>
+                        <td>${r.promoted_to || (ok ? '→ next' : 'stay')}</td></tr>`;
+                    return `<div class="card"><h3>${title}</h3>
+                      <p>Pass mark: <b>${passMark}</b> · Students: ${list.length} · Pass: <b style="color:#047857">${pass.length}</b> · Fail: <b style="color:#b91c1c">${fail.length}</b></p>
+                      <h4 style="color:#047857">✅ Pass</h4>
+                      <div style="overflow-x:auto"><table><tr><th>ID</th><th>Name</th><th>Class</th><th>Avg</th><th>Result</th><th>Next</th></tr>
+                      ${pass.map(r=>rowFn(r,true)).join('') || '<tr><td colspan="6">None</td></tr>'}</table></div>
+                      <h4 style="color:#b91c1c;margin-top:14px">❌ Fail (stay in class)</h4>
+                      <div style="overflow-x:auto"><table><tr><th>ID</th><th>Name</th><th>Class</th><th>Avg</th><th>Result</th><th>Next</th></tr>
+                      ${fail.map(r=>rowFn(r,false)).join('') || '<tr><td colspan="6">None</td></tr>'}</table></div>
+                    </div>`;
+                };
+                res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pass / Fail Board</title>
+<style>
+body{font-family:Segoe UI,sans-serif;background:#f1f5f9;margin:0;padding:16px;color:#0f172a}
+.wrap{max-width:1100px;margin:auto}
+.card{background:#fff;border-radius:14px;padding:16px;margin-bottom:16px;box-shadow:0 4px 14px rgba(0,0,0,.06);border-top:4px solid #1d4ed8}
+h1{color:#1e3a8a} h3{margin:0 0 8px;color:#1e3a8a}
+table{width:100%;border-collapse:collapse;font-size:13px} th,td{border:1px solid #e2e8f0;padding:8px}
+th{background:#1e3a8a;color:#fff}
+a.btn{display:inline-block;background:#1d4ed8;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:bold;margin-right:8px}
+</style></head><body><div class="wrap">
+<h1>🎓 Director Pass / Fail Board</h1>
+<p><a class="btn" href="/admin">⬅️ Admin</a>
+<a class="btn" href="/admin/director-report" style="background:#0f766e">Director Report</a></p>
+<p>Threshold (pass mark): <b style="font-size:22px;color:#1d4ed8">${passMark}</b> — average of subject totals</p>
+${bandHtml('1-4','📗 Grades 1–4')}
+${bandHtml('5-8','📘 Grades 5–8')}
+${bandHtml('9-12','📙 Grades 9–12')}
+</div></body></html>`);
+            });
         });
     });
 });
