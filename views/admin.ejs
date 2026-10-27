@@ -2001,11 +2001,19 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <div class="card" id="gradeUnlockBox" style="border-color:#b45309;">
-  <h3>🔓 Grade unlock · 🧾 Re-registration payments · 💾 Backup</h3>
-  <p style="font-size:13px;color:#64748b;">After teacher submits grades they are locked. Unlock manually or run backup (auto-unlocks).</p>
-  <button type="button" onclick="unlockAllGrades()" style="background:#b45309;color:#fff;border:none;padding:10px 14px;border-radius:8px;font-weight:bold;">🔓 Unlock all locked grades</button>
-  <button type="button" onclick="runBackupNow()" style="background:#027a48;color:#fff;border:none;padding:10px 14px;border-radius:8px;font-weight:bold;margin-left:8px;">💾 Run backup now</button>
-  <div id="gradeLocksList" style="margin-top:12px;font-size:13px;"></div>
+  <h3>🔓 Grade unlock · 🧾 Re-registration · 💾 Backup</h3>
+  <p style="font-size:13px;color:#64748b;">መምህር submit ካደረገ በኋላ lock ይሆናል። እንደገና ለማረም መምህር request ይልካል → Admin class/section ይምረጥ unlock።</p>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;">
+    <select id="unlockClassSelect" style="min-width:200px;padding:10px;font-weight:bold;">
+      <option value="">— Class to unlock —</option>
+    </select>
+    <button type="button" onclick="unlockSelectedClass()" style="background:#b45309;color:#fff;border:none;padding:10px 14px;border-radius:8px;font-weight:bold;">🔓 Unlock this class only</button>
+    <button type="button" onclick="unlockAllGrades()" style="background:#92400e;color:#fff;border:none;padding:10px 14px;border-radius:8px;font-weight:bold;">Unlock ALL</button>
+    <button type="button" onclick="runBackupNow()" style="background:#027a48;color:#fff;border:none;padding:10px 14px;border-radius:8px;font-weight:bold;">💾 Backup now</button>
+  </div>
+  <div id="gradeLocksList" style="margin-top:8px;font-size:13px;"></div>
+  <h4 style="margin:16px 0 8px;">📩 Teacher unlock requests</h4>
+  <div id="unlockReqList">Loading...</div>
   <h4 style="margin:16px 0 8px;">Re-registration payment requests</h4>
   <div id="reregAdminList">Loading...</div>
 </div>
@@ -2014,6 +2022,12 @@ function loadGradeLocks(){
   fetch('/api/admin/grade-locks',{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
     var box=document.getElementById('gradeLocksList');
     var rows=(d.rows||[]).filter(function(x){return Number(x.locked)===1;});
+    var sel=document.getElementById('unlockClassSelect');
+    if(sel){ var seen={}; sel.innerHTML='<option value="">— Class to unlock —</option>';
+      (d.rows||[]).filter(function(x){return Number(x.locked)===1;}).forEach(function(r){
+        if(r.class_level && !seen[r.class_level]){ seen[r.class_level]=1; var o=document.createElement('option'); o.value=r.class_level; o.textContent=r.class_level; sel.appendChild(o); }
+      });
+    }
     if(!rows.length){ box.innerHTML='<p style="color:#64748b">No locked grade sets.</p>'; return; }
     box.innerHTML=rows.map(function(r){
       return '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #fde68a">'+
@@ -2051,9 +2065,87 @@ function reviewRereg(id, action){
   fetch('/admin/rereg-review',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id,action:action})})
     .then(r=>r.json()).then(function(){ loadReregAdmin(); });
 }
-loadGradeLocks(); loadReregAdmin();
+
+function unlockSelectedClass(){
+  var cls=(document.getElementById('unlockClassSelect')||{}).value||'';
+  if(!cls){ alert('Select class'); return; }
+  fetch('/admin/grade-unlock-class',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({class_level:cls})})
+    .then(r=>r.json()).then(function(){ alert('Unlocked: '+cls); loadGradeLocks(); loadUnlockReqs(); });
+}
+function loadUnlockReqs(){
+  fetch('/api/admin/unlock-requests',{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
+    var box=document.getElementById('unlockReqList'); if(!box) return;
+    var rows=d.rows||[];
+    if(!rows.length){ box.innerHTML='<p style="color:#64748b">No unlock requests</p>'; return; }
+    box.innerHTML=rows.map(function(r){
+      return '<div style="padding:10px 0;border-bottom:1px solid #fed7aa"><b>'+(r.teacher_name||r.teacher_id)+'</b> · <b>'+(r.class_level||'')+'</b> '+(r.course_code?('· '+r.course_code):'')+
+        '<br><small>'+(r.reason||'')+' · <b>'+r.status+'</b></small>'+
+        (r.status==='pending'?('<div style="margin-top:6px"><button type="button" onclick="reviewUnlock('+r.id+',\'approve\')" style="background:#059669;color:#fff;border:none;padding:6px 10px;border-radius:6px">✅ Approve unlock</button> '+
+        '<button type="button" onclick="reviewUnlock('+r.id+',\'reject\')" style="background:#dc2626;color:#fff;border:none;padding:6px 10px;border-radius:6px">❌ Reject</button></div>'):
+        (r.admin_reply?('<div style="font-size:12px;color:#64748b">Reply: '+r.admin_reply+'</div>'):''))+
+        '</div>';
+    }).join('');
+  });
+}
+function reviewUnlock(id, action){
+  var reply = action==='approve' ? 'Unlocked by admin' : (prompt('Reply (optional)')||'Rejected');
+  fetch('/admin/unlock-request-review',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id,action:action,reply:reply})})
+    .then(r=>r.json()).then(function(){ loadUnlockReqs(); loadGradeLocks(); });
+}
+
+loadGradeLocks(); loadUnlockReqs(); loadReregAdmin();
 </script>
 
+
+
+<div class="card" id="yearArchiveBox" style="border-top:4px solid #0f766e;">
+  <h3>📅 Academic year · Previous · New year</h3>
+  <p style="font-size:13px;color:#64748b;">አንድ ዓመት ሲያልቅ <b>Archive year</b> — ውጤት ይቀመጣል። <b>Previous</b> በዓመት ይመልከቱ። <b>New year</b> አዲስ ይጀምሩ (ታሪክ አይጠፋም)።</p>
+  <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+    <label><b>Current year</b></label>
+    <input type="text" id="curYearInp" value="2019 E.C" style="width:140px;padding:10px;font-weight:bold;">
+    <button type="button" onclick="setCurrentYear()" style="background:#0f766e;color:#fff;border:none;padding:10px 12px;border-radius:8px;font-weight:bold;">Set current</button>
+  </div>
+  <form action="/admin/archive-year" method="POST" style="margin-top:12px;padding:12px;background:#f0fdfa;border-radius:12px;" onsubmit="document.getElementById('archYear').value=document.getElementById('curYearInp').value; return confirm('Archive ALL current grades into this year, then clear for new year?');">
+    <input type="hidden" name="academic_year" id="archYear" value="2019 E.C">
+    <button type="submit" style="background:#0f766e;color:#fff;border:none;padding:12px 16px;border-radius:10px;font-weight:900;">📦 Archive year & prepare New year</button>
+  </form>
+  <div style="margin-top:14px;">
+    <label><b>📂 Previous year</b></label>
+    <select id="prevYearSelect" style="width:100%;max-width:280px;padding:10px;margin:6px 0;"></select>
+    <button type="button" onclick="loadYearArchive()" style="background:#1d4ed8;color:#fff;border:none;padding:10px 14px;border-radius:8px;font-weight:bold;">View year data</button>
+    <div id="yearArchiveResult" style="margin-top:10px;max-height:320px;overflow:auto;font-size:13px;"></div>
+  </div>
+</div>
+<script>
+function loadYears(){
+  fetch('/api/admin/academic-years',{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
+    if(!d.success) return;
+    var inp=document.getElementById('curYearInp'); if(inp&&d.current) inp.value=d.current;
+    var sel=document.getElementById('prevYearSelect'); if(!sel) return;
+    sel.innerHTML='<option value="">— Select previous year —</option>';
+    (d.years||[]).forEach(function(y){ var o=document.createElement('option'); o.value=y; o.textContent=y; sel.appendChild(o); });
+  });
+}
+function setCurrentYear(){
+  var y=document.getElementById('curYearInp').value;
+  fetch('/admin/set-current-year',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({academic_year:y})})
+    .then(r=>r.json()).then(function(d){ alert(d.success?'Current year: '+d.current:'Failed'); });
+}
+function loadYearArchive(){
+  var y=document.getElementById('prevYearSelect').value;
+  var box=document.getElementById('yearArchiveResult');
+  if(!y){ box.innerHTML='Select a year'; return; }
+  fetch('/api/admin/year-archive?year='+encodeURIComponent(y),{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
+    if(!(d.rows||[]).length){ box.innerHTML='No archive rows for '+y; return; }
+    box.innerHTML='<table style="width:100%;border-collapse:collapse"><tr><th>ID</th><th>Name</th><th>Class</th><th>Avg</th><th>Courses</th></tr>'+
+      d.rows.map(function(r){
+        return '<tr><td>'+r.student_id+'</td><td style="text-align:left">'+r.student_name+'</td><td>'+(r.class_level||'')+'</td><td><b>'+(r.total_score!=null?Number(r.total_score).toFixed(1):'-')+'</b></td><td style="text-align:left;font-size:11px">'+(r.courses_summary||'')+'</td></tr>';
+      }).join('')+'</table>';
+  });
+}
+loadYears();
+</script>
 
 <div class="card" id="passMarkBox" style="border-top:4px solid #7c3aed;">
   <h3>🎯 Pass marks by band · Promote · Director board</h3>
