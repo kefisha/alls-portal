@@ -1158,9 +1158,17 @@
       if(!d.success||!(d.quizzes||[]).length){ box.innerHTML='<p style="margin:0;color:#64748b">No quiz data yet.</p>'; return; }
       box.innerHTML=d.quizzes.map(function(q){
         var recent=(q.recent||[]).map(function(a){ return '<div style="font-size:12px">'+a.student+': <b>'+a.percent+'%</b> ('+a.score+'/'+a.total+')</div>'; }).join('');
+        var wrong=(q.question_stats||[]).filter(function(s){return s.wrong>0;}).map(function(s){
+          return '<div style="font-size:12px;margin:4px 0;padding:6px;background:#fff;border-left:3px solid #e11d48;border-radius:4px">'+
+            '<b>Q'+s.index+'</b> ❌ wrong: <b>'+s.wrong+'</b> · ✅ right: '+s.right+
+            '<br><span style="color:#334155">'+String(s.q||'').replace(/</g,'&lt;')+'</span>'+
+            '<br><span style="color:#b91c1c">Wrong answers: '+(s.wrong_answers||'-')+'</span>'+
+            '<br><span style="color:#047857">Correct: '+(s.correct||'-')+'</span></div>';
+        }).join('') || '<div style="font-size:12px;color:#64748b">No wrong answers yet (or no attempts).</div>';
         return '<div style="border-bottom:1px solid #e9d5ff;padding:10px 0"><b>'+q.title+'</b> · '+q.class_level+
           '<br><small>Questions: '+q.questions+' · Attempts: '+q.attempts+' · Avg: <b>'+q.avg_percent+'%</b></small>'+
-          (recent?('<div style="margin-top:6px">'+recent+'</div>'):'')+'</div>';
+          '<div style="margin-top:8px"><b>Wrong questions</b>'+wrong+'</div>'+
+          (recent?('<div style="margin-top:6px"><b>Recent</b>'+recent+'</div>'):'')+'</div>';
       }).join('');
     }).catch(function(){ box.innerHTML='Failed to load analytics'; });
   }
@@ -1184,6 +1192,24 @@
   loadQuizAnalytics();
   loadLessonPlans();
 })();
+</script>
+
+
+<div class="card" style="border-top:4px solid #b45309;margin:16px 0;padding:14px;">
+  <h4 style="margin:0 0 8px;color:#b45309;">🔓 Request grade unlock (after submit)</h4>
+  <p style="font-size:13px;color:#64748b;margin:0 0 8px;">Submit ካደረጉ በኋላ edit አይችሉም። Admin እንዲከፍትልዎ class ይምረጡ → Request።</p>
+  <input type="text" id="unlockReqClass" placeholder="Class e.g. Grade 5 - Section A" style="width:100%;max-width:320px;padding:10px;margin:4px 0;">
+  <input type="text" id="unlockReqReason" placeholder="Reason" style="width:100%;max-width:320px;padding:10px;margin:4px 0;">
+  <button type="button" onclick="requestUnlock()" style="background:#b45309;color:#fff;border:none;padding:10px 14px;border-radius:8px;font-weight:bold;">📩 Send unlock request</button>
+</div>
+<script>
+function requestUnlock(){
+  var cls=(document.getElementById('unlockReqClass')||{}).value||'';
+  var reason=(document.getElementById('unlockReqReason')||{}).value||'';
+  if(!cls){ alert('Class required'); return; }
+  fetch('/teacher/request-unlock',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({class_level:cls,reason:reason})})
+    .then(r=>r.json()).then(function(d){ alert(d.success?'Request sent to Admin':'Failed'); });
+}
 </script>
 
 </body>
