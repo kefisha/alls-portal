@@ -3096,6 +3096,13 @@ app.post('/library/upload', upload.single('file'), (req, res) => {
         [title || 'Resource', category || 'General', class_level || 'ALL', file, by, getFormattedTimestamp()],
         () => res.redirect(req.get('Referer') || '/admin'));
 });
+app.get('/api/whoami', (req, res) => {
+    if (req.session.isAdmin) return res.json({ role: 'admin' });
+    if (req.session.teacherId) return res.json({ role: 'teacher', id: req.session.teacherId });
+    if (req.session.studentId) return res.json({ role: 'student', id: req.session.studentId });
+    if (req.session.parentStudentId) return res.json({ role: 'parent', id: req.session.parentStudentId });
+    res.json({ role: 'guest' });
+});
 app.get('/api/me-student', (req, res) => {
     if (!req.session.studentId) return res.json({ success: false });
     db.get(`SELECT student_id, name, class_level FROM students WHERE student_id=?`, [req.session.studentId], (e, s) => {
@@ -3614,10 +3621,11 @@ function showQ(){
     '<div class="meta">Question '+(idx+1)+' / '+questions.length+' · 1 min each</div>'+
     '<div class="progress"><div class="bar" style="width:'+pct+'%"></div></div>'+
     imgHtml+'<div class="qbox" id="qtext"></div>'+optsHtml+
+    '<button type="button" id="prevBtn" '+(idx===0?'disabled style="opacity:.4"':'')+' style="width:100%;padding:12px;margin-top:8px;border:none;border-radius:10px;font-weight:bold;background:#64748b;color:#fff">⬅️ Previous</button>'+
     '<button type="button" id="nextBtn" disabled>'+(idx===questions.length-1?'Finish ✅':'Next ➡️')+'</button>'+
-    '<button type="button" class="sec" id="exitBtn">Exit</button>';
+    '<button type="button" class="sec" id="exitBtn">Exit to Learning Hub</button>';
   document.getElementById('qtext').textContent = q.q || '';
-  document.getElementById('exitBtn').onclick = function(){ stopTimer(); location.href='/learning-hub'; };
+  document.getElementById('exitBtn').onclick = function(){ stopTimer(); location.replace('/learning-hub'); };
   var nextBtn = document.getElementById('nextBtn');
   app.querySelectorAll('.opt').forEach(function(btn){
     btn.onclick = function(){
@@ -3639,6 +3647,18 @@ function showQ(){
     idx++;
     showQ();
   };
+  var prevBtn = document.getElementById('prevBtn');
+  if (prevBtn) {
+    prevBtn.onclick = function(){
+      if (idx <= 0) return;
+      var val = selected;
+      if (ans) val = (ans.value||'').trim();
+      answers[idx] = val || answers[idx] || '';
+      stopTimer();
+      idx--;
+      showQ();
+    };
+  }
   startTimer();
 }
 
@@ -4097,7 +4117,15 @@ th{background:#1f4e79;color:#fff}
 .thumb{max-width:100%;max-height:220px;border-radius:8px;margin-top:8px}
 </style></head><body>
 <div class="wrap">
-  <a class="back" href="javascript:history.back()">⬅️ Back</a>
+  <a class="back" id="hubBack" href="/">⬅️ Back</a>
+<script>
+fetch('/api/whoami',{credentials:'same-origin'}).then(function(r){return r.json()}).then(function(d){
+  var a=document.getElementById('hubBack'); if(!a) return;
+  if(d.role==='admin') a.href='/admin';
+  else if(d.role==='teacher') a.href='/teacher-dashboard';
+  else if(d.role==='student') a.href='/student-dashboard';
+}).catch(function(){});
+</script>
   <h2>📚 Learning Hub / የትምህርት ማዕከል</h2>
   <div class="tabs">
     <button type="button" class="on" data-t="ann">📢 Announcements</button>
@@ -4239,7 +4267,7 @@ app.get('/admin/attendance-report', (req, res) => {
 <input name="class" placeholder="Class e.g. Grade 5A" value="${cls}">
 <input name="month" type="month" value="${month}">
 <button type="submit">Filter</button>
-<a href="/admin">Admin</a> | <a href="/teacher-dashboard">Teacher</a>
+<a href="/admin" style="font-weight:bold;color:#1d4ed8">Admin portal</a> | <a href="/teacher-dashboard" style="font-weight:bold;color:#1d4ed8">Teacher portal</a>
 </form>
 <table><tr><th>ID</th><th>Name</th><th>Class</th><th>Present</th><th>Absent</th><th>Total</th><th>%</th></tr>${tr}</table>
 </div></body></html>`);
