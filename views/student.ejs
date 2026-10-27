@@ -419,5 +419,74 @@
         new Chart(ctx, { type: 'bar', data: { labels: d.labels, datasets: [{ label: 'Total', data: d.data, backgroundColor: '#2980b9' }] }, options: { scales: { y: { beginAtZero: true, max: 100 } } } });
     }).catch(()=>{});
 </script>
+
+<div class="card" id="prevClassHistory" style="border-top:4px solid #7c3aed;margin:16px 0;padding:16px;background:#fff;border-radius:12px;">
+  <h3 style="color:#6d28d9;">📂 Previous class results (1–12)</h3>
+  <select id="histClassSelect" style="width:100%;max-width:320px;padding:10px;margin:8px 0;">
+    <option value="">— Select previous class —</option>
+  </select>
+  <button type="button" onclick="loadHist()" style="padding:10px 14px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-weight:bold;">View</button>
+  <div id="histResult" style="margin-top:12px;font-size:14px;"></div>
+</div>
+<div class="card" id="rereg" style="border-top:4px solid #0369a1;margin:16px 0;padding:16px;background:#fff;border-radius:12px;">
+  <h3 style="color:#0369a1;">📝 Next class registration (existing students)</h3>
+  <p style="font-size:13px;color:#475569;">Pay school fee → upload slip → wait Admin ✅ approve → then you can register for next class.</p>
+  <div id="reregStatus" style="margin:8px 0;font-weight:bold;"></div>
+  <form id="reregForm" action="/student/rereg-request" method="POST" enctype="multipart/form-data" style="display:none;">
+    <input type="text" name="target_class" placeholder="Target class e.g. Grade 3 - Section A" required style="width:100%;margin:6px 0;padding:10px;">
+    <input type="text" name="amount" placeholder="Amount paid (ETB)" style="width:100%;margin:6px 0;padding:10px;">
+    <input type="text" name="note" placeholder="Transaction ref / note" style="width:100%;margin:6px 0;padding:10px;">
+    <label>Bank slip / screenshot *</label>
+    <input type="file" name="slip" accept="image/*,.pdf" required style="margin:6px 0;">
+    <button type="submit" style="padding:12px 16px;background:#0369a1;color:#fff;border:none;border-radius:8px;font-weight:bold;">Submit payment for approval</button>
+  </form>
+  <div id="reregApproved" style="display:none;padding:12px;background:#ecfdf5;border:2px solid #10b981;border-radius:10px;margin-top:10px;">
+    ✅ Payment approved — <b>You can register</b> for the next class.
+    <br><a href="/student-register" style="display:inline-block;margin-top:10px;background:#059669;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:bold;">Open registration form</a>
+  </div>
+</div>
+<script>
+function loadHistClasses(){
+  fetch('/api/student/history',{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
+    var sel=document.getElementById('histClassSelect'); if(!sel) return;
+    (d.classes||[]).forEach(function(c){
+      var o=document.createElement('option'); o.value=c; o.textContent=c; sel.appendChild(o);
+    });
+    // always offer Grade 1-12
+    for(var g=1;g<=12;g++){
+      ['Section A','Section B'].forEach(function(s){
+        var v='Grade '+g+' - '+s;
+        if(!(d.classes||[]).includes(v)){ var o=document.createElement('option'); o.value=v; o.textContent=v+' (if any)'; sel.appendChild(o); }
+      });
+    }
+  });
+}
+function loadHist(){
+  var cls=document.getElementById('histClassSelect').value;
+  var box=document.getElementById('histResult');
+  fetch('/api/student/history?class='+encodeURIComponent(cls),{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
+    if(!(d.rows||[]).length){ box.innerHTML='No saved results for this class yet.'; return; }
+    box.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:13px"><tr><th>Year</th><th>Course</th><th>Quiz</th><th>Mid</th><th>Final</th><th>Total</th></tr>'+
+      d.rows.map(function(r){
+        return '<tr><td>'+(r.academic_year||'')+'</td><td>'+(r.course_title||r.course_code)+'</td><td>'+(r.quiz||0)+'</td><td>'+(r.mid||0)+'</td><td>'+(r.final||0)+'</td><td><b>'+(r.total||0)+'</b></td></tr>';
+      }).join('')+'</table>';
+  });
+}
+function loadRereg(){
+  fetch('/api/student/rereg-status',{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
+    var st=document.getElementById('reregStatus');
+    var form=document.getElementById('reregForm');
+    var ok=document.getElementById('reregApproved');
+    var rows=d.rows||[];
+    var latest=rows[0];
+    if(!latest){ st.textContent='No payment submitted yet.'; form.style.display='block'; ok.style.display='none'; return; }
+    if(latest.status==='approved'){ st.textContent='Latest: APPROVED for '+(latest.target_class||''); form.style.display='none'; ok.style.display='block'; }
+    else if(latest.status==='pending'){ st.textContent='Latest: PENDING admin review ('+(latest.target_class||'')+')'; form.style.display='block'; ok.style.display='none'; }
+    else { st.textContent='Latest: '+String(latest.status).toUpperCase(); form.style.display='block'; ok.style.display='none'; }
+  });
+}
+loadHistClasses(); loadRereg();
+</script>
+
 </body>
 </html>
