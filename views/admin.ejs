@@ -2056,39 +2056,57 @@ loadGradeLocks(); loadReregAdmin();
 
 
 <div class="card" id="passMarkBox" style="border-top:4px solid #7c3aed;">
-  <h3>🎯 Pass mark · Promote · Director board</h3>
-  <p style="font-size:13px;color:#64748b;">Set average pass mark (e.g. <b>67</b>). Promote uses it: ≥ pass → next class form; below → stay.</p>
-  <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
-    <label style="font-weight:bold;">Pass mark %</label>
-    <input type="number" id="passMarkInput" min="0" max="100" step="0.1" value="50" style="width:100px;padding:10px;font-size:18px;font-weight:bold;">
-    <button type="button" onclick="savePassMark()" style="background:#7c3aed;color:#fff;border:none;padding:10px 14px;border-radius:8px;font-weight:bold;">Save pass mark</button>
+  <h3>🎯 Pass marks by band · Promote · Director board</h3>
+  <p style="font-size:13px;color:#64748b;">እያንዳንዱ ቡድን የራሱ pass mark — 1–4 / 5–8 / 9–12 የተለያየ ማስቀመጥ ይችላሉ።</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:12px 0;">
+    <label style="display:block;background:#ecfdf5;padding:12px;border-radius:12px;border:2px solid #6ee7b7;">
+      <span style="font-weight:900;color:#047857;">📗 Grades 1–4</span>
+      <input type="number" id="pm14" min="0" max="100" step="0.1" value="56" style="width:100%;margin-top:6px;padding:10px;font-size:20px;font-weight:bold;">
+    </label>
+    <label style="display:block;background:#eff6ff;padding:12px;border-radius:12px;border:2px solid #93c5fd;">
+      <span style="font-weight:900;color:#1d4ed8;">📘 Grades 5–8</span>
+      <input type="number" id="pm58" min="0" max="100" step="0.1" value="60" style="width:100%;margin-top:6px;padding:10px;font-size:20px;font-weight:bold;">
+    </label>
+    <label style="display:block;background:#fff7ed;padding:12px;border-radius:12px;border:2px solid #fdba74;">
+      <span style="font-weight:900;color:#c2410c;">📙 Grades 9–12</span>
+      <input type="number" id="pm912" min="0" max="100" step="0.1" value="65" style="width:100%;margin-top:6px;padding:10px;font-size:20px;font-weight:bold;">
+    </label>
   </div>
-  <form action="/admin/promote-students" method="POST" style="margin-top:14px;padding:14px;background:#faf5ff;border-radius:12px;" onsubmit="return confirm('Archive results & promote PASS students only? FAIL stay in class.');">
-    <input type="hidden" name="pass_mark" id="passMarkHidden" value="50">
+  <button type="button" onclick="savePassMarks()" style="background:#7c3aed;color:#fff;border:none;padding:10px 14px;border-radius:8px;font-weight:bold;">💾 Save pass marks</button>
+  <form action="/admin/promote-students" method="POST" style="margin-top:14px;padding:14px;background:#faf5ff;border-radius:12px;" onsubmit="syncPromoteMarks(); return confirm('Archive & promote PASS only (each band uses its own mark)?');">
+    <input type="hidden" name="pass_mark_1_4" id="hpm14" value="56">
+    <input type="hidden" name="pass_mark_5_8" id="hpm58" value="60">
+    <input type="hidden" name="pass_mark_9_12" id="hpm912" value="65">
     <input type="text" name="academic_year" value="2019 E.C" style="width:140px;">
-    <button type="submit" style="background:#6d28d9;color:#fff;border:none;padding:12px 18px;border-radius:10px;font-weight:900;font-size:16px;">🎓 Promote all students (pass only)</button>
+    <button type="submit" style="background:#6d28d9;color:#fff;border:none;padding:12px 18px;border-radius:10px;font-weight:900;font-size:16px;">🎓 Promote all students (by band)</button>
   </form>
   <p style="margin-top:12px;">
     <a href="/admin/pass-fail-board" style="display:inline-block;background:#1d4ed8;color:#fff;padding:12px 16px;border-radius:10px;text-decoration:none;font-weight:bold;">📊 Director Pass/Fail Board (1–4 · 5–8 · 9–12)</a>
   </p>
 </div>
 <script>
-fetch('/api/admin/pass-mark',{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
-  if(d.success){
-    var el=document.getElementById('passMarkInput'); if(el) el.value=d.pass_mark;
-    var h=document.getElementById('passMarkHidden'); if(h) h.value=d.pass_mark;
-  }
-});
-function savePassMark(){
-  var v=document.getElementById('passMarkInput').value;
-  fetch('/admin/pass-mark',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass_mark:v})})
-    .then(r=>r.json()).then(function(d){
-      if(d.success){ document.getElementById('passMarkHidden').value=d.pass_mark; alert('Pass mark saved: '+d.pass_mark); }
-      else alert('Failed');
-    });
+function syncPromoteMarks(){
+  document.getElementById('hpm14').value=document.getElementById('pm14').value;
+  document.getElementById('hpm58').value=document.getElementById('pm58').value;
+  document.getElementById('hpm912').value=document.getElementById('pm912').value;
 }
-document.getElementById('passMarkInput')&&document.getElementById('passMarkInput').addEventListener('change',function(){
-  document.getElementById('passMarkHidden').value=this.value;
+function savePassMarks(){
+  syncPromoteMarks();
+  fetch('/admin/pass-mark',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    pass_mark_1_4:document.getElementById('pm14').value,
+    pass_mark_5_8:document.getElementById('pm58').value,
+    pass_mark_9_12:document.getElementById('pm912').value
+  })}).then(r=>r.json()).then(function(d){
+    if(d.success) alert('Saved:\n1–4: '+d.pass_mark_1_4+'\n5–8: '+d.pass_mark_5_8+'\n9–12: '+d.pass_mark_9_12);
+    else alert('Failed');
+  });
+}
+fetch('/api/admin/pass-mark',{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
+  if(!d.success) return;
+  if(d.pass_mark_1_4!=null) document.getElementById('pm14').value=d.pass_mark_1_4;
+  if(d.pass_mark_5_8!=null) document.getElementById('pm58').value=d.pass_mark_5_8;
+  if(d.pass_mark_9_12!=null) document.getElementById('pm912').value=d.pass_mark_9_12;
+  syncPromoteMarks();
 });
 </script>
 
