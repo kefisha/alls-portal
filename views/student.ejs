@@ -449,26 +449,28 @@
 function loadHistClasses(){
   fetch('/api/student/history',{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
     var sel=document.getElementById('histClassSelect'); if(!sel) return;
-    (d.classes||[]).forEach(function(c){
+    sel.innerHTML='<option value="">— Select previous class —</option>';
+    var classes=d.classes||[];
+    if(!classes.length){
+      sel.innerHTML='<option value="">No previous class yet</option>';
+      var box=document.getElementById('histResult');
+      if(box) box.innerHTML='<p style="color:#64748b;margin:8px 0">You have no archived previous-class results yet. After teachers submit and Admin clicks <b>Promote all students</b>, previous classes appear here.</p>';
+      return;
+    }
+    classes.forEach(function(c){
       var o=document.createElement('option'); o.value=c; o.textContent=c; sel.appendChild(o);
     });
-    // always offer Grade 1-12
-    for(var g=1;g<=12;g++){
-      ['Section A','Section B'].forEach(function(s){
-        var v='Grade '+g+' - '+s;
-        if(!(d.classes||[]).includes(v)){ var o=document.createElement('option'); o.value=v; o.textContent=v+' (if any)'; sel.appendChild(o); }
-      });
-    }
   });
 }
 function loadHist(){
   var cls=document.getElementById('histClassSelect').value;
   var box=document.getElementById('histResult');
+  if(!cls){ box.innerHTML='Select a previous class.'; return; }
   fetch('/api/student/history?class='+encodeURIComponent(cls),{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
-    if(!(d.rows||[]).length){ box.innerHTML='No saved results for this class yet.'; return; }
-    box.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:13px"><tr><th>Year</th><th>Course</th><th>Quiz</th><th>Mid</th><th>Final</th><th>Total</th></tr>'+
+    if(!(d.rows||[]).length){ box.innerHTML='No results for this class.'; return; }
+    box.innerHTML='<p style="font-weight:bold;color:#6d28d9">'+cls+'</p><table style="width:100%;border-collapse:collapse;font-size:13px"><tr><th>Year</th><th>Course</th><th>Quiz</th><th>Assign</th><th>Project</th><th>Mid</th><th>Final</th><th>Total</th></tr>'+
       d.rows.map(function(r){
-        return '<tr><td>'+(r.academic_year||'')+'</td><td>'+(r.course_title||r.course_code)+'</td><td>'+(r.quiz||0)+'</td><td>'+(r.mid||0)+'</td><td>'+(r.final||0)+'</td><td><b>'+(r.total||0)+'</b></td></tr>';
+        return '<tr><td>'+(r.academic_year||'')+'</td><td>'+(r.course_title||r.course_code)+'</td><td>'+(r.quiz||0)+'</td><td>'+(r.assignment||0)+'</td><td>'+(r.project||0)+'</td><td>'+(r.mid||0)+'</td><td>'+(r.final||0)+'</td><td><b>'+(r.total||0)+'</b></td></tr>';
       }).join('')+'</table>';
   });
 }
