@@ -2,307 +2,560 @@
 <html lang="am">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#1f4e79">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0b1220">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/uploads/logo.jpg">
-    <title>Login - Amanuel Light and Life School</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <title>Login · Amanuel Light & Life School</title>
     <style>
-        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        :root {
+            --bg0: #070b14;
+            --stroke: rgba(255,255,255,0.14);
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --gold: #f5c542;
+            --gold2: #e8a317;
+            --blue: #3b82f6;
+            --blue2: #2563eb;
+            --green: #10b981;
+            --radius: 22px;
+            --shadow: 0 25px 60px rgba(0,0,0,0.45);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { min-height: 100%; }
         body {
-            margin: 0; padding: 20px; min-height: 100vh;
-            background: linear-gradient(135deg, #1f4e79 0%, #0d2b45 100%);
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            font-family: 'Outfit', 'Segoe UI', system-ui, sans-serif;
+            color: var(--text);
+            background: #070b14;
+            overflow-x: hidden;
         }
         body.lang-am .en { display: none !important; }
         body.lang-am .am { display: inline !important; }
         body.lang-en .am { display: none !important; }
         body.lang-en .en { display: inline !important; }
 
-        .lang-bar {
-            background: rgba(255,255,255,0.15); padding: 6px; border-radius: 10px;
-            display: flex; gap: 8px; margin-bottom: 18px; backdrop-filter: blur(5px);
+        .bg {
+            position: fixed; inset: 0; z-index: 0;
+            background:
+                radial-gradient(900px 500px at 10% -10%, rgba(59,130,246,0.35), transparent 55%),
+                radial-gradient(700px 480px at 90% 10%, rgba(245,197,66,0.22), transparent 50%),
+                radial-gradient(600px 400px at 50% 110%, rgba(16,185,129,0.18), transparent 50%),
+                linear-gradient(160deg, #070b14 0%, #0f1b33 50%, #0a1628 100%);
         }
-        .lang-btn {
-            border: none; padding: 8px 18px; border-radius: 7px; font-weight: bold;
-            cursor: pointer; font-size: 14px; transition: 0.2s;
+        .bg::after {
+            content: "";
+            position: absolute; inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            pointer-events: none;
+        }
+        .orb {
+            position: fixed; border-radius: 50%; filter: blur(60px); z-index: 0; pointer-events: none;
+            animation: float 12s ease-in-out infinite;
+        }
+        .orb.a { width: 280px; height: 280px; background: rgba(59,130,246,0.25); top: 8%; left: -60px; }
+        .orb.b { width: 220px; height: 220px; background: rgba(245,197,66,0.18); bottom: 12%; right: -40px; animation-delay: -4s; }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-24px); }
         }
 
-        .login-card {
-            background: white; width: 100%; max-width: 430px; border-radius: 16px;
-            box-shadow: 0 15px 35px rgba(0,0,0,0.3); overflow: hidden; border-top: 6px solid #f39c12;
+        .wrap {
+            position: relative; z-index: 1;
+            min-height: 100vh;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            padding: 24px 16px 40px;
         }
-        .header {
-            text-align: center; padding: 25px 20px 15px; background: #f8fafc; border-bottom: 1px solid #e2e8f0;
-        }
-        .header img {
-            width: 80px; height: 80px; border-radius: 50%; object-fit: cover;
-            border: 3px solid #f39c12; box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        }
-        .header h2 { margin: 10px 0 4px; color: #1f4e79; font-size: 21px; }
-        .header p { margin: 0; color: #d35400; font-weight: bold; font-size: 13px; }
 
-        .form-body { padding: 25px; }
-        label { display: block; font-weight: bold; font-size: 13.5px; color: #2c3e50; margin-bottom: 6px; }
-        select, input[type="text"], input[type="password"] {
-            width: 100%; padding: 12px; margin-bottom: 16px; border: 1.5px solid #cbd5e1;
-            border-radius: 8px; font-size: 15px; outline: none; transition: 0.2s;
+        .topbar {
+            width: 100%; max-width: 440px;
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 18px; gap: 10px;
         }
-        select:focus, input:focus { border-color: #2980b9; box-shadow: 0 0 0 3px rgba(41,128,185,0.15); }
+        .lang-pill {
+            display: flex; gap: 4px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid var(--stroke);
+            backdrop-filter: blur(12px);
+            padding: 4px; border-radius: 999px;
+        }
+        .lang-pill button {
+            border: none; background: transparent; color: var(--muted);
+            padding: 8px 14px; border-radius: 999px; font-weight: 600;
+            font-size: 13px; cursor: pointer; font-family: inherit; transition: 0.2s;
+        }
+        .lang-pill button.active {
+            background: linear-gradient(135deg, var(--blue), var(--blue2));
+            color: #fff; box-shadow: 0 6px 16px rgba(37,99,235,0.35);
+        }
+        .install-btn {
+            border: 1px solid var(--stroke);
+            background: linear-gradient(135deg, var(--gold), var(--gold2));
+            color: #1a1200; font-weight: 700; font-size: 13px;
+            padding: 9px 14px; border-radius: 999px; cursor: pointer;
+            font-family: inherit; display: none;
+            box-shadow: 0 8px 20px rgba(245,197,66,0.25);
+        }
+
+        .card {
+            width: 100%; max-width: 440px;
+            background: linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.05) 100%);
+            border: 1px solid var(--stroke);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(22px) saturate(1.3);
+            overflow: hidden;
+            animation: rise 0.55s cubic-bezier(.22,1,.36,1) both;
+        }
+        @keyframes rise {
+            from { opacity: 0; transform: translateY(28px) scale(0.98); }
+            to { opacity: 1; transform: none; }
+        }
+
+        .brand {
+            text-align: center;
+            padding: 32px 28px 20px;
+            position: relative;
+        }
+        .brand::before {
+            content: "";
+            position: absolute; left: 50%; top: 0; transform: translateX(-50%);
+            width: 120px; height: 4px; border-radius: 0 0 8px 8px;
+            background: linear-gradient(90deg, var(--gold), var(--blue));
+        }
+        .logo-ring {
+            width: 92px; height: 92px; margin: 0 auto 14px;
+            border-radius: 50%;
+            padding: 3px;
+            background: linear-gradient(135deg, var(--gold), var(--blue), var(--green));
+            box-shadow: 0 12px 30px rgba(59,130,246,0.35);
+        }
+        .logo-ring img {
+            width: 100%; height: 100%; border-radius: 50%;
+            object-fit: cover; border: 3px solid #0b1220;
+            background: #1e293b;
+        }
+        .brand h1 {
+            font-size: 1.2rem; font-weight: 800; letter-spacing: 0.02em;
+            line-height: 1.25; margin-bottom: 6px;
+            background: linear-gradient(90deg, #fff 0%, #c7d2fe 100%);
+            -webkit-background-clip: text; background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .brand .tag {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 12px; font-weight: 600; color: var(--gold);
+            background: rgba(245,197,66,0.12);
+            border: 1px solid rgba(245,197,66,0.28);
+            padding: 5px 12px; border-radius: 999px; margin-top: 4px;
+        }
+
+        .body { padding: 8px 28px 28px; }
+
+        .error-msg {
+            background: rgba(248,113,113,0.12);
+            border: 1px solid rgba(248,113,113,0.35);
+            color: #fecaca;
+            padding: 12px 14px; border-radius: 12px;
+            font-size: 13.5px; font-weight: 600; text-align: center;
+            margin-bottom: 16px;
+        }
+
+        .role-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+            margin-bottom: 18px;
+        }
+        .role-card {
+            position: relative;
+            border: 1px solid var(--stroke);
+            background: rgba(0,0,0,0.22);
+            border-radius: 14px;
+            padding: 14px 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: 0.22s;
+            user-select: none;
+        }
+        .role-card:hover { border-color: rgba(59,130,246,0.5); background: rgba(59,130,246,0.1); }
+        .role-card.active {
+            border-color: rgba(59,130,246,0.85);
+            background: linear-gradient(160deg, rgba(59,130,246,0.28), rgba(37,99,235,0.12));
+            box-shadow: 0 0 0 1px rgba(59,130,246,0.4), 0 10px 24px rgba(37,99,235,0.2);
+        }
+        .role-card .ico { font-size: 22px; display: block; margin-bottom: 6px; }
+        .role-card .lbl { font-size: 12.5px; font-weight: 700; color: #e2e8f0; line-height: 1.3; }
+        .role-card input { position: absolute; opacity: 0; pointer-events: none; }
+
+        label.field-label {
+            display: block; font-size: 12.5px; font-weight: 600;
+            color: var(--muted); margin-bottom: 7px; letter-spacing: 0.02em;
+        }
+        .field {
+            position: relative; margin-bottom: 14px;
+        }
+        .field input {
+            width: 100%;
+            padding: 14px 16px 14px 44px;
+            border-radius: 14px;
+            border: 1px solid var(--stroke);
+            background: rgba(0,0,0,0.28);
+            color: var(--text);
+            font-size: 15.5px;
+            font-family: inherit;
+            outline: none;
+            transition: 0.2s;
+        }
+        .field .icon {
+            position: absolute; left: 15px; top: 50%; transform: translateY(-50%);
+            font-size: 16px; opacity: 0.75; pointer-events: none;
+        }
+        .field input:focus {
+            border-color: rgba(59,130,246,0.7);
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.2);
+            background: rgba(0,0,0,0.4);
+        }
+        .field input::placeholder { color: #64748b; }
+
+        .parent-hint {
+            display: none;
+            background: rgba(59,130,246,0.12);
+            border: 1px solid rgba(59,130,246,0.3);
+            color: #bfdbfe;
+            padding: 12px 14px; border-radius: 12px;
+            font-size: 12.5px; line-height: 1.5; margin-bottom: 14px;
+        }
 
         .btn-login {
-            width: 100%; background: #2980b9; color: white; border: none; padding: 13px;
-            border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s;
+            width: 100%;
+            border: none;
+            padding: 15px;
+            border-radius: 14px;
+            font-size: 16px; font-weight: 700;
+            font-family: inherit;
+            cursor: pointer;
+            color: #fff;
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 55%, #1e40af 100%);
+            box-shadow: 0 12px 28px rgba(37,99,235,0.4);
+            transition: 0.2s;
+            margin-top: 4px;
         }
-        .btn-login:hover { background: #1f4e79; }
+        .btn-login:hover { transform: translateY(-1px); filter: brightness(1.06); }
+        .btn-login:active { transform: translateY(0); }
 
-        .links-box {
-            margin-top: 18px; padding-top: 15px; border-top: 1px solid #e2e8f0;
-            display: flex; flex-direction: column; gap: 10px; text-align: center;
+        .links {
+            margin-top: 18px;
+            display: flex; flex-direction: column; gap: 10px;
         }
         .btn-register {
-            display: block; background: #27ae60; color: white; text-decoration: none;
-            padding: 12px; border-radius: 8px; font-weight: bold; font-size: 15px;
+            display: block; text-align: center; text-decoration: none;
+            padding: 13px; border-radius: 14px; font-weight: 700; font-size: 14.5px;
+            color: #052e1a;
+            background: linear-gradient(135deg, #34d399, #10b981);
+            box-shadow: 0 10px 22px rgba(16,185,129,0.28);
         }
         .btn-forgot {
-            background: #fef9e7; color: #d35400; border: 1px solid #f39c12; padding: 10px;
-            border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer; text-decoration: none; display: block;
+            display: block; text-align: center; text-decoration: none;
+            padding: 12px; border-radius: 14px; font-weight: 600; font-size: 13.5px;
+            color: var(--gold);
+            background: rgba(245,197,66,0.1);
+            border: 1px solid rgba(245,197,66,0.28);
+            cursor: pointer;
+            width: 100%;
+            font-family: inherit;
         }
-        .error-msg {
-            background: #fdecea; color: #c0392b; padding: 10px; border-radius: 6px;
-            border-left: 4px solid #e74c3c; margin-bottom: 15px; font-size: 13.5px; font-weight: bold; text-align: center;
-        }
-        .parent-hint {
-            display: none; background: #eaf6ff; border: 1px solid #3498db; color: #1a5276;
-            padding: 10px 12px; border-radius: 8px; font-size: 12.5px; margin-bottom: 14px; line-height: 1.5;
+
+        .footer-note {
+            margin-top: 20px; text-align: center;
+            font-size: 11.5px; color: var(--muted); max-width: 440px;
+            line-height: 1.5;
         }
 
         .modal-overlay {
-            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.65);
-            align-items: center; justify-content: center; padding: 20px; z-index: 999;
+            display: none; position: fixed; inset: 0; z-index: 50;
+            background: rgba(0,0,0,0.72); backdrop-filter: blur(8px);
+            align-items: center; justify-content: center; padding: 20px;
         }
         .modal-box {
-            background: white; width: 100%; max-width: 400px; border-radius: 14px;
-            padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); border-top: 6px solid #8e44ad;
+            width: 100%; max-width: 400px;
+            background: linear-gradient(165deg, #1e293b, #0f172a);
+            border: 1px solid var(--stroke);
+            border-radius: 20px; padding: 26px;
+            box-shadow: var(--shadow);
+            animation: rise 0.35s ease both;
+        }
+        .modal-box h3 {
+            font-size: 18px; margin-bottom: 8px;
+            background: linear-gradient(90deg, #fff, #c7d2fe);
+            -webkit-background-clip: text; background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .modal-box p { color: var(--muted); font-size: 13px; margin-bottom: 16px; line-height: 1.45; }
+        .modal-box input {
+            width: 100%; padding: 13px 14px; margin-bottom: 12px;
+            border-radius: 12px; border: 1px solid var(--stroke);
+            background: rgba(0,0,0,0.35); color: #fff; font-size: 15px;
+            font-family: inherit; outline: none;
+        }
+        .modal-box input:focus { border-color: rgba(139,92,246,0.7); box-shadow: 0 0 0 3px rgba(139,92,246,0.2); }
+        .modal-actions { display: flex; gap: 10px; margin-top: 6px; }
+        .modal-actions button {
+            flex: 1; padding: 12px; border-radius: 12px; border: none;
+            font-weight: 700; font-family: inherit; cursor: pointer; font-size: 14px;
+        }
+        .btn-purple {
+            background: linear-gradient(135deg, #8b5cf6, #6d28d9); color: #fff;
+        }
+        .btn-ghost {
+            background: rgba(255,255,255,0.08); color: #e2e8f0; border: 1px solid var(--stroke) !important;
+        }
+        #resetResultBox {
+            display: none; margin-top: 14px; padding: 14px; border-radius: 12px;
+            text-align: center; font-weight: 600; font-size: 14px;
+        }
+
+        @media (max-width: 420px) {
+            .brand { padding: 26px 20px 16px; }
+            .body { padding: 6px 20px 24px; }
+            .brand h1 { font-size: 1.05rem; }
+            .role-card { padding: 12px 8px; }
         }
     </style>
 </head>
 <body class="lang-am">
+    <div class="bg"></div>
+    <div class="orb a"></div>
+    <div class="orb b"></div>
 
-    <div class="lang-bar">
-        <button type="button" id="btn-am" class="lang-btn" onclick="switchPortalLang('am')" style="background:#27ae60; color:white;">🇪🇹 አማርኛ</button>
-        <button type="button" id="btn-en" class="lang-btn" onclick="switchPortalLang('en')" style="background:transparent; color:white;">🇬🇧 English</button>
-        <button type="button" id="btnInstallPWA" class="lang-btn" style="display:none;background:#f39c12;color:white;">📲 Install App</button>
-    </div>
-
-    <div class="login-card">
-        <div class="header">
-            <img src="/uploads/logo.jpg" onerror="this.src='/uploads/logo.png'" alt="School Logo">
-            <h2>AMANUEL LIGHT & LIFE SCHOOL</h2>
-            <p><span class="am">አማኑኤል ብርሃንና ሕይወት ትምህርት ቤት</span><span class="en">Official School Portal</span></p>
+    <div class="wrap">
+        <div class="topbar">
+            <div class="lang-pill">
+                <button type="button" id="btn-am" class="active" onclick="switchPortalLang('am')">🇪🇹 አማ</button>
+                <button type="button" id="btn-en" onclick="switchPortalLang('en')">🇬🇧 EN</button>
+            </div>
+            <button type="button" id="btnInstallPWA" class="install-btn">📲 Install</button>
         </div>
 
-        <div class="form-body">
-            <% if (typeof error !== 'undefined' && error) { %>
+        <div class="card">
+            <div class="brand">
+                <div class="logo-ring">
+                    <img src="/uploads/logo.jpg" onerror="this.src='/uploads/logo.png'" alt="Logo">
+                </div>
+                <h1>AMANUEL LIGHT &amp; LIFE SCHOOL</h1>
+                <div class="tag">
+                    <span class="am">✦ አማኑኤል ብርሃንና ሕይወት ትምህርት ቤት</span>
+                    <span class="en">✦ Official Digital Portal</span>
+                </div>
+            </div>
+
+            <div class="body">
+                <% if (typeof error !== 'undefined' && error) { %>
                 <div class="error-msg">
-                    ❌ <span class="am">የተሳሳተ መታወቂያ ወይም የይለፍ ቃል!</span><span class="en">Invalid Username/ID or Password!</span>
+                    ❌ <span class="am">የተሳሳተ መታወቂያ ወይም የይለፍ ቃል!</span>
+                    <span class="en">Invalid ID or Password!</span>
                 </div>
-            <% } %>
+                <% } %>
 
-            <form action="/login" method="POST" id="loginForm">
-                <label>👤 <span class="am">የተጠቃሚ ሚና ይምረጡ (Role):</span><span class="en">Select User Role:</span></label>
-                <select name="role" id="roleSelect" required>
-                    <option value="student"> ተማሪ / Student</option>
-                    <option value="teacher"> መምህር / Teacher</option>
-                    <option value="parent"> ወላጅ / Parent</option>
-                    <option value="admin"> ዲሬክተር / አድሚን (Director / Admin)</option>
-                </select>
+                <form action="/login" method="POST" id="loginForm">
+                    <label class="field-label">
+                        <span class="am">ሚና ይምረጡ</span><span class="en">Choose your role</span>
+                    </label>
+                    <div class="role-grid" id="roleGrid">
+                        <label class="role-card active" data-role="student">
+                            <input type="radio" name="role" value="student" checked>
+                            <span class="ico">🎓</span>
+                            <span class="lbl"><span class="am">ተማሪ</span><span class="en">Student</span></span>
+                        </label>
+                        <label class="role-card" data-role="teacher">
+                            <input type="radio" name="role" value="teacher">
+                            <span class="ico">👩‍🏫</span>
+                            <span class="lbl"><span class="am">መምህር</span><span class="en">Teacher</span></span>
+                        </label>
+                        <label class="role-card" data-role="parent">
+                            <input type="radio" name="role" value="parent">
+                            <span class="ico">👨‍👩‍👧</span>
+                            <span class="lbl"><span class="am">ወላጅ</span><span class="en">Parent</span></span>
+                        </label>
+                        <label class="role-card" data-role="admin">
+                            <input type="radio" name="role" value="admin">
+                            <span class="ico">👑</span>
+                            <span class="lbl"><span class="am">ዲሬክተር</span><span class="en">Director</span></span>
+                        </label>
+                    </div>
 
-                <div class="parent-hint" id="parentHint">
-                    <span class="am">💡 <b>ወላጅ:</b> የተማሪውን <b>መታወቂያ (ID)</b> እና የወላጅ <b>ስልክ ቁጥር</b> (emergency phone) ያስገቡ።</span>
-                    <span class="en">💡 <b>Parent:</b> Enter the <b>Student ID</b> and the <b>parent phone</b> (emergency phone).</span>
+                    <div class="parent-hint" id="parentHint">
+                        <span class="am">💡 <b>ወላጅ:</b> የተማሪውን <b>መታወቂያ (ID)</b> እና የወላጅ <b>ስልክ ቁጥር</b> ያስገቡ።</span>
+                        <span class="en">💡 <b>Parent:</b> Use the <b>Student ID</b> and parent <b>phone</b> (emergency number).</span>
+                    </div>
+
+                    <label class="field-label">
+                        <span class="am">መታወቂያ / የተጠቃሚ ስም</span>
+                        <span class="en">ID / Username</span>
+                    </label>
+                    <div class="field">
+                        <span class="icon">🪪</span>
+                        <input type="text" name="username" id="usernameInput" required autocomplete="username"
+                               placeholder="ALLS-1234 / T-101 / admin">
+                    </div>
+
+                    <label class="field-label">
+                        <span class="am">የይለፍ ቃል</span><span class="en">Password / PIN</span>
+                    </label>
+                    <div class="field">
+                        <span class="icon">🔒</span>
+                        <input type="password" name="password" id="passwordInput" required autocomplete="current-password"
+                               placeholder="••••">
+                    </div>
+
+                    <button type="submit" class="btn-login">
+                        <span class="am">🚀 ግባ · Sign in</span>
+                        <span class="en">🚀 Sign in to Portal</span>
+                    </button>
+                </form>
+
+                <div class="links">
+                    <a class="btn-register" href="/student-register">
+                        <span class="am">📝 አዲስ ተማሪ ምዝገባ</span>
+                        <span class="en">📝 New Student Registration</span>
+                    </a>
+                    <button type="button" class="btn-forgot" onclick="openResetModal()">
+                        <span class="am">🔑 የይለፍ ቃል ረሳሁ?</span>
+                        <span class="en">🔑 Forgot password?</span>
+                    </button>
                 </div>
-
-                <label id="userLabel">🆔 <span class="am">መታወቂያ ቁጥር / Username:</span><span class="en">ID Number / Username:</span></label>
-                <input type="text" name="username" id="usernameInput" placeholder="" required>
-
-                <label id="passLabel">🔑 <span class="am">የይለፍ ቃል (PIN / Password):</span><span class="en">Password / PIN:</span></label>
-                <input type="password" name="password" id="passwordInput" placeholder="" required>
-
-                <button type="submit" class="btn-login">
-                    🔓 <span class="am">ወደ ፖርታሉ ግባ</span><span class="en">Login to Portal</span>
-                </button>
-            </form>
-
-            <div class="links-box">
-                <button type="button" onclick="openResetModal()" class="btn-forgot">
-                    🔑 <span class="am">የይለፍ ቃል ረስተዋል? (Reset Password)</span><span class="en">Forgot Password? (Reset PIN)</span>
-                </button>
-
-                <a href="/student-register" id="regLink" class="btn-register">
-                    📝 <span class="am">አዲስ ተማሪ ለመመዝገብ እዚህ ይጫኑ</span><span class="en">New Student Registration</span>
-                </a>
             </div>
         </div>
+
+        <p class="footer-note">
+            <span class="am">ደህንነቱ የተጠበቀ የትምህርት ቤት ፖርታል · Amanuel Light &amp; Life School</span>
+            <span class="en">Secure school portal · Amanuel Light &amp; Life School</span>
+        </p>
     </div>
 
     <div class="modal-overlay" id="resetModal">
         <div class="modal-box">
-            <h3 style="margin-top:0; color:#8e44ad; text-align:center;">
-                🔑 <span class="am">የይለፍ ቃል ዳግም ማስጀመሪያ</span><span class="en">Reset Your Password / PIN</span>
-            </h3>
-            <p style="font-size:13px; color:#555; text-align:center; margin-bottom:15px;">
-                <span class="am">መታወቂያ ቁጥርዎን (ID) እና በምዝገባ ጊዜ ያስገቡትን ስልክ ቁጥር ያስገቡ፦</span>
-                <span class="en">Enter your ID Number and registered Phone Number:</span>
+            <h3><span class="am">🔑 የይለፍ ቃል መልሶ ማግኛ</span><span class="en">Password recovery</span></h3>
+            <p>
+                <span class="am">መታወቂያ እና ስልክ ቁጥር ያስገቡ። አዲስ PIN ይመነጫል።</span>
+                <span class="en">Enter your ID and phone. A new PIN will be generated.</span>
             </p>
-
-            <div id="resetResultBox" style="display:none; padding:12px; border-radius:8px; margin-bottom:15px; text-align:center; font-weight:bold;"></div>
-
-            <form id="resetPassForm" onsubmit="submitPasswordReset(event)">
-                <label>🆔 <span class="am">መታወቂያ ቁጥር (Student / Teacher ID):</span><span class="en">ID Number (e.g. ALLS-...):</span></label>
-                <input type="text" id="resetIdInput" placeholder="ALLS-1234 ወይም ALLS-T-1234" required>
-
-                <label>📞 <span class="am">ስልክ ቁጥር (Phone Number):</span><span class="en">Registered Phone Number:</span></label>
-                <input type="text" id="resetPhoneInput" placeholder="09... / 07..." required>
-
-                <button type="submit" id="resetSubmitBtn" style="width:100%; background:#8e44ad; color:white; border:none; padding:12px; border-radius:8px; font-weight:bold; font-size:15px; cursor:pointer;">
-                    🔄 <span class="am">አዲስ የይለፍ ቃል አውጣ</span><span class="en">Generate New PIN</span>
-                </button>
-                <button type="button" onclick="closeResetModal()" style="width:100%; margin-top:8px; background:#95a5a6; color:white; border:none; padding:10px; border-radius:8px; font-weight:bold; cursor:pointer;">
-                    ✖️ <span class="am">ዝጋ</span><span class="en">Close</span>
-                </button>
+            <form onsubmit="submitPasswordReset(event)">
+                <input type="text" id="resetIdInput" placeholder="ID e.g. ALLS-1234 / T-101" required>
+                <input type="text" id="resetPhoneInput" placeholder="Phone number" required>
+                <div class="modal-actions">
+                    <button type="button" class="btn-ghost" onclick="closeResetModal()">
+                        <span class="am">ዝጋ</span><span class="en">Close</span>
+                    </button>
+                    <button type="submit" class="btn-purple" id="resetSubmitBtn">
+                        <span class="am">🔄 አዲስ PIN</span><span class="en">🔄 New PIN</span>
+                    </button>
+                </div>
             </form>
+            <div id="resetResultBox"></div>
         </div>
     </div>
 
     <script>
         function switchPortalLang(lang) {
-            const clean = (lang === 'en') ? 'en' : 'am';
+            var clean = lang === 'en' ? 'en' : 'am';
             document.body.className = 'lang-' + clean;
-            localStorage.setItem('prefLang', clean);
-
-            const btnAm = document.getElementById('btn-am');
-            const btnEn = document.getElementById('btn-en');
-            if (btnAm && btnEn) {
-                btnAm.style.background = clean === 'am' ? '#27ae60' : 'transparent';
-                btnEn.style.background = clean === 'en' ? '#2980b9' : 'transparent';
-            }
-
-            const regLink = document.getElementById('regLink');
-            if (regLink) regLink.href = '/student-register?lang=' + clean;
-
-            const loginForm = document.getElementById('loginForm');
-            if (loginForm) loginForm.action = '/login?lang=' + clean;
+            try { localStorage.setItem('prefLang', clean); } catch (e) {}
+            document.getElementById('btn-am').classList.toggle('active', clean === 'am');
+            document.getElementById('btn-en').classList.toggle('active', clean === 'en');
         }
+        try {
+            var pl = localStorage.getItem('prefLang') || 'am';
+            switchPortalLang(pl);
+        } catch (e) {}
 
-        document.addEventListener('DOMContentLoaded', () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            const initialLang = urlParams.get('lang') || localStorage.getItem('prefLang') || 'am';
-            switchPortalLang(initialLang);
-
-            const roleSelect = document.getElementById('roleSelect');
-            const parentHint = document.getElementById('parentHint');
-            const userLabel = document.getElementById('userLabel');
-            const passLabel = document.getElementById('passLabel');
-            const usernameInput = document.getElementById('usernameInput');
-            const passwordInput = document.getElementById('passwordInput');
-
-            function updateRoleUI() {
-                if (roleSelect.value === 'parent') {
-                    parentHint.style.display = 'block';
-                    userLabel.innerHTML = '🆔 <span class="am">የተማሪ መታወቂያ (Student ID):</span><span class="en">Student ID:</span>';
-                    passLabel.innerHTML = '📞 <span class="am">የወላጅ ስልክ ቁጥር:</span><span class="en">Parent Phone Number:</span>';
-                    usernameInput.placeholder = 'e.g. ALLS-5430';
-                    passwordInput.placeholder = '09... / 07...';
-                    passwordInput.type = 'text';
-                } else {
-                    parentHint.style.display = 'none';
-                    userLabel.innerHTML = '🆔 <span class="am">መታወቂያ ቁጥር / Username:</span><span class="en">ID Number / Username:</span>';
-                    passLabel.innerHTML = '🔑 <span class="am">የይለፍ ቃል (PIN / Password):</span><span class="en">Password / PIN:</span>';
-                    usernameInput.placeholder = '';
-                    passwordInput.placeholder = '';
-                    passwordInput.type = 'password';
-                }
+        (function () {
+            var cards = document.querySelectorAll('.role-card');
+            var hint = document.getElementById('parentHint');
+            function sync() {
+                var selected = document.querySelector('input[name="role"]:checked');
+                var role = selected ? selected.value : 'student';
+                cards.forEach(function (c) {
+                    c.classList.toggle('active', c.getAttribute('data-role') === role);
+                });
+                if (hint) hint.style.display = role === 'parent' ? 'block' : 'none';
             }
-            roleSelect.addEventListener('change', updateRoleUI);
-            updateRoleUI();
+            cards.forEach(function (c) {
+                c.addEventListener('click', function () {
+                    var input = c.querySelector('input');
+                    if (input) input.checked = true;
+                    sync();
+                });
+            });
+            sync();
+        })();
 
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('/sw.js').catch(() => {});
-            }
-
-        let deferredPrompt = null;
-        window.addEventListener('beforeinstallprompt', (e) => {
+        var deferredPrompt = null;
+        var installBtn = document.getElementById('btnInstallPWA');
+        window.addEventListener('beforeinstallprompt', function (e) {
             e.preventDefault();
             deferredPrompt = e;
-            const b = document.getElementById('btnInstallPWA');
-            if (b) b.style.display = 'inline-block';
+            if (installBtn) installBtn.style.display = 'inline-block';
         });
-        const installBtn = document.getElementById('btnInstallPWA');
         if (installBtn) {
-            installBtn.addEventListener('click', async () => {
-                if (!deferredPrompt) {
-                    alert('Install: use browser menu → Add to Home Screen / Install app\n(HTTPS required)');
-                    return;
-                }
+            installBtn.addEventListener('click', async function () {
+                if (!deferredPrompt) return;
                 deferredPrompt.prompt();
                 await deferredPrompt.userChoice;
                 deferredPrompt = null;
                 installBtn.style.display = 'none';
             });
         }
-
-        });
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(function () {});
+        }
 
         function openResetModal() {
             document.getElementById('resetResultBox').style.display = 'none';
             document.getElementById('resetModal').style.display = 'flex';
         }
-
         function closeResetModal() {
             document.getElementById('resetModal').style.display = 'none';
         }
-
         function submitPasswordReset(e) {
             e.preventDefault();
-            const idVal = document.getElementById('resetIdInput').value.trim();
-            const phoneVal = document.getElementById('resetPhoneInput').value.trim();
-            const resBox = document.getElementById('resetResultBox');
-            const btn = document.getElementById('resetSubmitBtn');
-
+            var idVal = document.getElementById('resetIdInput').value.trim();
+            var phoneVal = document.getElementById('resetPhoneInput').value.trim();
+            var resBox = document.getElementById('resetResultBox');
+            var btn = document.getElementById('resetSubmitBtn');
             btn.disabled = true;
-            btn.innerText = '⏳ በመፈለግ ላይ...';
-
+            btn.innerText = '⏳ ...';
             fetch('/api/recover-password', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: idVal, phone: phoneVal })
             })
-            .then(r => r.json())
-            .then(data => {
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
                 btn.disabled = false;
-                btn.innerText = '🔄 አዲስ የይለፍ ቃል አውጣ';
+                btn.innerHTML = '<span class="am">🔄 አዲስ PIN</span><span class="en">🔄 New PIN</span>';
                 resBox.style.display = 'block';
                 if (data.success) {
-                    resBox.style.background = '#d4edda';
-                    resBox.style.color = '#155724';
-                    resBox.style.border = '2px solid #27ae60';
-                    resBox.innerHTML = '✅ ተሳክቷል!<br>አዲሱ የይለፍ ቃልዎ (New PIN):<br><span style="font-size:28px; color:#e74c3c; letter-spacing:3px;">' + data.newPassword + '</span>';
+                    resBox.style.background = 'rgba(16,185,129,0.15)';
+                    resBox.style.color = '#6ee7b7';
+                    resBox.style.border = '1px solid rgba(16,185,129,0.4)';
+                    resBox.innerHTML = '✅ OK<br><span style="font-size:28px;letter-spacing:4px;color:#fbbf24;">' + data.newPassword + '</span>';
                 } else {
-                    resBox.style.background = '#f8d7da';
-                    resBox.style.color = '#721c24';
-                    resBox.style.border = '1px solid #e74c3c';
-                    resBox.innerHTML = '❌ መታወቂያ ቁጥሩ ወይም ስልክ ቁጥሩ አልተገኘም! እባክዎ ትክክለኛ መረጃ ያስገቡ።';
+                    resBox.style.background = 'rgba(248,113,113,0.12)';
+                    resBox.style.color = '#fecaca';
+                    resBox.style.border = '1px solid rgba(248,113,113,0.35)';
+                    resBox.innerHTML = '❌ Not found';
                 }
             })
-            .catch(() => {
+            .catch(function () {
                 btn.disabled = false;
-                btn.innerText = '🔄 አዲስ የይለፍ ቃል አውጣ';
+                btn.innerHTML = '<span class="am">🔄 አዲስ PIN</span><span class="en">🔄 New PIN</span>';
                 resBox.style.display = 'block';
-                resBox.style.background = '#f8d7da';
-                resBox.innerHTML = '❌ የኔትወርክ ስህተት ተፈጥሯል!';
+                resBox.style.background = 'rgba(248,113,113,0.12)';
+                resBox.innerHTML = '❌ Network error';
             });
         }
     </script>
