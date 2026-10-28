@@ -375,13 +375,10 @@ app.use(session({
     cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 }
 }));
 
-const ADMIN_USER = String(process.env.ADMIN_USER || '').trim();
-const ADMIN_PASS = String(process.env.ADMIN_PASS || '').trim();
-if (!ADMIN_USER || !ADMIN_PASS) {
-    console.warn('WARNING: ADMIN_USER or ADMIN_PASS not set in environment');
-} else {
-    console.log('Admin login enabled for user:', ADMIN_USER);
-}
+// Prefer env; fallback so portal is not locked if Render env missing
+const ADMIN_USER = String(process.env.ADMIN_USER || 'amanuel').trim();
+const ADMIN_PASS = String(process.env.ADMIN_PASS || '1234').trim();
+console.log('Admin login user:', ADMIN_USER, '| env set:', !!process.env.ADMIN_USER);
 
 function generateStudentID() { return `ALLS-${Math.floor(1000 + Math.random() * 9000)}`; }
 function generateTeacherID() { return `T-${Math.floor(100 + Math.random() * 900)}`; }
