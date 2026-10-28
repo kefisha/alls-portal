@@ -62,20 +62,14 @@ const db = {
 };
 
 const loginLimiter = rateLimit({
-    windowMs: 10 * 60 * 1000, // 10 minutes
-    max: 80, // higher — shared mobile IPs / Render proxy
-    standardHeaders: true,
-    legacyHeaders: false,
-    skipSuccessfulRequests: true, // only failed logins count
-    keyGenerator: (req) => {
-        const u = (req.body && req.body.username) ? String(req.body.username).toLowerCase().trim() : '';
-        const ip = req.ip || (req.headers['x-forwarded-for'] || '').toString().split(',')[0].trim() || 'unknown';
-        return ip + ':' + u;
-    },
+    windowMs: 15 * 60 * 1000,
+    max: 500,
+    skipSuccessfulRequests: true,
     handler: (req, res) => {
-        res.send(`<script>alert('⚠️ የደህንነት ጥንቃቄ: እጅግ ብዙ የተሳሳተ የሎጊን ሙከራ ተደርጓል። እባክዎ ከ 10 ደቂቃ በኋላ እንደገና ይሞክሩ።'); window.location.href='/';</script>`);
+        res.send(`<script>alert('Too many tries. Wait 1 minute.'); window.location.href='/';</script>`);
     }
 });
+// loginLimiter temporarily NOT applied on /login (blocked users before password entry on shared IPs)
 
 const weakPasswords = ['1234', '4321', '0000', '1111', '2222', '3333', '4444', '5555', '6666', '7777', '8888', '9999', '12345', '123456'];
 function isWeakPassword(pass) {
@@ -443,7 +437,7 @@ app.get('/', (req, res) => {
     res.render('login', { lang, error });
 });
 
-app.post('/login', loginLimiter, (req, res) => {
+app.post('/login', (req, res) => {
     const lang = req.query.lang || 'am';
     const { role, username, password } = req.body;
     let uKey = (username || '').trim();
