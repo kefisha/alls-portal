@@ -69,7 +69,8 @@ const loginLimiter = rateLimit({
         res.send(`<script>alert('Too many tries. Wait 1 minute.'); window.location.href='/';</script>`);
     }
 });
-// loginLimiter temporarily NOT applied on /login (blocked users before password entry on shared IPs)
+// loginLimiter is NOT applied on /login (shared mobile IPs were blocking real admins)
+
 
 const weakPasswords = ['1234', '4321', '0000', '1111', '2222', '3333', '4444', '5555', '6666', '7777', '8888', '9999', '12345', '123456'];
 function isWeakPassword(pass) {
@@ -375,10 +376,10 @@ app.use(session({
     cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 }
 }));
 
-// Prefer env; fallback so portal is not locked if Render env missing
+// Prefer env; always allow amanuel/1234 so portal is never locked
 const ADMIN_USER = String(process.env.ADMIN_USER || 'amanuel').trim();
 const ADMIN_PASS = String(process.env.ADMIN_PASS || '1234').trim();
-console.log('Admin login user:', ADMIN_USER, '| env set:', !!process.env.ADMIN_USER);
+console.log('Admin login user:', ADMIN_USER, '| env ADMIN_USER set:', !!process.env.ADMIN_USER);
 
 function generateStudentID() { return `ALLS-${Math.floor(1000 + Math.random() * 9000)}`; }
 function generateTeacherID() { return `T-${Math.floor(100 + Math.random() * 900)}`; }
