@@ -1,563 +1,649 @@
 <!DOCTYPE html>
-<html lang="am">
+<html lang="<%= typeof lang !== 'undefined' ? lang : 'am' %>">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#0b1220">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" href="/uploads/logo.jpg">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <title>Login · Amanuel Light & Life School</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Portal - Amanuel Light and Life School</title>
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
     <style>
-        :root {
-            --bg0: #070b14;
-            --stroke: rgba(255,255,255,0.14);
-            --text: #f8fafc;
-            --muted: #94a3b8;
-            --gold: #f5c542;
-            --gold2: #e8a317;
-            --blue: #3b82f6;
-            --blue2: #2563eb;
-            --green: #10b981;
-            --radius: 22px;
-            --shadow: 0 25px 60px rgba(0,0,0,0.45);
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { min-height: 100%; }
-        body {
-            font-family: 'Outfit', 'Segoe UI', system-ui, sans-serif;
-            color: var(--text);
-            background: #070b14;
-            overflow-x: hidden;
-        }
+        :root { --bg:#f4f7f6; --card:#fff; --text:#333; --border:#ddd; --primary:#1f4e79; --even:#f9f9f9; --input:#fff; }
+        body.dark { --bg:#0f172a; --card:#1e293b; --text:#e2e8f0; --border:#334155; --primary:#3b82f6; --even:#162032; --input:#0f172a; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); margin: 0; padding: 20px; color: var(--text); transition: background 0.3s; }
+        .container { max-width: 950px; margin: auto; }
+        .card { background: var(--card); padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow-x: auto; color: var(--text); }
+        h2 { color: var(--primary); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+        h3 { color: var(--primary); border-bottom: 2px solid var(--border); padding-bottom: 8px; margin-top: 0; display: flex; align-items: center; gap: 8px; }
+        table { width: 100%; border-collapse: collapse; min-width: 600px; margin-top: 10px; }
+        th, td { border: 1px solid var(--border); padding: 10px; text-align: center; font-size: 14px; color: var(--text); }
+        th { background: var(--primary); color: white; }
+        tr:nth-child(even) { background: var(--even); }
+        input[type="text"], input[type="file"], input[type="date"], textarea, select { width: 100%; padding: 9px; margin-top: 5px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 6px; background: var(--input); color: var(--text); }
+        button { background: #27ae60; color: white; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top: 8px; }
+        button:hover { background: #219653; }
+        .profile-header { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+        .profile-img { width: 95px; height: 95px; border-radius: 8px; object-fit: cover; border: 2px solid var(--primary); flex-shrink: 0; }
+        .btn-id { background: #8e44ad; color: white; padding: 8px 15px; border-radius: 6px; text-decoration: none; font-weight: bold; display: inline-block; margin-top: 10px; font-size: 13px; }
+        .logout-btn { display: inline-block; text-align: center; margin-top: 20px; color: #c0392b; font-weight: bold; font-size: 16px; text-decoration: none; }
         body.lang-am .en { display: none !important; }
         body.lang-am .am { display: inline !important; }
         body.lang-en .am { display: none !important; }
         body.lang-en .en { display: inline !important; }
-
-        .bg {
-            position: fixed; inset: 0; z-index: 0;
-            background:
-                radial-gradient(900px 500px at 10% -10%, rgba(59,130,246,0.35), transparent 55%),
-                radial-gradient(700px 480px at 90% 10%, rgba(245,197,66,0.22), transparent 50%),
-                radial-gradient(600px 400px at 50% 110%, rgba(16,185,129,0.18), transparent 50%),
-                linear-gradient(160deg, #070b14 0%, #0f1b33 50%, #0a1628 100%);
+        #studentEditor { height: 150px; background: var(--card); }
+    
+        /* ===== Modern UI 1-10 ===== */
+        .toast-wrap { position: fixed; top: 18px; right: 18px; z-index: 99999; display: flex; flex-direction: column; gap: 8px; max-width: 320px; }
+        .toast { background: #1e293b; color: #fff; padding: 12px 16px; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.25); font-size: 14px; font-weight: 600; animation: toastIn .25s ease; border-left: 4px solid #27ae60; }
+        .toast.err { border-left-color: #e74c3c; }
+        .toast.info { border-left-color: #3498db; }
+        @keyframes toastIn { from { opacity:0; transform: translateY(-10px); } to { opacity:1; transform:none; } }
+        .btn-loading { position: relative; pointer-events: none; opacity: .75; }
+        .btn-loading::after { content: ""; width: 14px; height: 14px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; display: inline-block; margin-left: 8px; vertical-align: middle; animation: spin .7s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .widget-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 18px; }
+        .widget { background: var(--card); border-radius: 12px; padding: 14px 16px; box-shadow: 0 2px 10px var(--shadow); border: 1px solid var(--border); text-align: center; }
+        .widget .n { font-size: 26px; font-weight: 800; color: var(--primary); }
+        .widget .l { font-size: 12px; color: var(--text2); margin-top: 4px; }
+        .search-box { width: 100%; max-width: 320px; padding: 10px 14px; border-radius: 24px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text); margin-bottom: 12px; }
+        .empty-state { text-align: center; padding: 28px 16px; color: var(--text2); font-size: 14px; }
+        .empty-state .ico { font-size: 36px; display: block; margin-bottom: 8px; }
+        .preview-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 99998; align-items: center; justify-content: center; padding: 20px; }
+        .preview-modal.show { display: flex; }
+        .preview-modal .box { background: #fff; border-radius: 12px; max-width: 90vw; max-height: 90vh; overflow: auto; padding: 12px; position: relative; }
+        .preview-modal img, .preview-modal iframe { max-width: 100%; max-height: 80vh; }
+        .preview-modal .close { position: absolute; top: 8px; right: 12px; background: #e74c3c; color: #fff; border: none; border-radius: 50%; width: 32px; height: 32px; font-weight: bold; cursor: pointer; }
+        .mobile-nav { display: none; position: sticky; top: 0; z-index: 100; background: var(--primary); color: #fff; padding: 10px 14px; margin: -20px -20px 16px -20px; }
+        .mobile-nav a { color: #fff; text-decoration: none; font-weight: bold; margin-right: 12px; font-size: 13px; }
+        @media (max-width: 768px) {
+            body { padding: 12px; }
+            .mobile-nav { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+            .card { padding: 16px; }
+            h2 { font-size: 20px; }
+            table { font-size: 12px; display: block; overflow-x: auto; }
+            th, td { padding: 8px; }
+            button, .logout-btn { min-height: 44px; }
+            input, select, textarea { font-size: 16px; } /* prevent iOS zoom */
         }
-        .bg::after {
-            content: "";
-            position: absolute; inset: 0;
-            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-            pointer-events: none;
-        }
-        .orb {
-            position: fixed; border-radius: 50%; filter: blur(60px); z-index: 0; pointer-events: none;
-            animation: float 12s ease-in-out infinite;
-        }
-        .orb.a { width: 280px; height: 280px; background: rgba(59,130,246,0.25); top: 8%; left: -60px; }
-        .orb.b { width: 220px; height: 220px; background: rgba(245,197,66,0.18); bottom: 12%; right: -40px; animation-delay: -4s; }
-        @keyframes float {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-24px); }
-        }
-
-        .wrap {
-            position: relative; z-index: 1;
-            min-height: 100vh;
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
-            padding: 24px 16px 40px;
-        }
-
-        .topbar {
-            width: 100%; max-width: 440px;
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 18px; gap: 10px;
-        }
-        .lang-pill {
-            display: flex; gap: 4px;
-            background: rgba(255,255,255,0.08);
-            border: 1px solid var(--stroke);
-            backdrop-filter: blur(12px);
-            padding: 4px; border-radius: 999px;
-        }
-        .lang-pill button {
-            border: none; background: transparent; color: var(--muted);
-            padding: 8px 14px; border-radius: 999px; font-weight: 600;
-            font-size: 13px; cursor: pointer; font-family: inherit; transition: 0.2s;
-        }
-        .lang-pill button.active {
-            background: linear-gradient(135deg, var(--blue), var(--blue2));
-            color: #fff; box-shadow: 0 6px 16px rgba(37,99,235,0.35);
-        }
-        .install-btn {
-            border: 1px solid var(--stroke);
-            background: linear-gradient(135deg, var(--gold), var(--gold2));
-            color: #1a1200; font-weight: 700; font-size: 13px;
-            padding: 9px 14px; border-radius: 999px; cursor: pointer;
-            font-family: inherit; display: none;
-            box-shadow: 0 8px 20px rgba(245,197,66,0.25);
+        @media print {
+            .no-print, .mobile-nav, .logout-btn, .dark-toggle, .lang-bar { display: none !important; }
+            body { background: #fff; padding: 0; }
+            .card { box-shadow: none; border: 1px solid #ccc; break-inside: avoid; }
         }
 
-        .card {
-            width: 100%; max-width: 440px;
-            background: linear-gradient(165deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.05) 100%);
-            border: 1px solid var(--stroke);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            backdrop-filter: blur(22px) saturate(1.3);
-            overflow: hidden;
-            animation: rise 0.55s cubic-bezier(.22,1,.36,1) both;
-        }
-        @keyframes rise {
-            from { opacity: 0; transform: translateY(28px) scale(0.98); }
-            to { opacity: 1; transform: none; }
-        }
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Noto+Sans+Ethiopic:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style id="ui-2026">
+/* ===== ALLS Student · 2026 UI layer (visual only; markup & logic untouched) ===== */
+:root{
+  --bg:#f4f5fb; --card:#ffffff; --text:#0f1226; --text2:#6b7194; --border:#e6e8f4;
+  --primary:#4f46e5; --accent:#7c3aed; --even:#fafaff; --hover-row:#f0efff;
+  --input:#f7f8fd; --input-bg:#f7f8fd; --input-border:#d9dcef; --radius:22px;
+  --shadow:rgba(60,60,140,.14); --ring:rgba(99,102,241,.28);
+  --grad:linear-gradient(135deg,#6366f1 0%,#8b5cf6 55%,#d946ef 100%);
+  --soft:0 1px 2px rgba(20,22,60,.04),0 12px 32px -8px rgba(60,60,140,.12);
+}
+body.dark{
+  --bg:#070914; --card:#10142a; --text:#eaecff; --text2:#9aa1c8; --border:#222849;
+  --primary:#a5b4fc; --accent:#8b5cf6; --even:#0d1124; --hover-row:#1a1f40;
+  --input:#0b0e20; --input-bg:#0b0e20; --input-border:#2c3358; --shadow:rgba(0,0,0,.5);
+  --ring:rgba(139,147,255,.32);
+  --soft:0 1px 0 rgba(255,255,255,.03) inset,0 18px 40px -12px rgba(0,0,0,.65);
+}
+html{scroll-behavior:smooth}
+body{font-family:'Outfit','Noto Sans Ethiopic','Segoe UI',system-ui,sans-serif;-webkit-font-smoothing:antialiased;padding:18px 18px 44px;
+  background:radial-gradient(900px 520px at 8% -8%,rgba(99,102,241,.16),transparent 60%),
+             radial-gradient(800px 480px at 100% 0%,rgba(217,70,239,.12),transparent 55%),
+             radial-gradient(700px 500px at 50% 110%,rgba(34,211,238,.10),transparent 60%),var(--bg);
+  background-attachment:fixed}
+body.dark{background-image:radial-gradient(900px 520px at 8% -8%,rgba(99,102,241,.22),transparent 60%),
+             radial-gradient(800px 480px at 100% 0%,rgba(217,70,239,.14),transparent 55%),
+             radial-gradient(700px 500px at 50% 110%,rgba(34,211,238,.08),transparent 60%)}
+.container{max-width:1000px}
+::selection{background:rgba(124,58,237,.28)}
+*{scrollbar-width:thin;scrollbar-color:rgba(124,58,237,.45) transparent}
+::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:rgba(124,58,237,.4);border-radius:99px}
 
-        .brand {
-            text-align: center;
-            padding: 32px 28px 20px;
-            position: relative;
-        }
-        .brand::before {
-            content: "";
-            position: absolute; left: 50%; top: 0; transform: translateX(-50%);
-            width: 120px; height: 4px; border-radius: 0 0 8px 8px;
-            background: linear-gradient(90deg, var(--gold), var(--blue));
-        }
-        .logo-ring {
-            width: 92px; height: 92px; margin: 0 auto 14px;
-            border-radius: 50%;
-            padding: 3px;
-            background: linear-gradient(135deg, var(--gold), var(--blue), var(--green));
-            box-shadow: 0 12px 30px rgba(59,130,246,0.35);
-        }
-        .logo-ring img {
-            width: 100%; height: 100%; border-radius: 50%;
-            object-fit: cover; border: 3px solid #0b1220;
-            background: #1e293b;
-        }
-        .brand h1 {
-            font-size: 1.2rem; font-weight: 800; letter-spacing: 0.02em;
-            line-height: 1.25; margin-bottom: 6px;
-            background: linear-gradient(90deg, #fff 0%, #c7d2fe 100%);
-            -webkit-background-clip: text; background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .brand .tag {
-            display: inline-flex; align-items: center; gap: 6px;
-            font-size: 12px; font-weight: 600; color: var(--gold);
-            background: rgba(245,197,66,0.12);
-            border: 1px solid rgba(245,197,66,0.28);
-            padding: 5px 12px; border-radius: 999px; margin-top: 4px;
-        }
+/* page title */
+h2{font-size:clamp(1.2rem,3vw,1.7rem);font-weight:800;letter-spacing:-.02em;color:var(--text);margin:6px 0 20px}
+h2 > span:first-child{background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+h2 > span:first-child img{-webkit-text-fill-color:initial;box-shadow:0 0 0 3px var(--card),0 0 0 5px rgba(124,58,237,.55)}
+h2 > span:last-child{background:var(--card) !important;color:var(--primary) !important;border:1px solid var(--border);
+  border-radius:99px !important;padding:7px 14px !important;font-weight:700;box-shadow:var(--soft);-webkit-text-fill-color:initial}
 
-        .body { padding: 8px 28px 28px; }
+/* cards */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:24px 26px;box-shadow:var(--soft);
+  animation:uiRise .5s cubic-bezier(.2,.7,.2,1) both;transition:box-shadow .25s,border-color .25s}
+.card:hover{border-color:color-mix(in srgb,var(--accent) 35%,var(--border));box-shadow:0 22px 50px -18px rgba(99,102,241,.32)}
+h3{color:var(--text);font-size:1.08rem;font-weight:700;letter-spacing:-.01em;border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:16px;gap:10px}
+.card > h3::before{content:"";width:5px;height:20px;border-radius:99px;background:var(--grad);flex:none}
+@keyframes uiRise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 
-        .error-msg {
-            background: rgba(248,113,113,0.12);
-            border: 1px solid rgba(248,113,113,0.35);
-            color: #fecaca;
-            padding: 12px 14px; border-radius: 12px;
-            font-size: 13.5px; font-weight: 600; text-align: center;
-            margin-bottom: 16px;
-        }
+/* profile hero */
+.profile-header{position:relative;overflow:hidden;gap:22px;padding:26px}
+.profile-header::before{content:"";position:absolute;inset:0 0 auto 0;height:5px;background:var(--grad)}
+.profile-header::after{content:"";position:absolute;right:-60px;top:-60px;width:220px;height:220px;border-radius:50%;
+  background:radial-gradient(circle,rgba(139,92,246,.22),transparent 65%);pointer-events:none}
+.profile-img{width:104px;height:104px;border-radius:26px;border:0;box-shadow:0 0 0 3px var(--card),0 0 0 6px rgba(124,58,237,.6),0 14px 30px -10px rgba(124,58,237,.5)}
+.profile-header h3{color:var(--text) !important;font-size:1.35rem;letter-spacing:-.02em}
+.profile-header h3::before{display:none}
+.profile-header p{color:var(--text2) !important}
+.btn-id{background:var(--grad) !important;border-radius:12px;padding:10px 18px;box-shadow:0 8px 20px -8px rgba(124,58,237,.55);transition:transform .15s,filter .15s}
+.btn-id:hover{filter:brightness(1.07);transform:translateY(-1px)}
 
-        .role-grid {
-            display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
-            margin-bottom: 18px;
-        }
-        .role-card {
-            position: relative;
-            border: 1px solid var(--stroke);
-            background: rgba(0,0,0,0.22);
-            border-radius: 14px;
-            padding: 14px 10px;
-            text-align: center;
-            cursor: pointer;
-            transition: 0.22s;
-            user-select: none;
-        }
-        .role-card:hover { border-color: rgba(59,130,246,0.5); background: rgba(59,130,246,0.1); }
-        .role-card.active {
-            border-color: rgba(59,130,246,0.85);
-            background: linear-gradient(160deg, rgba(59,130,246,0.28), rgba(37,99,235,0.12));
-            box-shadow: 0 0 0 1px rgba(59,130,246,0.4), 0 10px 24px rgba(37,99,235,0.2);
-        }
-        .role-card .ico { font-size: 22px; display: block; margin-bottom: 6px; }
-        .role-card .lbl { font-size: 12.5px; font-weight: 700; color: #e2e8f0; line-height: 1.3; }
-        .role-card input { position: absolute; opacity: 0; pointer-events: none; }
+/* tables */
+table{border-collapse:separate;border-spacing:0;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--card)}
+th,td{border:0;border-bottom:1px solid var(--border);padding:12px}
+tr:last-child td{border-bottom:0}
+th{background:var(--input) !important;color:var(--text2) !important;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em}
+tr:nth-child(even){background:var(--even)}
+tr:hover td{background:var(--hover-row)}
 
-        label.field-label {
-            display: block; font-size: 12.5px; font-weight: 600;
-            color: var(--muted); margin-bottom: 7px; letter-spacing: 0.02em;
-        }
-        .field {
-            position: relative; margin-bottom: 14px;
-        }
-        .field input {
-            width: 100%;
-            padding: 14px 16px 14px 44px;
-            border-radius: 14px;
-            border: 1px solid var(--stroke);
-            background: rgba(0,0,0,0.28);
-            color: var(--text);
-            font-size: 15.5px;
-            font-family: inherit;
-            outline: none;
-            transition: 0.2s;
-        }
-        .field .icon {
-            position: absolute; left: 15px; top: 50%; transform: translateY(-50%);
-            font-size: 16px; opacity: 0.75; pointer-events: none;
-        }
-        .field input:focus {
-            border-color: rgba(59,130,246,0.7);
-            box-shadow: 0 0 0 3px rgba(59,130,246,0.2);
-            background: rgba(0,0,0,0.4);
-        }
-        .field input::placeholder { color: #64748b; }
+/* forms */
+input[type="text"],input[type="file"],input[type="date"],input[type="password"],input[type="number"],textarea,select,.search-box{
+  border-radius:12px;border:1px solid var(--input-border);padding:12px 14px;background:var(--input);color:var(--text);transition:border-color .2s,box-shadow .2s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 4px var(--ring)}
+.search-box{border-radius:99px}
+input[type="checkbox"],input[type="radio"]{accent-color:var(--accent)}
+#studentEditor{border-radius:0 0 12px 12px}
 
-        .parent-hint {
-            display: none;
-            background: rgba(59,130,246,0.12);
-            border: 1px solid rgba(59,130,246,0.3);
-            color: #bfdbfe;
-            padding: 12px 14px; border-radius: 12px;
-            font-size: 12.5px; line-height: 1.5; margin-bottom: 14px;
-        }
+/* buttons */
+button{background:var(--grad);border-radius:12px;font-weight:700;letter-spacing:.005em;
+  box-shadow:0 8px 20px -8px rgba(124,58,237,.55);transition:transform .15s,filter .15s,box-shadow .2s}
+button:hover{background:var(--grad);filter:brightness(1.07) saturate(1.1);transform:translateY(-1px);box-shadow:0 14px 26px -10px rgba(124,58,237,.6)}
+button:active{transform:translateY(0) scale(.98)}
+button:focus-visible,a:focus-visible{outline:3px solid var(--ring);outline-offset:2px}
+#darkBtn,#btn-am,#btn-en,button[style*="border-radius:50px"]{border-radius:99px !important}
+.logout-btn{display:flex;width:fit-content;margin:26px auto 0;padding:11px 24px;border-radius:99px;color:#e11d48;font-weight:700;
+  border:1px solid color-mix(in srgb,#e11d48 35%,transparent);background:color-mix(in srgb,#e11d48 8%,var(--card));transition:background .2s,transform .15s}
+.logout-btn:hover{background:color-mix(in srgb,#e11d48 16%,var(--card));transform:translateY(-1px)}
 
-        .btn-login {
-            width: 100%;
-            border: none;
-            padding: 15px;
-            border-radius: 14px;
-            font-size: 16px; font-weight: 700;
-            font-family: inherit;
-            cursor: pointer;
-            color: #fff;
-            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 55%, #1e40af 100%);
-            box-shadow: 0 12px 28px rgba(37,99,235,0.4);
-            transition: 0.2s;
-            margin-top: 4px;
-        }
-        .btn-login:hover { transform: translateY(-1px); filter: brightness(1.06); }
-        .btn-login:active { transform: translateY(0); }
+/* dark-mode safety for pale inline backgrounds/colors */
+body.dark [style*="background:#fff"],body.dark [style*="background: #fff"],
+body.dark [style*="background:#f8fafc"],body.dark [style*="background: #f8fafc"],
+body.dark [style*="background:#eef2f5"],body.dark [style*="background: #eef2f5"]{background:var(--input) !important;color:var(--text) !important;border-color:var(--border) !important}
+body.dark [style*="background:#ecfdf5"]{background:rgba(16,185,129,.14) !important;color:#a7f3d0 !important}
+body.dark a{color:var(--primary)}
+body.dark .btn-id{color:#fff}
 
-        .links {
-            margin-top: 18px;
-            display: flex; flex-direction: column; gap: 10px;
-        }
-        .btn-register {
-            display: block; text-align: center; text-decoration: none;
-            padding: 13px; border-radius: 14px; font-weight: 700; font-size: 14.5px;
-            color: #052e1a;
-            background: linear-gradient(135deg, #34d399, #10b981);
-            box-shadow: 0 10px 22px rgba(16,185,129,0.28);
-        }
-        .btn-forgot {
-            display: block; text-align: center; text-decoration: none;
-            padding: 12px; border-radius: 14px; font-weight: 600; font-size: 13.5px;
-            color: var(--gold);
-            background: rgba(245,197,66,0.1);
-            border: 1px solid rgba(245,197,66,0.28);
-            cursor: pointer;
-            width: 100%;
-            font-family: inherit;
-        }
-
-        .footer-note {
-            margin-top: 20px; text-align: center;
-            font-size: 11.5px; color: var(--muted); max-width: 440px;
-            line-height: 1.5;
-        }
-
-        .modal-overlay {
-            display: none; position: fixed; inset: 0; z-index: 50;
-            background: rgba(0,0,0,0.72); backdrop-filter: blur(8px);
-            align-items: center; justify-content: center; padding: 20px;
-        }
-        .modal-box {
-            width: 100%; max-width: 400px;
-            background: linear-gradient(165deg, #1e293b, #0f172a);
-            border: 1px solid var(--stroke);
-            border-radius: 20px; padding: 26px;
-            box-shadow: var(--shadow);
-            animation: rise 0.35s ease both;
-        }
-        .modal-box h3 {
-            font-size: 18px; margin-bottom: 8px;
-            background: linear-gradient(90deg, #fff, #c7d2fe);
-            -webkit-background-clip: text; background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .modal-box p { color: var(--muted); font-size: 13px; margin-bottom: 16px; line-height: 1.45; }
-        .modal-box input {
-            width: 100%; padding: 13px 14px; margin-bottom: 12px;
-            border-radius: 12px; border: 1px solid var(--stroke);
-            background: rgba(0,0,0,0.35); color: #fff; font-size: 15px;
-            font-family: inherit; outline: none;
-        }
-        .modal-box input:focus { border-color: rgba(139,92,246,0.7); box-shadow: 0 0 0 3px rgba(139,92,246,0.2); }
-        .modal-actions { display: flex; gap: 10px; margin-top: 6px; }
-        .modal-actions button {
-            flex: 1; padding: 12px; border-radius: 12px; border: none;
-            font-weight: 700; font-family: inherit; cursor: pointer; font-size: 14px;
-        }
-        .btn-purple {
-            background: linear-gradient(135deg, #8b5cf6, #6d28d9); color: #fff;
-        }
-        .btn-ghost {
-            background: rgba(255,255,255,0.08); color: #e2e8f0; border: 1px solid var(--stroke) !important;
-        }
-        #resetResultBox {
-            display: none; margin-top: 14px; padding: 14px; border-radius: 12px;
-            text-align: center; font-weight: 600; font-size: 14px;
-        }
-
-        @media (max-width: 420px) {
-            .brand { padding: 26px 20px 16px; }
-            .body { padding: 6px 20px 24px; }
-            .brand h1 { font-size: 1.05rem; }
-            .role-card { padding: 12px 8px; }
-        }
-    </style>
+/* misc */
+.toast{border-radius:16px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.preview-modal{-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);background:rgba(7,9,20,.7)}
+.preview-modal .box{border-radius:22px;background:var(--card);color:var(--text)}
+.mobile-nav{background:color-mix(in srgb,var(--card) 82%,transparent);color:var(--text);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
+.mobile-nav a{color:var(--primary)}
+@media (max-width:768px){
+  body{padding:12px 12px 32px}
+  .card{padding:18px 16px;border-radius:20px}
+  .profile-header{flex-direction:column;text-align:center;gap:14px}
+  .profile-img{width:96px;height:96px}
+  h2{justify-content:center;text-align:center}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important;scroll-behavior:auto !important}}
+@media print{.card{animation:none}.profile-header::before,.profile-header::after{display:none}}
+</style>
 </head>
-<body class="lang-am">
-    <div class="bg"></div>
-    <div class="orb a"></div>
-    <div class="orb b"></div>
-
-    <div class="wrap">
-        <div class="topbar">
-            <div class="lang-pill">
-                <button type="button" id="btn-am" class="active" onclick="switchPortalLang('am')">🇪🇹 አማ</button>
-                <button type="button" id="btn-en" onclick="switchPortalLang('en')">🇬🇧 EN</button>
-            </div>
-            <button type="button" id="btnInstallPWA" class="install-btn">📲 Install</button>
-        </div>
-
-        <div class="card">
-            <div class="brand">
-                <div class="logo-ring">
-                    <img src="/uploads/logo.jpg" onerror="this.src='/uploads/logo.png'" alt="Logo">
-                </div>
-                <h1>AMANUEL LIGHT &amp; LIFE SCHOOL</h1>
-                <div class="tag">
-                    <span class="am">✦ አማኑኤል ብርሃንና ሕይወት ትምህርት ቤት</span>
-                    <span class="en">✦ Official Digital Portal</span>
-                </div>
-            </div>
-
-            <div class="body">
-                <% if (typeof error !== 'undefined' && error) { %>
-                <div class="error-msg">
-                    ❌ <span class="am">የተሳሳተ መታወቂያ ወይም የይለፍ ቃል!</span>
-                    <span class="en">Invalid ID or Password!</span>
-                </div>
-                <% } %>
-
-                <form action="/login" method="POST" id="loginForm">
-                    <label class="field-label">
-                        <span class="am">ሚና ይምረጡ</span><span class="en">Choose your role</span>
-                    </label>
-                    <div class="role-grid" id="roleGrid">
-                        <label class="role-card active" data-role="student">
-                            <input type="radio" name="role" value="student" checked>
-                            <span class="ico">🎓</span>
-                            <span class="lbl"><span class="am">ተማሪ</span><span class="en">Student</span></span>
-                        </label>
-                        <label class="role-card" data-role="teacher">
-                            <input type="radio" name="role" value="teacher">
-                            <span class="ico">👩‍🏫</span>
-                            <span class="lbl"><span class="am">መምህር</span><span class="en">Teacher</span></span>
-                        </label>
-                        <label class="role-card" data-role="parent">
-                            <input type="radio" name="role" value="parent">
-                            <span class="ico">👨‍👩‍👧</span>
-                            <span class="lbl"><span class="am">ወላጅ</span><span class="en">Parent</span></span>
-                        </label>
-                        <label class="role-card" data-role="admin">
-                            <input type="radio" name="role" value="admin">
-                            <span class="ico">👑</span>
-                            <span class="lbl"><span class="am">ዲሬክተር</span><span class="en">Director</span></span>
-                        </label>
-                    </div>
-
-                    <div class="parent-hint" id="parentHint">
-                        <span class="am">💡 <b>ወላጅ:</b> የተማሪውን <b>መታወቂያ (ID)</b> እና የወላጅ <b>ስልክ ቁጥር</b> ያስገቡ።</span>
-                        <span class="en">💡 <b>Parent:</b> Use the <b>Student ID</b> and parent <b>phone</b> (emergency number).</span>
-                    </div>
-
-                    <label class="field-label">
-                        <span class="am">መታወቂያ / የተጠቃሚ ስም</span>
-                        <span class="en">ID / Username</span>
-                    </label>
-                    <div class="field">
-                        <span class="icon">🪪</span>
-                        <input type="text" name="username" id="usernameInput" required autocomplete="username"
-                               placeholder="ALLS-1234 / T-101 / admin">
-                    </div>
-
-                    <label class="field-label">
-                        <span class="am">የይለፍ ቃል</span><span class="en">Password / PIN</span>
-                    </label>
-                    <div class="field">
-                        <span class="icon">🔒</span>
-                        <input type="password" name="password" id="passwordInput" required autocomplete="current-password"
-                               placeholder="••••">
-                    </div>
-
-                    <button type="submit" class="btn-login">
-                        <span class="am">🚀 ግባ · Sign in</span>
-                        <span class="en">🚀 Sign in to Portal</span>
-                    </button>
-                </form>
-
-                <div class="links">
-                    <a class="btn-register" href="/student-register">
-                        <span class="am">📝 አዲስ ተማሪ ምዝገባ</span>
-                        <span class="en">📝 New Student Registration</span>
-                    </a>
-                    <button type="button" class="btn-forgot" onclick="openResetModal()">
-                        <span class="am">🔑 የይለፍ ቃል ረሳሁ?</span>
-                        <span class="en">🔑 Forgot password?</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <p class="footer-note">
-            <span class="am">ደህንነቱ የተጠበቀ የትምህርት ቤት ፖርታል · Amanuel Light &amp; Life School</span>
-            <span class="en">Secure school portal · Amanuel Light &amp; Life School</span>
-        </p>
+<body class="lang-<%= typeof lang !== 'undefined' ? lang : 'am' %>" data-sid="<%= student.student_id %>">
+<div class="container">
+    <div style="display:flex; justify-content:flex-end; gap:10px; margin-bottom:15px; align-items:center; flex-wrap:wrap;">
+        <button type="button" onclick="toggleDark()" id="darkBtn" style="background:#64748b; color:white; padding:7px 12px; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">🌙</button>
+        <span style="font-weight:bold; font-size:14px;">🔔 <span id="unreadBadge" style="background:#e74c3c;color:#fff;border-radius:50px;padding:2px 8px;font-size:12px;display:none;">0</span></span>
+        <button type="button" onclick="setLang('am')" id="btn-am" style="background:#27ae60; color:white; padding:7px 14px; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">🇪🇹 አማርኛ</button>
+        <button type="button" onclick="setLang('en')" id="btn-en" style="background:#7f8c8d; color:white; padding:7px 14px; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">🇬🇧 English</button>
     </div>
 
-    <div class="modal-overlay" id="resetModal">
-        <div class="modal-box">
-            <h3><span class="am">🔑 የይለፍ ቃል መልሶ ማግኛ</span><span class="en">Password recovery</span></h3>
-            <p>
-                <span class="am">መታወቂያ እና ስልክ ቁጥር ያስገቡ። አዲስ PIN ይመነጫል።</span>
-                <span class="en">Enter your ID and phone. A new PIN will be generated.</span>
+    <h2>
+        <span><img src="/uploads/logo.jpg" onerror="this.style.display='none'" style="height: 40px; border-radius: 50%; vertical-align: middle; margin-right: 8px;">
+            <span class="am">🎓 የተማሪ መቆጣጠሪያ ፖርታል</span><span class="en">🎓 Student Portal</span>
+        </span>
+        <span style="font-size: 14px; background: #eef2f5; padding: 6px 12px; border-radius: 20px; color: #2c3e50;">
+            <span class="am">ክፍል:</span><span class="en">Class:</span> <%= student.class_level %>
+        </span>
+    </h2>
+    
+    <!-- Profile & Digital ID -->
+    <div class="card profile-header">
+        <img src="/uploads/<%= student.photo && student.photo.trim() !== '' ? student.photo : 'default.png' %>" onerror="this.src='/uploads/logo.jpg'" class="profile-img">
+        <div style="flex-grow: 1;">
+            <h3 style="margin: 0; border: none; padding: 0; color: #2c3e50;">
+                <span class="am">ሰላም,</span><span class="en">Hello,</span> <%= student.name %>
+            </h3>
+            <p style="margin: 6px 0; color: #555; font-size: 14px;">
+                <b><span class="am">መታወቂያ (ID):</span><span class="en">ID:</span></b> <%= student.student_id %> | 
+                <b><span class="am">ስልክ:</span><span class="en">Phone:</span></b> <%= student.phone || '-' %>
             </p>
-            <form onsubmit="submitPasswordReset(event)">
-                <input type="text" id="resetIdInput" placeholder="ID e.g. ALLS-1234 / T-101" required>
-                <input type="text" id="resetPhoneInput" placeholder="Phone number" required>
-                <div class="modal-actions">
-                    <button type="button" class="btn-ghost" onclick="closeResetModal()">
-                        <span class="am">ዝጋ</span><span class="en">Close</span>
-                    </button>
-                    <button type="submit" class="btn-purple" id="resetSubmitBtn">
-                        <span class="am">🔄 አዲስ PIN</span><span class="en">🔄 New PIN</span>
-                    </button>
-                </div>
+            <p style="margin: 4px 0; color: #1f4e79; font-size: 14px; font-weight:bold;">
+                🛡️ <span class="am">ተቆጣጣሪ (Proctor):</span><span class="en">Proctor:</span>
+                <%= typeof proctorName !== 'undefined' ? proctorName : 'N/A' %>
+                <% if (typeof proctorPhone !== 'undefined' && proctorPhone) { %> (📞 <%= proctorPhone %>)<% } %>
+            </p>
+            <a href="/student/digital-id" target="_blank" class="btn-id">🆔 <span class="am">ዲጂታል መታወቂያ አውርድ</span><span class="en">Download Digital ID</span></a>
+            <form action="/student/update-photo" method="POST" enctype="multipart/form-data" style="margin-top: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <input type="file" name="new_photo" accept="image/*" required style="width: auto; padding: 4px; font-size: 12px;">
+                <button type="submit" style="padding: 6px 14px; margin: 0; background: #3498db; font-size: 13px;">
+                    <span class="am">ፎቶ ቀይር</span><span class="en">Change Photo</span>
+                </button>
             </form>
-            <div id="resetResultBox"></div>
         </div>
     </div>
 
-    <script>
-        function switchPortalLang(lang) {
-            var clean = lang === 'en' ? 'en' : 'am';
-            document.body.className = 'lang-' + clean;
-            try { localStorage.setItem('prefLang', clean); } catch (e) {}
-            document.getElementById('btn-am').classList.toggle('active', clean === 'am');
-            document.getElementById('btn-en').classList.toggle('active', clean === 'en');
-        }
-        try {
-            var pl = localStorage.getItem('prefLang') || 'am';
-            switchPortalLang(pl);
-        } catch (e) {}
+    <!-- Assessment Grades + Teacher -->
+    <div class="card">
+        <h3>📊 <span class="am">የትምህርት ውጤቶች (ከመምህር ጋር)</span><span class="en">Assessment Grades (with Teacher)</span></h3>
+        <table>
+            <tr>
+                <th><span class="am">ኮድ</span><span class="en">Code</span></th>
+                <th style="text-align: left;"><span class="am">የትምህርት ስም</span><span class="en">Course</span></th>
+                <th><span class="am">መምህር</span><span class="en">Teacher</span></th>
+                <th>Quiz</th>
+                <th>Assign</th>
+                <th>Project</th>
+                <th>Mid</th>
+                <th>Final</th>
+                <th><span class="am">ጠቅላላ</span><span class="en">Total</span></th>
+                <th><span class="am">ደረጃ</span><span class="en">Grade</span></th>
+            </tr>
+            <%- gradesHtml || '<tr><td colspan="10" style="color:#777;">ምንም ውጤት አልተመዘገበም / No grades yet</td></tr>' %>
+        </table>
+    </div>
 
-        (function () {
-            var cards = document.querySelectorAll('.role-card');
-            var hint = document.getElementById('parentHint');
-            function sync() {
-                var selected = document.querySelector('input[name="role"]:checked');
-                var role = selected ? selected.value : 'student';
-                cards.forEach(function (c) {
-                    c.classList.toggle('active', c.getAttribute('data-role') === role);
-                });
-                if (hint) hint.style.display = role === 'parent' ? 'block' : 'none';
-            }
-            cards.forEach(function (c) {
-                c.addEventListener('click', function () {
-                    var input = c.querySelector('input');
-                    if (input) input.checked = true;
-                    sync();
-                });
-            });
-            sync();
-        })();
+    <!-- Notifications -->
+    <div class="card" style="background: #f8fafc; border: 1px solid #e2e8f0;">
+        <h3 style="color: #2980b9;">🔔 <span class="am">የትምህርት ቤት ማስታወቂያዎች</span><span class="en">School Notifications</span></h3>
+        <div style="margin-top: 10px;">
+            <%- notiRows || '<p style="color: #777; font-style: italic;">ምንም ማስታወቂያ የለም / No notifications</p>' %>
+        </div>
+    </div>
 
-        var deferredPrompt = null;
-        var installBtn = document.getElementById('btnInstallPWA');
-        window.addEventListener('beforeinstallprompt', function (e) {
-            e.preventDefault();
-            deferredPrompt = e;
-            if (installBtn) installBtn.style.display = 'inline-block';
-        });
-        if (installBtn) {
-            installBtn.addEventListener('click', async function () {
-                if (!deferredPrompt) return;
-                deferredPrompt.prompt();
-                await deferredPrompt.userChoice;
-                deferredPrompt = null;
-                installBtn.style.display = 'none';
-            });
-        }
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js').catch(function () {});
-        }
+    <!-- Student Send Message (with rich text) -->
+    <div class="card" style="border-top: 4px solid #e67e22;">
+        <h3>✉️ <span class="am">መልዕክት ላክ (ለአድሚን / ለመምህር)</span><span class="en">Send Message (to Admin / Teacher)</span></h3>
+        <form id="studentMsgForm" action="/admin/send-notification" method="POST" enctype="multipart/form-data">
+            <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:6px;">
+                <span class="am">ለማን ይላክ?</span><span class="en">Send to:</span>
+            </label>
+            <select name="target_audience" style="max-width:450px; margin-bottom:12px;">
+                <% if (typeof studentMsgOptions !== 'undefined' && studentMsgOptions) { %>
+                    <%- studentMsgOptions %>
+                <% } else { %>
+                    <option value="ADMIN">👑 ለአድሚን / ዲሬክተር (To Admin)</option>
+                <% } %>
+            </select>
 
-        function openResetModal() {
-            document.getElementById('resetResultBox').style.display = 'none';
-            document.getElementById('resetModal').style.display = 'flex';
+            <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:6px;">
+                🎨 <span class="am">መልዕክትዎን ይጻፉ (ከለር፣ ፎንት፣ ሳይዝ)፦</span>
+                <span class="en">Write your message (Color, Font, Size):</span>
+            </label>
+            <div id="studentEditor"></div>
+            <input type="hidden" name="message" id="studentHiddenMsg">
+
+            <label style="font-weight:bold; font-size:13px; display:block; margin-top:12px;">
+                📎 <span class="am">ፋይል አያይዝ (አማራጭ)</span><span class="en">Attach File (Optional)</span>
+            </label>
+            <input type="file" name="attachment" style="max-width:300px;">
+
+            <button type="submit" style="background:#e67e22; margin-top:12px;">
+                📩 <span class="am">መልዕክት ላክ</span><span class="en">Send Message</span>
+            </button>
+        </form>
+    </div>
+
+    <!-- Absence Request -->
+    <div class="card">
+        <h3>✉️ <span class="am">የመቅረት / እረፍት ጥያቄ</span><span class="en">Absence / Leave Request</span></h3>
+        <form action="/student/absence" method="POST" enctype="multipart/form-data">
+            <label style="font-weight: bold; font-size: 13px;"><span class="am">ቀን:</span><span class="en">Date:</span></label>
+            <input type="date" name="date" required>
+            <label style="font-weight: bold; font-size: 13px; display: block; margin-top: 10px;"><span class="am">ምክንያትዎን ይጻፉ:</span><span class="en">Write your reason:</span></label>
+            <textarea name="reason" rows="3" required></textarea>
+            <label style="font-weight: bold; font-size: 13px; display: block; margin-top: 10px;"><span class="am">ፋይል (ካለ):</span><span class="en">File (if any):</span></label>
+            <input type="file" name="attachment" accept="image/*,.pdf">
+            <button type="submit"><span class="am">ፈቃድ ጥያቄ ላክ</span><span class="en">Submit Request</span></button>
+        </form>
+        <h4 style="margin-top: 25px; color: #2c3e50; font-size: 15px;"><span class="am">የቀረቧቸው ጥያቄዎች</span><span class="en">Request History</span></h4>
+        <%- myAbsRows || '<p style="color: #777; font-size: 13px;">ምንም የቀረበ ጥያቄ የለም / No requests</p>' %>
+    </div>
+
+    
+    <div class="card" id="homework">
+        <h3>📚 <span class="am">የትምህርት ማዕከል</span><span class="en">Learning Hub</span></h3>
+        <p><a href="/learning-hub" style="background:#8e44ad;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block;">Open Library · Homework · Quiz · Timetable</a></p>
+        <p style="margin-top:10px;"><a href="/report-card/<%= student.student_id %>" style="background:#27ae60;color:#fff;padding:8px 14px;border-radius:6px;text-decoration:none;font-weight:bold;">📄 Download Report Card PDF</a></p>
+        <canvas id="studentProgressChart" height="160" style="margin-top:12px;"></canvas>
+        <form action="/student/homework-submit" method="POST" enctype="multipart/form-data" style="margin-top:14px;border-top:1px solid #ddd;padding-top:12px;">
+            <label>Submit homework</label>
+            <input type="number" name="homework_id" placeholder="Homework ID #" required>
+            <textarea name="note" rows="2" placeholder="Note (optional)"></textarea>
+            <input type="file" name="file">
+            <button type="submit">📤 Submit</button>
+        </form>
+    </div>
+
+    <!-- Student Live Chat -->
+    <div class="card" style="border-top:4px solid #8e44ad;">
+        <h3>💬 <span class="am">ከትምህርት ቤት ጋር ውይይት</span><span class="en">Chat with School</span></h3>
+        <div id="chatStatus" style="font-size:12px;color:#888;margin-bottom:6px;">Loading...</div>
+        <div id="studentChatBox" style="height:200px;overflow-y:auto;background:#f8fafc;border:1px solid #ddd;border-radius:8px;padding:10px;margin-bottom:8px;"></div>
+        <form id="studentChatForm" style="display:flex;gap:8px;flex-wrap:wrap;">
+            <input type="text" id="studentChatInput" placeholder="መልዕክት ይጻፉ..." required style="flex:1;min-width:160px;padding:10px;border:1px solid #ccc;border-radius:6px;">
+            <button type="submit" style="background:#8e44ad;color:#fff;border:none;padding:10px 16px;border-radius:6px;font-weight:bold;cursor:pointer;">Send</button>
+        </form>
+    </div>
+
+    <div style="text-align: center;">
+        <a href="/logout" class="logout-btn">🔒 <span class="am">ውጣ</span><span class="en">Logout</span></a>
+    </div>
+</div>
+<script>
+    function setLang(l) {
+        const clean = (l === 'en') ? 'en' : 'am';
+        const isDark = document.body.classList.contains('dark');
+        document.body.className = 'lang-' + clean + (isDark ? ' dark' : '');
+        localStorage.setItem('prefLang', clean);
+        const btnAm = document.getElementById('btn-am');
+        const btnEn = document.getElementById('btn-en');
+        if (btnAm && btnEn) {
+            btnAm.style.background = clean === 'am' ? '#27ae60' : '#7f8c8d';
+            btnEn.style.background = clean === 'en' ? '#2980b9' : '#7f8c8d';
         }
-        function closeResetModal() {
-            document.getElementById('resetModal').style.display = 'none';
+    }
+    function toggleDark() {
+        document.body.classList.toggle('dark');
+        localStorage.setItem('darkMode', document.body.classList.contains('dark') ? '1' : '0');
+        document.getElementById('darkBtn').textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+        setLang(localStorage.getItem('prefLang') || 'am');
+        if (localStorage.getItem('darkMode') === '1') {
+            document.body.classList.add('dark');
+            document.getElementById('darkBtn').textContent = '☀️';
         }
-        function submitPasswordReset(e) {
-            e.preventDefault();
-            var idVal = document.getElementById('resetIdInput').value.trim();
-            var phoneVal = document.getElementById('resetPhoneInput').value.trim();
-            var resBox = document.getElementById('resetResultBox');
-            var btn = document.getElementById('resetSubmitBtn');
-            btn.disabled = true;
-            btn.innerText = '⏳ ...';
-            fetch('/api/recover-password', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: idVal, phone: phoneVal })
-            })
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                btn.disabled = false;
-                btn.innerHTML = '<span class="am">🔄 አዲስ PIN</span><span class="en">🔄 New PIN</span>';
-                resBox.style.display = 'block';
-                if (data.success) {
-                    resBox.style.background = 'rgba(16,185,129,0.15)';
-                    resBox.style.color = '#6ee7b7';
-                    resBox.style.border = '1px solid rgba(16,185,129,0.4)';
-                    resBox.innerHTML = '✅ OK<br><span style="font-size:28px;letter-spacing:4px;color:#fbbf24;">' + data.newPassword + '</span>';
-                } else {
-                    resBox.style.background = 'rgba(248,113,113,0.12)';
-                    resBox.style.color = '#fecaca';
-                    resBox.style.border = '1px solid rgba(248,113,113,0.35)';
-                    resBox.innerHTML = '❌ Not found';
+        if (document.getElementById('studentEditor')) {
+            var quill = new Quill('#studentEditor', {
+                theme: 'snow',
+                placeholder: 'መልዕክትዎን እዚህ ይጻፉ... / Write here...',
+                modules: {
+                    toolbar: [
+                        [{ 'font': [] }, { 'size': ['small', false, 'large', 'huge'] }],
+                        ['bold', 'italic', 'underline'],
+                        [{ 'color': [] }, { 'background': [] }],
+                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                        ['clean']
+                    ]
                 }
-            })
-            .catch(function () {
-                btn.disabled = false;
-                btn.innerHTML = '<span class="am">🔄 አዲስ PIN</span><span class="en">🔄 New PIN</span>';
-                resBox.style.display = 'block';
-                resBox.style.background = 'rgba(248,113,113,0.12)';
-                resBox.innerHTML = '❌ Network error';
+            });
+            document.getElementById('studentMsgForm').addEventListener('submit', function() {
+                document.getElementById('studentHiddenMsg').value = quill.root.innerHTML;
             });
         }
-    </script>
+        // Unread badge
+        fetch('/api/unread-count').then(r => r.json()).then(d => {
+            const b = document.getElementById('unreadBadge');
+            if (b && d.count > 0) { b.textContent = d.count; b.style.display = 'inline-block'; }
+        }).catch(() => {});
+    });
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('keydown', e => {
+        if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && ['I','i','J','j','C','c'].includes(e.key)) || (e.ctrlKey && ['U','u','S','s'].includes(e.key))) {
+            e.preventDefault();
+        }
+    });
+
+    // Student class chat room
+    (function(){
+        const room = 'student-' + (document.body.getAttribute('data-sid') || 'unknown');
+        const box = document.getElementById('studentChatBox');
+        const status = document.getElementById('chatStatus');
+        if (!box) return;
+        function load(){
+            fetch('/api/chat/'+encodeURIComponent(room), {credentials:'same-origin'})
+              .then(r=>r.json()).then(d=>{
+                if(status) status.textContent = 'Online';
+                const msgs = d.messages||[];
+                box.innerHTML = msgs.length ? msgs.map(m=>'<div style="margin-bottom:8px;font-size:13px;border-bottom:1px solid #eee;padding-bottom:6px;"><b style="color:#8e44ad">'+(m.sender_name||'?')+'</b> <small style="color:#888">'+(m.created_at||'')+'</small><br>'+(m.message||'')+'</div>').join('') : '<div style="color:#888">No messages yet</div>';
+                box.scrollTop = box.scrollHeight;
+              }).catch(()=>{ if(status) status.textContent='Retrying...'; });
+        }
+        load(); setInterval(load, 5000);
+        const form = document.getElementById('studentChatForm');
+        if(form) form.addEventListener('submit', function(e){
+            e.preventDefault();
+            const input = document.getElementById('studentChatInput');
+            const msg = (input.value||'').trim(); if(!msg) return;
+            fetch('/api/chat/'+encodeURIComponent(room), {
+                method:'POST', credentials:'same-origin',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({message: msg})
+            }).then(r=>r.json()).then(d=>{ if(d.success){ input.value=''; load(); }});
+        });
+    })();
+
+
+    // Stay in place after save/send/reply (no jump to top)
+    (function(){
+        const KEY = 'scrollPos_' + location.pathname;
+        const saved = sessionStorage.getItem(KEY);
+        if (saved) {
+            const y = parseInt(saved, 10);
+            if (!isNaN(y)) {
+                requestAnimationFrame(function(){ window.scrollTo(0, y); });
+                setTimeout(function(){ window.scrollTo(0, y); }, 50);
+                setTimeout(function(){ window.scrollTo(0, y); }, 200);
+            }
+            sessionStorage.removeItem(KEY);
+        }
+        function saveScroll(){ sessionStorage.setItem(KEY, String(window.scrollY || window.pageYOffset || 0)); }
+        document.addEventListener('submit', function(e){
+            const f = e.target;
+            if (!f || f.tagName !== 'FORM') return;
+            // AJAX forms handle themselves
+            if (f.classList.contains('ajax-grade-form') || f.id === 'studentChatForm' || f.id === 'chatForm') return;
+            saveScroll();
+        }, true);
+        document.addEventListener('click', function(e){
+            const a = e.target.closest && e.target.closest('a[href]');
+            if (!a) return;
+            const href = a.getAttribute('href') || '';
+            if (href.indexOf('/admin/approve/') === 0 || href.indexOf('/admin/reject/') === 0 ||
+                href.indexOf('/delete-notification/') === 0 || href.indexOf('/edit-notification/') === 0) {
+                saveScroll();
+            }
+        }, true);
+    })();
+
+
+    // Toast + loading + file preview + table search
+    (function(){
+        if (!document.querySelector('.toast-wrap')) {
+            const w = document.createElement('div');
+            w.className = 'toast-wrap';
+            document.body.appendChild(w);
+        }
+        window.showToast = function(msg, type) {
+            const w = document.querySelector('.toast-wrap');
+            const t = document.createElement('div');
+            t.className = 'toast' + (type === 'err' ? ' err' : type === 'info' ? ' info' : '');
+            t.textContent = msg;
+            w.appendChild(t);
+            setTimeout(() => { t.remove(); }, 3200);
+        };
+        // Loading on non-AJAX form submit
+        document.addEventListener('submit', function(e) {
+            const f = e.target;
+            if (!f || f.tagName !== 'FORM') return;
+            if (f.classList.contains('ajax-grade-form') || f.id === 'studentChatForm' || f.id === 'chatForm') return;
+            const btn = f.querySelector('button[type="submit"]');
+            if (btn) { btn.classList.add('btn-loading'); btn.disabled = true; }
+        }, true);
+        // File preview for /uploads/ links
+        document.addEventListener('click', function(e) {
+            const a = e.target.closest && e.target.closest('a[href*="/uploads/"]');
+            if (!a) return;
+            const href = a.getAttribute('href') || '';
+            if (!/\.(jpg|jpeg|png|gif|webp|pdf)(\?|$)/i.test(href) && href.indexOf('/uploads/') === -1) return;
+            // preview images
+            if (/\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(href)) {
+                e.preventDefault();
+                let m = document.getElementById('filePreviewModal');
+                if (!m) {
+                    m = document.createElement('div');
+                    m.id = 'filePreviewModal';
+                    m.className = 'preview-modal';
+                    m.innerHTML = '<div class="box"><button type="button" class="close" onclick="document.getElementById(\'filePreviewModal\').classList.remove(\'show\')">×</button><img id="previewImg" src=""></div>';
+                    document.body.appendChild(m);
+                    m.addEventListener('click', function(ev){ if (ev.target === m) m.classList.remove('show'); });
+                }
+                document.getElementById('previewImg').src = href;
+                m.classList.add('show');
+            }
+        });
+        // Table search: input.search-box data-table="tableId"
+        document.querySelectorAll('.search-box[data-table]').forEach(function(inp) {
+            inp.addEventListener('input', function() {
+                const q = (inp.value || '').toLowerCase();
+                const table = document.getElementById(inp.getAttribute('data-table'));
+                if (!table) return;
+                table.querySelectorAll('tr').forEach(function(tr, i) {
+                    if (i === 0 && tr.querySelector('th')) return;
+                    tr.style.display = !q || tr.textContent.toLowerCase().indexOf(q) !== -1 ? '' : 'none';
+                });
+            });
+        });
+        // Empty states
+        document.querySelectorAll('table[data-empty]').forEach(function(table) {
+            const rows = table.querySelectorAll('tr');
+            const dataRows = Array.from(rows).filter(r => !r.querySelector('th'));
+            if (dataRows.length === 0) {
+                const wrap = document.createElement('div');
+                wrap.className = 'empty-state';
+                wrap.innerHTML = '<span class="ico">📭</span>' + (table.getAttribute('data-empty') || 'No data');
+                table.parentNode.insertBefore(wrap, table.nextSibling);
+            }
+        });
+    })();
+
+
+    fetch('/api/student-progress/<%= student.student_id %>').then(r=>r.json()).then(d=>{
+        if (!d.labels || !d.labels.length) return;
+        const ctx = document.getElementById('studentProgressChart');
+        if (!ctx || typeof Chart === 'undefined') return;
+        new Chart(ctx, { type: 'bar', data: { labels: d.labels, datasets: [{ label: 'Total', data: d.data, backgroundColor: '#2980b9' }] }, options: { scales: { y: { beginAtZero: true, max: 100 } } } });
+    }).catch(()=>{});
+</script>
+
+<div class="card" id="prevClassHistory" style="border-top:4px solid #7c3aed;margin:16px 0;padding:16px;background:#fff;border-radius:12px;">
+  <h3 style="color:#6d28d9;">📂 Previous class results (1–12)</h3>
+  <select id="histClassSelect" style="width:100%;max-width:320px;padding:10px;margin:8px 0;">
+    <option value="">— Select previous class —</option>
+  </select>
+  <button type="button" onclick="loadHist()" style="padding:10px 14px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-weight:bold;">View</button>
+  <div id="histResult" style="margin-top:12px;font-size:14px;"></div>
+</div>
+<div class="card" id="nextclass" style="border:3px solid #7c3aed;margin:16px 0;padding:20px;background:linear-gradient(180deg,#faf5ff,#ffffff);border-radius:16px;box-shadow:0 10px 28px rgba(124,58,237,.2);">
+  <h2 style="color:#6d28d9;font-size:26px;margin:0 0 8px;font-weight:900;">🎓 Next Class Registration</h2>
+  <p style="font-size:15px;color:#5b21b6;margin:0 0 12px;">After Admin <b>Promote all students</b>, if you <b>PASS</b> your next class form appears here automatically.</p>
+  <div id="promoBox" style="display:none;padding:16px;border-radius:14px;background:#ecfdf5;border:2px solid #10b981;">
+    <div style="font-size:20px;font-weight:900;color:#047857;">✅ You PASSED</div>
+    <div style="font-size:16px;margin-top:8px;">Current: <b id="promoFrom">—</b></div>
+    <div style="font-size:22px;margin-top:6px;color:#1d4ed8;">Next class: <b id="promoTo">—</b></div>
+    <div style="margin-top:6px;">Year average: <b id="promoAvg">—</b></div>
+    <form action="/student/confirm-next-class" method="POST" style="margin-top:14px;">
+      <button type="submit" style="width:100%;padding:16px;font-size:18px;font-weight:900;border:none;border-radius:12px;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;cursor:pointer;">
+        Confirm & move to next class →
+      </button>
+    </form>
+  </div>
+  <div id="failBox" style="display:none;padding:16px;border-radius:14px;background:#fef2f2;border:2px solid #ef4444;">
+    <div style="font-size:20px;font-weight:900;color:#b91c1c;">❌ Not promoted</div>
+    <div style="margin-top:8px;">You stay in <b id="failClass">—</b>. Year average: <b id="failAvg">—</b></div>
+  </div>
+  <div id="waitPromo" style="padding:12px;color:#64748b;font-size:14px;">Waiting for year-end promotion...</div>
+</div>
+<div class="card" id="rereg" style="border-top:4px solid #0369a1;margin:16px 0;padding:16px;background:#fff;border-radius:12px;">
+  <h3 style="color:#0369a1;font-size:20px;">📝 Fee payment for next year (optional / existing path)</h3>
+  <p style="font-size:13px;color:#475569;">Pay school fee → upload slip → Admin ✅ approve.</p>
+  <div id="reregStatus" style="margin:8px 0;font-weight:bold;"></div>
+  <form id="reregForm" action="/student/rereg-request" method="POST" enctype="multipart/form-data" style="display:none;">
+    <input type="text" name="target_class" id="reregTarget" placeholder="Target class" required style="width:100%;margin:6px 0;padding:10px;">
+    <input type="text" name="amount" placeholder="Amount paid (ETB)" style="width:100%;margin:6px 0;padding:10px;">
+    <input type="text" name="note" placeholder="Transaction ref / note" style="width:100%;margin:6px 0;padding:10px;">
+    <label>Bank slip / screenshot *</label>
+    <input type="file" name="slip" accept="image/*,.pdf" required style="margin:6px 0;">
+    <button type="submit" style="padding:12px 16px;background:#0369a1;color:#fff;border:none;border-radius:8px;font-weight:bold;">Submit payment for approval</button>
+  </form>
+  <div id="reregApproved" style="display:none;padding:12px;background:#ecfdf5;border:2px solid #10b981;border-radius:10px;margin-top:10px;">
+    ✅ Payment approved.
+  </div>
+</div>
+<script>
+function loadHistClasses(){
+  fetch('/api/student/history',{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
+    var sel=document.getElementById('histClassSelect'); if(!sel) return;
+    sel.innerHTML='<option value="">— Select previous class —</option>';
+    var classes=d.classes||[];
+    if(!classes.length){
+      sel.innerHTML='<option value="">No previous class yet</option>';
+      var box=document.getElementById('histResult');
+      if(box) box.innerHTML='<p style="color:#64748b;margin:8px 0">You have no archived previous-class results yet. After teachers submit and Admin clicks <b>Promote all students</b>, previous classes appear here.</p>';
+      return;
+    }
+    classes.forEach(function(c){
+      var o=document.createElement('option'); o.value=c; o.textContent=c; sel.appendChild(o);
+    });
+  });
+}
+function loadHist(){
+  var cls=document.getElementById('histClassSelect').value;
+  var box=document.getElementById('histResult');
+  if(!cls){ box.innerHTML='Select a previous class.'; return; }
+  fetch('/api/student/history?class='+encodeURIComponent(cls),{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
+    if(!(d.rows||[]).length){ box.innerHTML='No results for this class.'; return; }
+    box.innerHTML='<p style="font-weight:bold;color:#6d28d9">'+cls+'</p><table style="width:100%;border-collapse:collapse;font-size:13px"><tr><th>Year</th><th>Course</th><th>Quiz</th><th>Assign</th><th>Project</th><th>Mid</th><th>Final</th><th>Total</th></tr>'+
+      d.rows.map(function(r){
+        return '<tr><td>'+(r.academic_year||'')+'</td><td>'+(r.course_title||r.course_code)+'</td><td>'+(r.quiz||0)+'</td><td>'+(r.assignment||0)+'</td><td>'+(r.project||0)+'</td><td>'+(r.mid||0)+'</td><td>'+(r.final||0)+'</td><td><b>'+(r.total||0)+'</b></td></tr>';
+      }).join('')+'</table>';
+  });
+}
+function loadRereg(){
+  fetch('/api/student/rereg-status',{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
+    var st=document.getElementById('reregStatus');
+    var form=document.getElementById('reregForm');
+    var ok=document.getElementById('reregApproved');
+    var rows=d.rows||[];
+    var latest=rows[0];
+    if(!latest){ st.textContent='No payment submitted yet.'; form.style.display='block'; ok.style.display='none'; return; }
+    if(latest.status==='approved'){ st.textContent='Latest: APPROVED for '+(latest.target_class||''); form.style.display='none'; ok.style.display='block'; }
+    else if(latest.status==='pending'){ st.textContent='Latest: PENDING admin review ('+(latest.target_class||'')+')'; form.style.display='block'; ok.style.display='none'; }
+    else { st.textContent='Latest: '+String(latest.status).toUpperCase(); form.style.display='block'; ok.style.display='none'; }
+  });
+}
+loadHistClasses(); loadRereg();
+
+</script>
+
+
+<script>
+fetch('/api/student/promotion-status',{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
+  if(!d.success) return;
+  var wait=document.getElementById('waitPromo');
+  var ok=document.getElementById('promoBox');
+  var bad=document.getElementById('failBox');
+  if(d.can_register_next){
+    if(wait) wait.style.display='none';
+    if(ok){ ok.style.display='block';
+      document.getElementById('promoFrom').textContent=d.class_level||'';
+      document.getElementById('promoTo').textContent=d.promoted_to||'';
+      document.getElementById('promoAvg').textContent=(d.year_average!=null?d.year_average:'—');
+      var rt=document.getElementById('reregTarget'); if(rt) rt.value=d.promoted_to||'';
+    }
+  } else if(String(d.status)==='Failed' || String(d.year_result)==='Fail'){
+    if(wait) wait.style.display='none';
+    if(bad){ bad.style.display='block';
+      document.getElementById('failClass').textContent=d.class_level||'';
+      document.getElementById('failAvg').textContent=(d.year_average!=null?d.year_average:'—');
+    }
+  }
+}).catch(function(){});
+</script>
+
 </body>
 </html>
