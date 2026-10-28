@@ -5548,32 +5548,37 @@ app.post('/admin/leave-review', (req, res) => {
 });
 
 // ===== Admin dashboard widgets =====
-app.get('/api/admin/dashboard-stats', (req, res) => {
+app.get('/api/admin/dashboard-stats', async (req, res) => {
     if (!req.session.isAdmin) return res.status(401).json({ success: false });
-    const out = {};
-    db.get(`SELECT COUNT(*) as c FROM students`, [], (e1, s) => {
-        out.students = s ? s.c : 0;
-        db.get(`SELECT COUNT(*) as c FROM teachers`, [], (e2, t) => {
-            out.teachers = t ? t.c : 0;
-            db.get(`SELECT COUNT(*) as c FROM pending_students`, [], (e3, p) => {
-                out.pending = p ? p.c : 0;
-                db.get(`SELECT COUNT(*) as c FROM grade_locks WHERE locked=1`, [], (e4, g) => {
-                    out.locked_grades = g ? g.c : 0;
-                    db.get(`SELECT COUNT(*) as c FROM staff_leave WHERE status='pending'`, [], (e5, l) => {
-                        out.leave_pending = l ? l.c : 0;
-                        db.get(`SELECT COUNT(*) as c FROM rereg_requests WHERE status='pending'`, [], (e6, r) => {
-                            out.rereg_pending = r ? r.c : 0;
-                            const today = new Date().toISOString().slice(0, 10);
-                            db.get(`SELECT COUNT(*) as c FROM daily_attendance WHERE date=? AND status='Present'`, [today], (e7, a) => {
-                                out.present_today = a ? a.c : 0;
-                                res.json({ success: true, stats: out });
-                            });
-                        });
-                    });
-                });
-            });
-        });
-    });
+    const num = (v) => {
+        if (v == null) return 0;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+    };
+    try {
+        const today = new Date().toISOString().slice(0, 10);
+        const q = async (sql, params=[]) => {
+            const r = await pool.query(sql, params);
+            const row = r.rows[0] || {};
+            return num(row.c != null ? row.c : row.count);
+        };
+        const out = {
+            students: await q(`SELECT COUNT(*)::int AS c FROM students`),
+            teachers: await q(`SELECT COUNT(*)::int AS c FROM teachers`),
+            pending: await q(`SELECT COUNT(*)::int AS c FROM pending_students`),
+            locked_grades: await q(`SELECT COUNT(*)::int AS c FROM grade_locks WHERE locked=1`),
+            leave_pending: await q(`SELECT COUNT(*)::int AS c FROM staff_leave WHERE status='pending'`),
+            rereg_pending: await q(`SELECT COUNT(*)::int AS c FROM rereg_requests WHERE status='pending'`),
+            present_today: await q(
+                `SELECT COUNT(*)::int AS c FROM daily_attendance WHERE (date=$1 OR date LIKE $2) AND (status ILIKE 'Present' OR status='P')`,
+                [today, today + '%']
+            )
+        };
+        res.json({ success: true, stats: out });
+    } catch (e) {
+        console.error('dashboard-stats', e.message);
+        res.json({ success: true, stats: { students:0, teachers:0, pending:0, locked_grades:0, leave_pending:0, rereg_pending:0, present_today:0 } });
+    }
 });
 
 // ===== Transfer certificate (simple printable) =====
@@ -5736,16 +5741,31 @@ app.get('/api/admin/report-builder', (req, res) => {
     if (!req.session.isAdmin) return res.status(401).send('Unauthorized');
     const entity = (req.query.entity || 'students').toLowerCase();
     const cols = String(req.query.cols || '').split(',').map(s => s.trim()).filter(Boolean);
+    const classFilter = String(req.query.class_level || req.query.section || '').trim();
+    const orderBy = String(req.query.order || '').trim();
     const allowedStudents = ['student_id','name','mother_name','gender','age','phone','emergency_phone','region','zone','woreda','kebele','class_level','status','year_average','year_result','promoted_to','payment_type'];
     const allowedTeachers = ['id','name','phone','subject','gender','assigned_sections','assigned_grades','is_proctor','emergency_phone'];
     const allowed = entity === 'teachers' ? allowedTeachers : allowedStudents;
     const useCols = cols.length ? cols.filter(c => allowed.includes(c)) : allowed.slice(0, 8);
     if (!useCols.length) return res.status(400).send('No valid columns');
     const table = entity === 'teachers' ? 'teachers' : 'students';
-    // safe column list only from allowlist
     const sqlCols = useCols.join(', ');
-    db.all(`SELECT ${sqlCols} FROM ${table}`, [], (e, rows) => {
-        if (e) return res.status(500).send('DB error');
+    let where = '';
+    const params = [];
+    if (entity === 'students' && classFilter && classFilter.toLowerCase() !== 'all') {
+        where = ' WHERE class_level ILIKE ?';
+        params.push('%' + classFilter + '%');
+    }
+    let orderSql = '';
+    if (entity === 'students') {
+        if (orderBy === 'name') orderSql = ' ORDER BY name ASC';
+        else if (orderBy === 'id') orderSql = ' ORDER BY student_id ASC';
+        else orderSql = ' ORDER BY class_level ASC, name ASC';
+    } else {
+        orderSql = ' ORDER BY name ASC';
+    }
+    db.all(`SELECT ${sqlCols} FROM ${table}${where}${orderSql}`, params, (e, rows) => {
+        if (e) { console.error(e); return res.status(500).send('DB error'); }
         const lines = [useCols.join(',')];
         (rows || []).forEach(r => {
             lines.push(useCols.map(c => {
@@ -5754,11 +5774,15 @@ app.get('/api/admin/report-builder', (req, res) => {
                 return '"' + String(v).replace(/"/g, '""') + '"';
             }).join(','));
         });
+        const fname = entity === 'students'
+            ? ('students_' + (classFilter || 'all').replace(/[^a-zA-Z0-9_-]/g, '_') + '.csv')
+            : 'teachers_report.csv';
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-        res.setHeader('Content-Disposition', `attachment; filename="${entity}_report.csv"`);
+        res.setHeader('Content-Disposition', 'attachment; filename="' + fname + '"');
         res.send('\uFEFF' + lines.join('\n'));
     });
 });
+
 
 
 httpServer.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
