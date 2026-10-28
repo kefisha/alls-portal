@@ -1,4 +1,4 @@
-require('dotenv').config(); 
+require('dotenv').config({ path: require('path').join(__dirname, '.env') }); 
 const express = require('express');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session); 
@@ -375,8 +375,13 @@ app.use(session({
     cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 }
 }));
 
-const ADMIN_USER = process.env.ADMIN_USER;
-const ADMIN_PASS = process.env.ADMIN_PASS;
+const ADMIN_USER = String(process.env.ADMIN_USER || '').trim();
+const ADMIN_PASS = String(process.env.ADMIN_PASS || '').trim();
+if (!ADMIN_USER || !ADMIN_PASS) {
+    console.warn('WARNING: ADMIN_USER or ADMIN_PASS not set in environment');
+} else {
+    console.log('Admin login enabled for user:', ADMIN_USER);
+}
 
 function generateStudentID() { return `ALLS-${Math.floor(1000 + Math.random() * 9000)}`; }
 function generateTeacherID() { return `T-${Math.floor(100 + Math.random() * 900)}`; }
@@ -448,7 +453,9 @@ app.post('/login', (req, res) => {
             console.error('ADMIN_USER / ADMIN_PASS env not set');
             return res.redirect(`/?lang=${lang}&error=invalid`);
         }
-        if (uKey === ADMIN_USER && pass === ADMIN_PASS) {
+        const userOk = uKey.toLowerCase() === ADMIN_USER.toLowerCase();
+        const passOk = pass === ADMIN_PASS;
+        if (userOk && passOk) {
             req.session.isAdmin = true;
             return res.redirect(`/admin?lang=${lang}`);
         } else {
