@@ -337,7 +337,7 @@ body.dark .hero-title h2 {
 .compact-applicants-card { padding: 15px !important; max-height: 320px !important; overflow-y: auto !important; }
 .expanded-subjects-card { grid-column: 1 / -1 !important; padding: 28px !important; border-width: 4px !important; }
 #bottomLinks a, a[href^="#"] { border-radius: 10px !important; }
-</style></style>
+</style>
 <script>
         window.setLang = function(lang) {
             var cleanLang = (lang === 'en') ? 'en' : 'am';
@@ -478,6 +478,27 @@ button:focus-visible,a:focus-visible{outline:3px solid var(--ring);outline-offse
 }
 @media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important;scroll-behavior:auto !important}}
 @media print{.card{animation:none}}
+
+/* Quick links + premium polish */
+.ql-grid a{
+  display:flex!important;align-items:center;justify-content:center;text-align:center;
+  min-height:56px;padding:14px 12px!important;border-radius:14px!important;
+  font-weight:700!important;font-size:13px!important;text-decoration:none!important;
+  box-shadow:0 8px 20px rgba(15,23,42,.12);transition:transform .15s,filter .15s;
+  border:1px solid rgba(255,255,255,.15);
+}
+.ql-grid a:hover{transform:translateY(-2px);filter:brightness(1.08)}
+.widget-grid{gap:14px}
+.widget{
+  border-radius:18px!important;
+  background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(248,250,252,.9))!important;
+}
+body.dark .widget{background:linear-gradient(180deg,#1e293b,#0f172a)!important}
+.card{
+  border-radius:20px!important;
+}
+.admin-topbar{border-radius:22px!important}
+
 </style>
 </head>
 <body class="lang-am">
@@ -518,14 +539,23 @@ try{
   <div class="widget"><div class="n" id="wLeave">—</div><div class="l">Leave requests</div></div>
 </div>
 <script>
-fetch('/api/admin/dashboard-stats',{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
-  if(!d.success||!d.stats) return;
-  var s=d.stats;
-  var set=function(id,v){ var el=document.getElementById(id); if(el) el.textContent=v; };
-  set('wStudents', s.students); set('wTeachers', s.teachers);
-  set('wPending', s.pending); set('wPresent', s.present_today);
-  set('wLocked', s.locked_grades); set('wLeave', s.leave_pending);
-}).catch(function(){});
+function loadDashStats(){
+  fetch('/api/admin/dashboard-stats',{credentials:'same-origin'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var s=(d && d.stats) ? d.stats : {};
+      var set=function(id,v){ var el=document.getElementById(id); if(el) el.textContent=(v==null||v==='')?'0':v; };
+      set('wStudents', s.students); set('wTeachers', s.teachers);
+      set('wPending', s.pending); set('wPresent', s.present_today);
+      set('wLocked', s.locked_grades); set('wLeave', s.leave_pending);
+    }).catch(function(){
+      ['wStudents','wTeachers','wPending','wPresent','wLocked','wLeave'].forEach(function(id){
+        var el=document.getElementById(id); if(el && el.textContent==='—') el.textContent='0';
+      });
+    });
+}
+loadDashStats();
+setInterval(loadDashStats, 60000);
 </script>
 
 <!-- 🏆 Roster & Report Card Center -->
@@ -664,7 +694,7 @@ fetch('/api/admin/dashboard-stats',{credentials:'same-origin'}).then(r=>r.json()
         
                 <div class="card no-print" id="bottomLinks" style="text-align:center;">
             <h3>🔗 Quick Links</h3>
-            <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
+            <div class="ql-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;">
                 <a href="#timetable" onclick="event.preventDefault();var e=document.getElementById('timetable');if(e){e.style.display='block';e.scrollIntoView({block:'nearest'});}return false;" style="background:#2980b9;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📅 Schedule / Timetable</a>
                 <a href="#" onclick="event.preventDefault();openAdminPanel('announcements');return false;" style="background:#7c3aed;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📢 Announcement Board</a>
                 <a href="#" onclick="event.preventDefault();openAdminPanel('librarySection');return false;" style="background:#0ea5e9;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">📖 Library Upload</a>
@@ -2573,14 +2603,44 @@ fetch('/api/admin/pass-mark',{credentials:'same-origin'}).then(r=>r.json()).then
 
 <div class="card" id="reportBuilderBox" style="border-top:4px solid #0369a1;">
   <h3>📊 Report builder → Excel (CSV)</h3>
-  <p style="font-size:13px;color:#64748b;">Columns ይምረጡ → Download CSV (Excel ይከፍታል)</p>
-  <label><b>Entity</b></label>
-  <select id="rbEntity" onchange="rbRenderCols()" style="padding:10px;margin:6px 0;max-width:240px;">
-    <option value="students">Students</option>
-    <option value="teachers">Teachers</option>
-  </select>
+  <p style="font-size:13px;color:#64748b;">Class/Section ይምረጡ · Columns · Order → Download CSV (Excel)</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:8px 0;">
+    <div>
+      <label><b>Entity</b></label>
+      <select id="rbEntity" onchange="rbRenderCols()" style="padding:10px;width:100%;">
+        <option value="students">Students</option>
+        <option value="teachers">Teachers</option>
+      </select>
+    </div>
+    <div>
+      <label><b>Class / Section</b></label>
+      <select id="rbClass" style="padding:10px;width:100%;">
+        <option value="all">All classes</option>
+        <option value="Grade 1">Grade 1</option>
+        <option value="Grade 2">Grade 2</option>
+        <option value="Grade 3">Grade 3</option>
+        <option value="Grade 4">Grade 4</option>
+        <option value="Grade 5">Grade 5</option>
+        <option value="Grade 6">Grade 6</option>
+        <option value="Grade 7">Grade 7</option>
+        <option value="Grade 8">Grade 8</option>
+        <option value="Grade 9">Grade 9</option>
+        <option value="Grade 10">Grade 10</option>
+        <option value="Grade 11">Grade 11</option>
+        <option value="Grade 12">Grade 12</option>
+      </select>
+    </div>
+    <div>
+      <label><b>Order by</b></label>
+      <select id="rbOrder" style="padding:10px;width:100%;">
+        <option value="class">Class then Name</option>
+        <option value="name">Name A–Z</option>
+        <option value="id">Student ID</option>
+      </select>
+    </div>
+  </div>
   <div id="rbCols" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:10px 0;"></div>
-  <button type="button" onclick="downloadReport()" style="background:#0369a1;color:#fff;border:none;padding:12px 16px;border-radius:8px;font-weight:bold;">⬇️ Download CSV</button>
+  <button type="button" onclick="downloadReport()" style="background:linear-gradient(135deg,#0369a1,#0284c7);color:#fff;border:none;padding:12px 18px;border-radius:10px;font-weight:bold;">⬇️ Download Excel (CSV)</button>
 </div>
 <script>
 (function(){
@@ -2598,7 +2658,13 @@ fetch('/api/admin/pass-mark',{credentials:'same-origin'}).then(r=>r.json()).then
     var ent=document.getElementById('rbEntity').value;
     var cols=[].slice.call(document.querySelectorAll('.rbCol:checked')).map(function(x){return x.value;});
     if(!cols.length){ alert('Select at least one column'); return; }
-    window.location='/api/admin/report-builder?entity='+encodeURIComponent(ent)+'&cols='+encodeURIComponent(cols.join(','));
+    var cls=(document.getElementById('rbClass')||{}).value||'all';
+    var ord=(document.getElementById('rbOrder')||{}).value||'class';
+    var url='/api/admin/report-builder?entity='+encodeURIComponent(ent)+
+      '&cols='+encodeURIComponent(cols.join(','))+
+      '&class_level='+encodeURIComponent(cls)+
+      '&order='+encodeURIComponent(ord);
+    window.location=url;
   };
   window.uploadGallery=function(){
     var f=document.getElementById('galFile').files[0];
