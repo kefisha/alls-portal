@@ -774,163 +774,197 @@ app.get('/student-register', (req, res) => {
     const lang = req.query.lang === 'en' ? 'en' : 'am';
     let gradeOptions = '';
     for(let i=1; i<=12; i++) gradeOptions += `<option value="Grade ${i}">Grade ${i}</option>`;
+    const err = req.query.error ? String(req.query.error) : '';
     res.send(`<!DOCTYPE html>
 <html lang="${lang}">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Registration - Amanuel Light & Life School</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body.lang-am .en { display: none !important; }
-        body.lang-am .am { display: inline !important; }
-        body.lang-en .am { display: none !important; }
-        body.lang-en .en { display: inline !important; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<title>Registration · Amanuel Light & Life School</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --stroke:rgba(255,255,255,.14);--muted:#94a3b8;--gold:#f5c542;--blue:#3b82f6;--green:#10b981;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Outfit',system-ui,sans-serif;color:#f8fafc;background:#070b14;min-height:100vh}
+body.lang-am .en{display:none!important} body.lang-am .am{display:inline!important}
+body.lang-en .am{display:none!important} body.lang-en .en{display:inline!important}
+.bg{position:fixed;inset:0;z-index:0;background:
+  radial-gradient(900px 500px at 8% -8%,rgba(59,130,246,.32),transparent 55%),
+  radial-gradient(700px 420px at 95% 5%,rgba(245,197,66,.18),transparent 50%),
+  radial-gradient(500px 360px at 50% 110%,rgba(16,185,129,.15),transparent 50%),
+  linear-gradient(160deg,#070b14,#0f1b33 50%,#0a1628)}
+.wrap{position:relative;z-index:1;max-width:720px;margin:0 auto;padding:24px 16px 48px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+.back{display:inline-flex;align-items:center;gap:6px;padding:10px 16px;border-radius:999px;text-decoration:none;color:#e2e8f0;font-weight:600;font-size:13px;background:rgba(255,255,255,.08);border:1px solid var(--stroke);backdrop-filter:blur(10px)}
+.lang{display:flex;gap:4px;background:rgba(255,255,255,.08);border:1px solid var(--stroke);padding:4px;border-radius:999px}
+.lang button{border:none;background:transparent;color:var(--muted);padding:8px 14px;border-radius:999px;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit}
+.lang button.active{background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff}
+.card{background:linear-gradient(165deg,rgba(255,255,255,.12),rgba(255,255,255,.05));border:1px solid var(--stroke);border-radius:22px;box-shadow:0 25px 60px rgba(0,0,0,.45);backdrop-filter:blur(22px) saturate(1.3);overflow:hidden;animation:rise .5s cubic-bezier(.22,1,.36,1) both}
+@keyframes rise{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+.head{text-align:center;padding:28px 24px 18px;position:relative}
+.head::before{content:"";position:absolute;left:50%;top:0;transform:translateX(-50%);width:130px;height:4px;border-radius:0 0 8px 8px;background:linear-gradient(90deg,var(--gold),var(--blue))}
+.head h1{font-size:1.35rem;font-weight:800;margin:0 0 6px;background:linear-gradient(90deg,#fff,#c7d2fe);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.head p{color:var(--gold);font-size:13px;font-weight:600}
+.body{padding:8px 24px 28px}
+.err{background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.35);color:#fecaca;padding:12px;border-radius:12px;font-weight:600;text-align:center;margin-bottom:16px;font-size:13.5px}
+.sec{margin-bottom:22px}
+.sec-title{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--stroke)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:640px){.grid{grid-template-columns:1fr}}
+label.l{display:block;font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:6px}
+input,select{width:100%;padding:13px 14px;border-radius:12px;border:1px solid var(--stroke);background:rgba(0,0,0,.28);color:#f8fafc;font-size:15px;font-family:inherit;outline:none;transition:.2s}
+input:focus,select:focus{border-color:rgba(59,130,246,.7);box-shadow:0 0 0 3px rgba(59,130,246,.2)}
+input::placeholder{color:#64748b}
+select option{background:#1e293b;color:#fff}
+.file-box{border:1.5px dashed rgba(255,255,255,.22);border-radius:14px;padding:16px;background:rgba(0,0,0,.2);text-align:center}
+.file-box input{border:none;background:transparent;padding:8px}
+.pay{padding:16px;border-radius:16px;border:1px solid rgba(59,130,246,.35);background:rgba(59,130,246,.1);margin-bottom:22px}
+.pay h3{font-size:14px;color:#bfdbfe;margin-bottom:12px}
+.btn{width:100%;border:none;padding:16px;border-radius:14px;font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;color:#fff;background:linear-gradient(135deg,#3b82f6,#1d4ed8 55%,#1e40af);box-shadow:0 12px 28px rgba(37,99,235,.4);transition:.2s}
+.btn:hover{filter:brightness(1.06);transform:translateY(-1px)}
+.note{text-align:center;margin-top:16px;font-size:12px;color:var(--muted)}
+</style>
 </head>
-<body class="lang-${lang}" style="background:linear-gradient(135deg,#1f4e79 0%,#0d2b45 100%);min-height:100vh;padding:32px 16px;">
-    <div class="max-w-3xl mx-auto">
-        <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
-            <a href="/?lang=${lang}" class="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-lg backdrop-blur">
-                ⬅️ <span class="am">ወደ መግቢያ ተመለስ</span><span class="en">Back to Login</span>
-            </a>
-            <div class="bg-white p-1.5 rounded-lg shadow flex gap-2">
-                <button type="button" onclick="setRegLang('am')" id="btn-am" class="px-4 py-1.5 rounded font-bold text-sm bg-blue-700 text-white">🇪🇹 አማርኛ</button>
-                <button type="button" onclick="setRegLang('en')" id="btn-en" class="px-4 py-1.5 rounded font-bold text-sm text-gray-700">🇬🇧 English</button>
-            </div>
-        </div>
-
-        <div class="bg-white rounded-2xl shadow-2xl overflow-hidden border-t-8 border-amber-500">
-            <div class="py-6 px-8 text-center text-white" style="background:linear-gradient(90deg,#1f4e79,#2980b9);">
-                <h2 class="text-2xl font-bold">
-                    🎓 <span class="am">የአዲስ ተማሪ ምዝገባ ቅጽ</span><span class="en">New Student Registration Form</span>
-                </h2>
-                <p class="text-sm opacity-90 mt-1">Amanuel Light &amp; Life School</p>
-            </div>
-            <div class="p-8">
-                <form action="/api/register" method="POST" enctype="multipart/form-data">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
-                        <div>
-                            <label class="block text-sm font-bold mb-1.5"><span class="am">👤 ሙሉ ስም *</span><span class="en">👤 Full Name *</span></label>
-                            <input type="text" name="name" required class="w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:border-green-600">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-bold mb-1.5"><span class="am">👩 የእናት ስም *</span><span class="en">👩 Mother's Name *</span></label>
-                            <input type="text" name="mother_name" required class="w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:border-green-600">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-bold mb-1.5"><span class="am">⚧ ፆታ *</span><span class="en">⚧ Gender *</span></label>
-                            <select name="gender" class="w-full px-3 py-2.5 border rounded-lg">
-                                <option value="Male">ወንድ (Male)</option>
-                                <option value="Female">ሴት (Female)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-bold mb-1.5"><span class="am">🎂 ዕድሜ *</span><span class="en">🎂 Age *</span></label>
-                            <input type="number" name="age" required class="w-full px-3 py-2.5 border rounded-lg">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-bold mb-1.5"><span class="am">📞 ስልክ ቁጥር *</span><span class="en">📞 Phone Number *</span></label>
-                            <input type="text" name="phone" required class="w-full px-3 py-2.5 border rounded-lg">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-bold mb-1.5"><span class="am">🚨 የአደጋ ጊዜ ተጠሪ ስልክ *</span><span class="en">🚨 Emergency Phone *</span></label>
-                            <input type="text" name="emergency_phone" required class="w-full px-3 py-2.5 border rounded-lg">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-bold mb-1.5"><span class="am">📍 ክልል *</span><span class="en">📍 Region *</span></label>
-                            <input type="text" name="region" required class="w-full px-3 py-2.5 border rounded-lg">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-bold mb-1.5"><span class="am">📍 ዞን *</span><span class="en">📍 Zone *</span></label>
-                            <input type="text" name="zone" required class="w-full px-3 py-2.5 border rounded-lg">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-bold mb-1.5"><span class="am">📍 ወረዳ *</span><span class="en">📍 Woreda *</span></label>
-                            <input type="text" name="woreda" required class="w-full px-3 py-2.5 border rounded-lg">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-bold mb-1.5"><span class="am">📍 ቀበሌ *</span><span class="en">📍 Kebele *</span></label>
-                            <input type="text" name="kebele" required class="w-full px-3 py-2.5 border rounded-lg">
-                        </div>
-                    </div>
-
-                    <div class="mb-6">
-                        <label class="block text-sm font-bold mb-1.5"><span class="am">🏫 የሚገቡበት የክፍል ደረጃ *</span><span class="en">🏫 Grade Level *</span></label>
-                        <select name="year_level" class="w-full px-3 py-2.5 border rounded-lg">${gradeOptions}</select>
-                    </div>
-
-                    <div class="mb-6">
-                        <label class="block text-sm font-bold mb-1.5"><span class="am">📷 የተማሪው የጉርድ ፎቶ *</span><span class="en">📷 Student Passport Photo *</span></label>
-                        <input type="file" name="student_photo" accept="image/*" required class="w-full p-2.5 border border-dashed rounded-lg bg-gray-50">
-                    </div>
-
-                    <div class="mb-8 p-5 border-2 border-blue-200 rounded-xl bg-blue-50">
-                        <label class="block text-sm font-bold mb-2 text-blue-900">
-                            💳 <span class="am">የክፍያ ማረጋገጫ መንገድ ይምረጡ *</span><span class="en">Select Payment Verification Method *</span>
-                        </label>
-                        <select name="payment_type" id="payTypeSelect" onchange="togglePaymentInput()" class="w-full px-3 py-2.5 border rounded-lg mb-4 bg-white font-semibold">
-                            <option value="txn_id">🔢 የትራንዛክሽን ቁጥር (Transaction / Reference ID)</option>
-                            <option value="slip_file">📄 የባንክ ደረሰኝ ፎቶ (Upload Bank Slip Photo/PDF)</option>
-                        </select>
-
-                        <div id="txnInputBox" style="display:block;">
-                            <label class="block text-xs font-bold mb-1 text-gray-700">
-                                <span class="am">የባንክ ትራንዛክሽን ቁጥሩን እዚህ ያስገቡ (ለምሳሌ FT24...):</span>
-                                <span class="en">Enter Bank Transaction / Reference Number:</span>
-                            </label>
-                            <input type="text" name="txn_id" id="txnInputField" placeholder="Transaction ID (e.g. FT24105...)" class="w-full px-3 py-2.5 border rounded-lg bg-white">
-                        </div>
-
-                        <div id="slipInputBox" style="display:none;">
-                            <label class="block text-xs font-bold mb-1 text-gray-700">
-                                <span class="am">የከፈሉበትን ደረሰኝ ፎቶ ወይም PDF ይምረጡ:</span>
-                                <span class="en">Upload Bank Slip Image or PDF:</span>
-                            </label>
-                            <input type="file" name="bank_slip_file" id="slipInputField" accept="image/*,.pdf" class="w-full p-2.5 border border-dashed rounded-lg bg-white">
-                        </div>
-                    </div>
-
-                    <button type="submit" class="w-full text-white font-bold py-4 rounded-xl shadow-lg text-lg cursor-pointer" style="background:linear-gradient(90deg,#1f4e79,#2980b9);">
-                        ✅ <span class="am">ምዝገባውን አጠናቅቅና ላክ</span><span class="en">Submit Registration</span>
-                    </button>
-                </form>
-            </div>
-        </div>
+<body class="lang-${lang}">
+<div class="bg"></div>
+<div class="wrap">
+  <div class="top">
+    <a class="back" href="/?lang=${lang}">⬅️ <span class="am">ወደ መግቢያ</span><span class="en">Back to Login</span></a>
+    <div class="lang">
+      <button type="button" id="btn-am" class="${lang==='am'?'active':''}" onclick="setRegLang('am')">🇪🇹 አማ</button>
+      <button type="button" id="btn-en" class="${lang==='en'?'active':''}" onclick="setRegLang('en')">🇬🇧 EN</button>
     </div>
+  </div>
 
-    <script>
-        function setRegLang(l) {
-            const clean = (l === 'en') ? 'en' : 'am';
-            document.body.className = 'lang-' + clean + ' bg-gray-100 py-8 px-4';
-            const btnAm = document.getElementById('btn-am');
-            const btnEn = document.getElementById('btn-en');
-            if (clean === 'am') {
-                btnAm.className = 'px-4 py-1.5 rounded font-bold text-sm bg-green-600 text-white';
-                btnEn.className = 'px-4 py-1.5 rounded font-bold text-sm text-gray-700';
-            } else {
-                btnEn.className = 'px-4 py-1.5 rounded font-bold text-sm bg-blue-600 text-white';
-                btnAm.className = 'px-4 py-1.5 rounded font-bold text-sm text-gray-700';
-            }
-        }
+  <div class="card">
+    <div class="head">
+      <h1>🎓 <span class="am">የአዲስ ተማሪ ምዝገባ</span><span class="en">New Student Registration</span></h1>
+      <p>Amanuel Light &amp; Life School</p>
+    </div>
+    <div class="body">
+      ${err ? `<div class="err">❌ <span class="am">ምዝገባ አልተሳካም። እንደገና ይሞክሩ።</span><span class="en">Registration failed. Please try again.</span></div>` : ''}
 
-        function togglePaymentInput() {
-            const val = document.getElementById('payTypeSelect').value;
-            const txnBox = document.getElementById('txnInputBox');
-            const slipBox = document.getElementById('slipInputBox');
-            if (val === 'slip_file') {
-                slipBox.style.display = 'block';
-                txnBox.style.display = 'none';
-            } else {
-                txnBox.style.display = 'block';
-                slipBox.style.display = 'none';
-            }
-        }
-        togglePaymentInput();
-    </script>
+      <form action="/api/register" method="POST" enctype="multipart/form-data">
+        <div class="sec">
+          <div class="sec-title"><span class="am">1 · የግል መረጃ</span><span class="en">1 · Personal info</span></div>
+          <div class="grid">
+            <div>
+              <label class="l"><span class="am">👤 ሙሉ ስም *</span><span class="en">👤 Full Name *</span></label>
+              <input type="text" name="name" required placeholder="Full name">
+            </div>
+            <div>
+              <label class="l"><span class="am">👩 የእናት ስም *</span><span class="en">👩 Mother's Name *</span></label>
+              <input type="text" name="mother_name" required placeholder="Mother's name">
+            </div>
+            <div>
+              <label class="l"><span class="am">⚧ ፆታ *</span><span class="en">⚧ Gender *</span></label>
+              <select name="gender">
+                <option value="Male">ወንድ (Male)</option>
+                <option value="Female">ሴት (Female)</option>
+              </select>
+            </div>
+            <div>
+              <label class="l"><span class="am">🎂 ዕድሜ *</span><span class="en">🎂 Age *</span></label>
+              <input type="number" name="age" required min="3" max="30" placeholder="Age">
+            </div>
+            <div>
+              <label class="l"><span class="am">📞 ስልክ *</span><span class="en">📞 Phone *</span></label>
+              <input type="text" name="phone" required placeholder="09xxxxxxxx">
+            </div>
+            <div>
+              <label class="l"><span class="am">🚨 የአደጋ ጊዜ ስልክ *</span><span class="en">🚨 Emergency phone *</span></label>
+              <input type="text" name="emergency_phone" required placeholder="09xxxxxxxx">
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-title"><span class="am">2 · አድራሻ</span><span class="en">2 · Address</span></div>
+          <div class="grid">
+            <div>
+              <label class="l"><span class="am">📍 ክልል *</span><span class="en">📍 Region *</span></label>
+              <input type="text" name="region" required>
+            </div>
+            <div>
+              <label class="l"><span class="am">📍 ዞን *</span><span class="en">📍 Zone *</span></label>
+              <input type="text" name="zone" required>
+            </div>
+            <div>
+              <label class="l"><span class="am">📍 ወረዳ *</span><span class="en">📍 Woreda *</span></label>
+              <input type="text" name="woreda" required>
+            </div>
+            <div>
+              <label class="l"><span class="am">📍 ቀበሌ *</span><span class="en">📍 Kebele *</span></label>
+              <input type="text" name="kebele" required>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-title"><span class="am">3 · ክፍል እና ፎቶ</span><span class="en">3 · Grade & photo</span></div>
+          <div class="grid">
+            <div>
+              <label class="l"><span class="am">🏫 የክፍል ደረጃ *</span><span class="en">🏫 Grade level *</span></label>
+              <select name="year_level">${gradeOptions}</select>
+            </div>
+            <div>
+              <label class="l"><span class="am">📷 የተማሪ ፎቶ *</span><span class="en">📷 Student photo *</span></label>
+              <div class="file-box">
+                <input type="file" name="student_photo" accept="image/*" required>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pay">
+          <h3>💳 <span class="am">የክፍያ ማረጋገጫ *</span><span class="en">Payment verification *</span></h3>
+          <label class="l"><span class="am">መንገድ ይምረጡ</span><span class="en">Choose method</span></label>
+          <select name="payment_type" id="payTypeSelect" onchange="togglePaymentInput()" style="margin-bottom:12px">
+            <option value="transaction_id">Transaction ID</option>
+            <option value="slip_file">Bank slip photo / PDF</option>
+          </select>
+          <div id="txnInputBox">
+            <label class="l"><span class="am">Transaction ID</span><span class="en">Transaction ID</span></label>
+            <input type="text" name="bank_slip_val" id="txnInputField" placeholder="e.g. FT24105...">
+          </div>
+          <div id="slipInputBox" style="display:none">
+            <label class="l"><span class="am">ደረሰኝ ፎቶ / PDF</span><span class="en">Bank slip image / PDF</span></label>
+            <div class="file-box">
+              <input type="file" name="bank_slip_file" id="slipInputField" accept="image/*,.pdf">
+            </div>
+          </div>
+        </div>
+
+        <button type="submit" class="btn">
+          ✅ <span class="am">ምዝገባውን አጠናቅቅና ላክ</span><span class="en">Submit Registration</span>
+        </button>
+      </form>
+      <p class="note"><span class="am">ከተላከ በኋላ Admin እስኪያፀድቅ ድረስ ይጠብቁ።</span><span class="en">After submit, wait for Admin approval.</span></p>
+    </div>
+  </div>
+</div>
+<script>
+function setRegLang(l){
+  var clean=l==='en'?'en':'am';
+  document.body.className='lang-'+clean;
+  document.getElementById('btn-am').classList.toggle('active',clean==='am');
+  document.getElementById('btn-en').classList.toggle('active',clean==='en');
+  try{history.replaceState(null,'','/student-register?lang='+clean)}catch(e){}
+}
+function togglePaymentInput(){
+  var val=document.getElementById('payTypeSelect').value;
+  document.getElementById('slipInputBox').style.display=val==='slip_file'?'block':'none';
+  document.getElementById('txnInputBox').style.display=val==='slip_file'?'none':'block';
+}
+togglePaymentInput();
+</script>
 </body>
 </html>`);
 });
+
 
 app.post('/api/register', upload.fields([{ name: 'student_photo', maxCount: 1 }, { name: 'bank_slip_file', maxCount: 1 }]), (req, res) => {
     const lang = req.query.lang || 'am';
