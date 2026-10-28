@@ -62,10 +62,18 @@ const db = {
 };
 
 const loginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, 
-    max: 25,
+    windowMs: 10 * 60 * 1000, // 10 minutes
+    max: 80, // higher — shared mobile IPs / Render proxy
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true, // only failed logins count
+    keyGenerator: (req) => {
+        const u = (req.body && req.body.username) ? String(req.body.username).toLowerCase().trim() : '';
+        const ip = req.ip || (req.headers['x-forwarded-for'] || '').toString().split(',')[0].trim() || 'unknown';
+        return ip + ':' + u;
+    },
     handler: (req, res) => {
-        res.send(`<script>alert('⚠️ የደህንነት ጥንቃቄ: እጅግ ብዙ የተሳሳተ የሎጊን ሙከራ ተደርጓል። እባክዎ ከ 15 ደቂቃ በኋላ እንደገና ይሞክሩ።'); window.location.href='/';</script>`);
+        res.send(`<script>alert('⚠️ የደህንነት ጥንቃቄ: እጅግ ብዙ የተሳሳተ የሎጊን ሙከራ ተደርጓል። እባክዎ ከ 10 ደቂቃ በኋላ እንደገና ይሞክሩ።'); window.location.href='/';</script>`);
     }
 });
 
@@ -442,6 +450,10 @@ app.post('/login', loginLimiter, (req, res) => {
     let pass = (password || '').trim();
 
     if (role === 'admin') {
+        if (!ADMIN_USER || !ADMIN_PASS) {
+            console.error('ADMIN_USER / ADMIN_PASS env not set');
+            return res.redirect(`/?lang=${lang}&error=invalid`);
+        }
         if (uKey === ADMIN_USER && pass === ADMIN_PASS) {
             req.session.isAdmin = true;
             return res.redirect(`/admin?lang=${lang}`);
