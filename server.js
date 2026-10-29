@@ -1818,6 +1818,19 @@ app.get('/api/sections-list', (req, res) => {
     db.all(`SELECT name FROM sections ORDER BY name`, [], (e, rows) => res.json({ rows: rows || [] }));
 });
 
+
+app.get('/api/admin/teacher-info', (req, res) => {
+    if (!req.session.isAdmin) return res.status(401).json({ success: false });
+    const id = String(req.query.id || '').trim();
+    if (!id) return res.json({ success: false, sections: [] });
+    db.get(`SELECT id, name, subject, assigned_sections, assigned_grades FROM teachers WHERE id = ?`, [id], (e, t) => {
+        if (!t) return res.json({ success: false, sections: [] });
+        const sections = String(t.assigned_sections || '')
+            .split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+        res.json({ success: true, teacher: t, sections });
+    });
+});
+
 app.post('/admin/handover-section', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const { section_name, old_teacher_id, new_teacher_id } = req.body;
