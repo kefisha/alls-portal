@@ -526,7 +526,7 @@ try{
         </div>
 
         <div class="hero-title">
-            <h2> <span class="am">የዲሬክተር / አድሚን መቆጣጠሪያ</span><span class="en">Director / Admin Dashboard</span></h2>
+            <h2>👑 <span class="am">የዲሬክተር / አድሚን መቆጣጠሪያ</span><span class="en">Director / Admin Dashboard</span></h2>
             <p><span class="am">ዘመናዊ የትምህርት ቤት አስተዳደር · Amanuel Light &amp; Life School</span><span class="en">Modern school management · Amanuel Light &amp; Life School</span></p>
         </div>
 
@@ -558,10 +558,10 @@ loadDashStats();
 setInterval(loadDashStats, 60000);
 </script>
 
-<!--  Roster & Report Card Center -->
+<!-- 🏆 Roster & Report Card Center -->
         <div class="card" style="border-color: #d35400; background: linear-gradient(to bottom, #ffffff, #fffdf9);">
             <h3 style="color: #d35400; border-bottom-color: #fdebd0;">
-                 <span class="am">የተማሪዎች ውጤት ማስረከቢያ፣ የ1 ገጽ ካርድ እና ጠቅላላ ሮስተር (Roster Center)</span>
+                🏆 <span class="am">የተማሪዎች ውጤት ማስረከቢያ፣ የ1 ገጽ ካርድ እና ጠቅላላ ሮስተር (Roster Center)</span>
                 <span class="en">Submitted Grades, 1-Page Student Report Card & All Student Roster</span>
             </h3>
 
@@ -720,7 +720,7 @@ setInterval(loadDashStats, 60000);
                 <p style="font-size:12px;color:var(--text2);">P1 8:00–8:45 · P2 8:45–9:30 · P3 9:30–10:15 · P4 10:15–11:00 · P5 11:00–11:45 · P6 11:45–12:30 · <b>Break 4:00–4:15 (15 min)</b></p>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
                     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;width:100%;">
-                      <select id="ttClassSelect" style="max-width:280px;padding:8px;border-radius:8px;border:1px solid #94a3b8;font-size:15px;">
+                      <select id="ttClassSelect" onchange="window.onTTClassPicked && window.onTTClassPicked()" style="max-width:280px;padding:8px;border-radius:8px;border:1px solid #94a3b8;font-size:15px;">
                         <option value="">— Select class 1–12 / section —</option>
                         <option value="Grade 1 - Section A">Grade 1 - Section A</option>
                         <option value="Grade 1 - Section B">Grade 1 - Section B</option>
@@ -774,18 +774,18 @@ setInterval(loadDashStats, 60000);
                       <option value="Grade 12 - Section A">
                       <option value="Grade 12 - Section B">
                       </datalist>
-                      <button type="button" onclick="loadTTGrid()">📂 Load</button>
+                      <div id="ttActionBtns" style="display:none;flex-wrap:wrap;gap:8px;width:100%;">
                       <button type="button" class="btn-green" id="ttSaveBtn" onclick="saveTTGrid()">💾 Save / Update</button>
                       <button type="button" id="ttDeleteBtn" onclick="deleteTTGrid()" style="background:#b91c1c;color:#fff;">🗑️ Delete this class schedule</button>
-                      <button type="button" onclick="loadTTGrid()" style="background:#64748b;color:#fff;">🔄 Refresh</button>
-                      <button type="button" onclick="loadAllTTClasses()" style="background:#0f766e;color:#fff;">📋 Refresh class list</button>
+                      </div>
                     </div>
                     <p style="font-size:12px;color:#64748b;margin:6px 0;">Select a class that already has a schedule, or type a new class name then Save. Only that class is edited.</p>
                     <span id="ttTeachersHint" style="font-size:12px;color:#64748b;width:100%;margin-top:4px;"></span>
                     <div id="ttSelectedClassLabel" style="display:none;margin:10px 0;padding:12px 14px;background:#eff6ff;border:2px solid #2563eb;border-radius:12px;font-size:18px;font-weight:900;color:#1e3a8a;"></div>
                     <div id="ttAllClassesHint" style="font-size:12px;color:#1f4e79;margin-top:4px;"></div>
                 </div>
-                <p style="font-size:13px;color:#64748b;margin:6px 0;">✏️ Each cell = Subject + Teacher — click to type, then <b>Save Grid</b></p>
+                <div id="ttEditorPanel" style="display:none;margin-top:12px;padding:14px;background:linear-gradient(180deg,#f8fafc,#fff);border:2px solid #c7d2fe;border-radius:16px;">
+                <p style="font-size:13px;color:#64748b;margin:6px 0;">✏️ Each cell = Subject + Teacher — click to type, then <b>Save / Update</b></p>
                 <div style="overflow-x:auto;">
                     <table id="ttGrid" style="font-size:12px;min-width:720px;width:100%;border-collapse:collapse;">
                         <thead>
@@ -808,6 +808,8 @@ setInterval(loadDashStats, 60000);
                         </tbody>
                     </table>
                 </div>
+                </div><!-- /ttEditorPanel -->
+
             </div>
 <div class="card admin-tools-panel" id="announcements">
             <h3>📢 <span class="am">ማስታወቂያ ቦርድ</span><span class="en">Announcements Board</span></h3>
@@ -1516,6 +1518,53 @@ setInterval(loadDashStats, 60000);
             if (oldSelEl) {
                 oldSelEl.addEventListener('change', function() {
                     var tid = oldSelEl.value;
+                    var hint = document.getElementById('leavingTeacherHint');
+                    var box = document.getElementById('leavingTeacherSectionsBox');
+                    if (!tid) {
+                        if (hint) hint.textContent = '';
+                        if (box) box.innerHTML = '';
+                        return;
+                    }
+                    if (hint) hint.innerHTML = 'Loading classes…';
+                    if (box) box.innerHTML = '';
+                    fetch('/api/admin/teacher-info?id=' + encodeURIComponent(tid), { credentials: 'same-origin' })
+                      .then(function(r){ return r.json(); })
+                      .then(function(d){
+                        var secs = (d && d.sections) ? d.sections : [];
+                        if (!secs.length) {
+                          var opt = oldSelEl.options[oldSelEl.selectedIndex];
+                          var secsStr = (opt && opt.getAttribute('data-sections')) || '';
+                          secs = secsStr ? secsStr.split(/[,;]+/).map(function(s){ return s.trim(); }).filter(Boolean) : [];
+                          if (!secs.length && window._teacherSections && window._teacherSections[tid]) secs = window._teacherSections[tid];
+                        }
+                        if (hint) {
+                          hint.innerHTML = secs.length
+                            ? ('<span class="am">ክፍሎች፦</span><span class="en">Classes:</span> <b>' + secs.join(', ') + '</b>')
+                            : '<span style="color:#c00;">No sections for this teacher</span>';
+                        }
+                        if (window.renderLeavingSections) window.renderLeavingSections(secs);
+                        else if (box) {
+                          box.innerHTML = secs.map(function(s){
+                            return '<label style="display:inline-flex;align-items:center;gap:6px;padding:8px 12px;margin:4px;border:2px solid #3498db;border-radius:8px;background:#dbeafe;cursor:pointer;font-weight:600;"><input type="checkbox" class="leave-sec-chk" value="'+s.replace(/"/g,'&quot;')+'" checked style="width:18px;height:18px;"> '+s+'</label>';
+                          }).join('') || '<span style="color:#94a3b8">No sections</span>';
+                          box.querySelectorAll('.leave-sec-chk').forEach(function(chk){
+                            chk.addEventListener('change', function(){
+                              var chosen = Array.from(document.querySelectorAll('.leave-sec-chk:checked')).map(function(c){ return c.value; });
+                              var handInput = document.getElementById('handoverSectionsInput');
+                              if (handInput) handInput.value = chosen.join(',');
+                              var cnt = document.getElementById('handoverSecCount');
+                              if (cnt) cnt.textContent = String(chosen.length);
+                              document.querySelectorAll('.hand-sec-chk').forEach(function(h){ h.checked = chosen.indexOf(h.value)!==-1; });
+                            });
+                          });
+                          var chosen0 = secs.slice();
+                          var handInput = document.getElementById('handoverSectionsInput');
+                          if (handInput) handInput.value = chosen0.join(',');
+                          var cnt = document.getElementById('handoverSecCount');
+                          if (cnt) cnt.textContent = String(chosen0.length);
+                        }
+                      }).catch(function(){ if (hint) hint.textContent = 'Failed to load sections'; });
+                    return; // skip old body
                     var opt = oldSelEl.options[oldSelEl.selectedIndex];
                     var secsStr = (opt && opt.getAttribute('data-sections')) || '';
                     var secs = secsStr ? secsStr.split(/[,;]+/).map(function(s){ return s.trim(); }).filter(Boolean) : (window._teacherSections[tid] || []);
@@ -1948,6 +1997,10 @@ setInterval(loadDashStats, 60000);
         window.loadTTGrid = function() {
             const cls = window.getTTClass();
             if (!cls) { if (window.showToast) showToast('Class ይምረጡ ወይም ይጻፉ e.g. 4A', 'err'); else alert('Select or type class'); return; }
+            var panel = document.getElementById('ttEditorPanel');
+            if (panel) panel.style.display = 'block';
+            var ab = document.getElementById('ttActionBtns');
+            if (ab) ab.style.display = 'flex';
             // sync fields
             var inp = document.getElementById('ttClass');
             if (inp) inp.value = cls;
@@ -2027,8 +2080,47 @@ setInterval(loadDashStats, 60000);
             }).catch(function(){ alert('Delete failed'); });
         };
 
-        // Build empty grid on page load so cells are visible
-        window.buildTTGrid(window._sampleTT ? window._sampleTT() : {});
+        // Do NOT show grid until a class is selected
+        window.onTTClassPicked = function() {
+            var sel = document.getElementById('ttClassSelect');
+            var inp = document.getElementById('ttClass');
+            var cls = (sel && sel.value) ? sel.value.trim() : '';
+            if (cls && inp) inp.value = cls;
+            if (!cls) {
+                var p = document.getElementById('ttEditorPanel');
+                if (p) p.style.display = 'none';
+                var ab = document.getElementById('ttActionBtns');
+                if (ab) ab.style.display = 'none';
+                return;
+            }
+            var p = document.getElementById('ttEditorPanel');
+            if (p) p.style.display = 'block';
+            var ab = document.getElementById('ttActionBtns');
+            if (ab) ab.style.display = 'flex';
+            if (window.loadTTGrid) loadTTGrid();
+        };
+        // typing class + Enter or blur can also open
+        (function(){
+            var inp = document.getElementById('ttClass');
+            if (!inp) return;
+            inp.addEventListener('change', function(){
+                var cls = (inp.value||'').trim();
+                if (!cls) return;
+                var sel = document.getElementById('ttClassSelect');
+                if (sel) {
+                    var found = false;
+                    for (var i=0;i<sel.options.length;i++){
+                        if (sel.options[i].value === cls) { sel.value = cls; found = true; break; }
+                    }
+                    if (!found) sel.value = '';
+                }
+                var p = document.getElementById('ttEditorPanel');
+                if (p) p.style.display = 'block';
+                var ab = document.getElementById('ttActionBtns');
+                if (ab) ab.style.display = 'flex';
+                if (window.loadTTGrid) loadTTGrid();
+            });
+        })();
         
 
         // Report card: name search → select → then open
