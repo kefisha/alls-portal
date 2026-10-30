@@ -1,4 +1,4 @@
-require('dotenv').config({ path: require('path').join(__dirname, '.env') }); 
+require('dotenv').config(); 
 const express = require('express');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session); 
@@ -61,16 +61,45 @@ const db = {
     }
 };
 
-const loginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 500,
-    skipSuccessfulRequests: true,
-    handler: (req, res) => {
-        res.send(`<script>alert('Too many tries. Wait 1 minute.'); window.location.href='/';</script>`);
-    }
-});
-// loginLimiter is NOT applied on /login (shared mobile IPs were blocking real admins)
+// ===== LOGIN PROTECTION: per-IP, counts FAILED logins only =====
+const MAX_FAILED_LOGINS = 20;            // ከዚህ በላይ የተሳሳተ ሙከራ ከአንድ IP -> block
+const LOGIN_BLOCK_MS = 15 * 60 * 1000;   // 15 ደቂቃ
+const loginFails = new Map();            // ip -> { count, firstAt }
 
+function getClientIP(req) { return req.ip || (req.socket && req.socket.remoteAddress) || 'unknown'; }
+
+function getFailRecord(ip) {
+    const r = loginFails.get(ip);
+    if (r && Date.now() - r.firstAt > LOGIN_BLOCK_MS) { loginFails.delete(ip); return null; }
+    return r || null;
+}
+
+setInterval(() => {
+    const now = Date.now();
+    for (const [ip, r] of loginFails) if (now - r.firstAt > LOGIN_BLOCK_MS) loginFails.delete(ip);
+}, 5 * 60 * 1000).unref();
+
+function loginLimiter(req, res, next) {
+    const ip = getClientIP(req);
+    const r = getFailRecord(ip);
+    if (r && r.count >= MAX_FAILED_LOGINS) {
+        const minsLeft = Math.max(1, Math.ceil((r.firstAt + LOGIN_BLOCK_MS - Date.now()) / 60000));
+        console.log('[LOGIN BLOCKED]', ip, 'fails=' + r.count);
+        return res.send(`<script>alert('⚠️ [v2] የደህንነት ጥንቃቄ: ከዚህ መሳሪያ/ኔትወርክ ብዙ የተሳሳተ የሎጊን ሙከራ ተደርጓል። ከ ${minsLeft} ደቂቃ በኋላ እንደገና ይሞክሩ።'); window.location.href='/';</script>`);
+    }
+    // Response ካለቀ በኋላ: failed -> ቁጠር ፣ success -> ይህን IP አጽዳ
+    res.on('finish', () => {
+        const loc = String(res.getHeader('Location') || '');
+        if (loc.includes('error=invalid')) {
+            const cur = getFailRecord(ip) || { count: 0, firstAt: Date.now() };
+            cur.count++;
+            loginFails.set(ip, cur);
+        } else if (req.session && (req.session.isAdmin || req.session.teacherId || req.session.studentId || req.session.parentStudentId)) {
+            loginFails.delete(ip);
+        }
+    });
+    next();
+}
 
 const weakPasswords = ['1234', '4321', '0000', '1111', '2222', '3333', '4444', '5555', '6666', '7777', '8888', '9999', '12345', '123456'];
 function isWeakPassword(pass) {
@@ -376,10 +405,8 @@ app.use(session({
     cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 }
 }));
 
-// Prefer env; always allow amanuel/1234 so portal is never locked
-const ADMIN_USER = String(process.env.ADMIN_USER || 'amanuel').trim();
-const ADMIN_PASS = String(process.env.ADMIN_PASS || '1234').trim();
-console.log('Admin login user:', ADMIN_USER, '| env ADMIN_USER set:', !!process.env.ADMIN_USER);
+const ADMIN_USER = process.env.ADMIN_USER;
+const ADMIN_PASS = process.env.ADMIN_PASS;
 
 function generateStudentID() { return `ALLS-${Math.floor(1000 + Math.random() * 9000)}`; }
 function generateTeacherID() { return `T-${Math.floor(100 + Math.random() * 900)}`; }
@@ -416,6 +443,110 @@ function isClassMatch(c1, c2) {
     return s1 === s2;
 }
 
+// Classes a teacher can work with = assigned_sections  +  classes of courses assigned to the teacher
+function getTeacherClasses(teacher, callback) {
+    const list = [];
+    const add = (c) => {
+        c = String(c || '').trim();
+        if (c && !list.some(x => x.toLowerCase() === c.toLowerCase())) list.push(c);
+    };
+    String(teacher.assigned_sections || '').split(/[,;]+/).forEach(add);
+    db.all('SELECT class_level FROM courses WHERE teacher_id = ?', [teacher.id], (err, rows) => {
+        (rows || []).forEach(r => add(r.class_level));
+        callback(list);
+    });
+}
+
+const normTxt = (v) => String(v == null ? '' : v).trim().toLowerCase();
+
+// Sections where this teacher is the PROCTOR (set by Admin) -> only they may take attendance
+function getMyProctorSections(teacherId, cb) {
+    db.get('SELECT name FROM teachers WHERE id = ?', [teacherId], (e, t) => {
+        if (!t) return cb(null, []);
+        db.all('SELECT name, proctor_name FROM sections', [], (e2, secs = []) => {
+            cb(t, (secs || []).filter(s => normTxt(s.proctor_name) === normTxt(t.name)).map(s => s.name));
+        });
+    });
+}
+
+function wantsJson(req) {
+    return req.xhr || String(req.headers['content-type'] || '').includes('json') || String(req.headers.accept || '').includes('application/json');
+}
+
+// Attendance (sheet / save / QR / report) = proctor teacher of that class (or Admin) only
+function proctorGuard(req, res, next) {
+    if (req.session.isAdmin || !req.session.teacherId) return next();
+    const isApi = req.baseUrl === '/api/qr-attendance';
+    const deny = () => isApi
+        ? res.status(403).json({ success: false, error: 'Attendance is only for the Proctor teacher assigned by Admin' })
+        : res.send(`<script>alert('⚠️ ተገኝነት (Attendance) የሚሞላው አድሚን በፕሮክተርነት የመደበው መምህር ብቻ ነው።\nAttendance is only for the Proctor teacher assigned by Admin.'); window.location.href='/teacher-dashboard';</script>`);
+    getMyProctorSections(req.session.teacherId, (t, mine) => {
+        if (!t || !mine.length) return deny();
+        req.proctorSections = mine;
+        if (req.baseUrl === '/attendance-sheet') {
+            let sec = '';
+            try { sec = decodeURIComponent(String(req.path || '').replace(/^\//, '')); } catch (e) { sec = ''; }
+            if (!mine.some(m => isClassMatch(m, sec))) return deny();
+        }
+        if (req.baseUrl === '/save-attendance') {
+            if (!mine.some(m => isClassMatch(m, String((req.body && req.body.class_level) || '')))) return deny();
+        }
+        if (isApi) {
+            const sid = String((req.body && req.body.student_id) || '').trim();
+            return db.get('SELECT class_level FROM students WHERE UPPER(student_id)=UPPER(?)', [sid], (e3, st) => {
+                if (st && !mine.some(m => isClassMatch(st.class_level, m))) return deny();
+                next();
+            });
+        }
+        next();
+    });
+}
+app.use(['/attendance-sheet', '/save-attendance', '/qr-scan', '/api/qr-attendance', '/admin/attendance-report'], proctorGuard);
+
+// A teacher can only target classes/sections he teaches (req.body.class_level is rewritten to the allowed ones)
+function enforceMyClasses(req, res, next) {
+    if (req.session.isAdmin) return next();
+    if (!req.session.teacherId) return res.redirect('/');
+    if (!req.body || req.body.class_level === undefined) return next();
+    db.get('SELECT * FROM teachers WHERE id = ?', [req.session.teacherId], (e, t) => {
+        if (!t) return res.redirect('/');
+        getTeacherClasses(t, (mine) => {
+            const wanted = String(req.body.class_level || '').split(/[,;]+/).map(x => x.trim()).filter(Boolean);
+            const ok = [];
+            wanted.forEach(w => {
+                if (w.toUpperCase() === 'ALL' || w.toUpperCase() === 'ALL_MY_CLASSES') {
+                    mine.forEach(m => { if (!ok.includes(m)) ok.push(m); });
+                } else {
+                    const hit = mine.find(m => normTxt(m) === normTxt(w));
+                    if (hit && !ok.includes(hit)) ok.push(hit);
+                }
+            });
+            if (!ok.length) {
+                if (wantsJson(req)) return res.json({ success: false, error: 'You can only use the classes assigned to you' });
+                return res.redirect('/teacher-dashboard');
+            }
+            req.body.class_level = ok.join(', ');
+            next();
+        });
+    });
+}
+
+// A teacher can only grade students of his own classes
+function ownsStudent(req, res, next) {
+    if (!req.session.teacherId) return res.json({ error: 'Unauthorized' });
+    const sid = String((req.body && req.body.student_id) || '').trim();
+    db.get('SELECT * FROM teachers WHERE id = ?', [req.session.teacherId], (e, t) => {
+        if (!t) return res.json({ error: 'Unauthorized' });
+        db.get('SELECT class_level FROM students WHERE student_id = ?', [sid], (e2, st) => {
+            if (!st) return next();
+            getTeacherClasses(t, (mine) => {
+                if (mine.some(c => isClassMatch(st.class_level, c))) return next();
+                res.json({ success: false, error: 'This student is not in your assigned class' });
+            });
+        });
+    });
+}
+
 function assignClassSection(requestedYearLevel, callback) {
     const letters = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N"];
     let checkNext = (index) => {
@@ -440,20 +571,19 @@ app.get('/', (req, res) => {
     res.render('login', { lang, error });
 });
 
-app.post('/login', (req, res) => {
+app.post('/login', loginLimiter, (req, res) => {
     const lang = req.query.lang || 'am';
     const { role, username, password } = req.body;
     let uKey = (username || '').trim();
     let pass = (password || '').trim();
 
     if (role === 'admin') {
-        const userOk = uKey.toLowerCase() === String(ADMIN_USER||'').toLowerCase() || uKey.toLowerCase() === 'amanuel';
-        const passOk = pass === ADMIN_PASS || pass === '1234';
-        if (userOk && passOk) {
+        if (uKey === ADMIN_USER && pass === ADMIN_PASS) {
             req.session.isAdmin = true;
             return res.redirect(`/admin?lang=${lang}`);
+        } else {
+            return res.redirect(`/?lang=${lang}&error=invalid`);
         }
-        return res.redirect(`/?lang=${lang}&error=invalid`);
     } else if (role === 'teacher') {
         db.get(`SELECT * FROM teachers WHERE UPPER(id) = ?`, [uKey.toUpperCase()], (err, t) => {
             if (t && (bcrypt.compareSync(pass, t.password) || pass === t.password || pass === t.plain_pin)) {
@@ -1818,19 +1948,6 @@ app.get('/api/sections-list', (req, res) => {
     db.all(`SELECT name FROM sections ORDER BY name`, [], (e, rows) => res.json({ rows: rows || [] }));
 });
 
-
-app.get('/api/admin/teacher-info', (req, res) => {
-    if (!req.session.isAdmin) return res.status(401).json({ success: false });
-    const id = String(req.query.id || '').trim();
-    if (!id) return res.json({ success: false, sections: [] });
-    db.get(`SELECT id, name, subject, assigned_sections, assigned_grades FROM teachers WHERE id = ?`, [id], (e, t) => {
-        if (!t) return res.json({ success: false, sections: [] });
-        const sections = String(t.assigned_sections || '')
-            .split(/[,;]+/).map(s => s.trim()).filter(Boolean);
-        res.json({ success: true, teacher: t, sections });
-    });
-});
-
 app.post('/admin/handover-section', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
     const { section_name, old_teacher_id, new_teacher_id } = req.body;
@@ -1896,29 +2013,8 @@ app.post('/admin/add-section', (req, res) => {
 });
 
 app.post('/admin/edit-section/:id', (req, res) => {
-    const proctorName = (req.body.proctor_name || '').trim();
-    db.get(`SELECT name FROM sections WHERE id = ?`, [req.params.id], (e, sec) => {
-        db.run(`UPDATE sections SET proctor_name=? WHERE id=?`, [proctorName, req.params.id], () => {
-            // Auto-add this section to the proctor teacher's assigned_sections
-            if (proctorName && sec && sec.name) {
-                db.get(`SELECT id, assigned_sections FROM teachers WHERE name = ?`, [proctorName], (e2, tch) => {
-                    if (tch) {
-                        let secs = (tch.assigned_sections || '').split(/[,;]+/).map(s => s.trim()).filter(Boolean);
-                        if (secs.indexOf(sec.name) === -1) {
-                            secs.push(sec.name);
-                            db.run(`UPDATE teachers SET assigned_sections = ? WHERE id = ?`, [secs.join(', '), tch.id], () => {
-                                res.redirect('/admin');
-                            });
-                            return;
-                        }
-                    }
-                    res.redirect('/admin');
-                });
-            } else {
-                res.redirect('/admin');
-            }
-        });
-    });
+    if (!req.session.isAdmin) return res.redirect('/');
+    db.run(`UPDATE sections SET proctor_name=? WHERE id=?`, [req.body.proctor_name, req.params.id], () => res.redirect('/admin'));
 });
 
 app.get('/admin/delete-section/:id', (req, res) => {
@@ -1928,9 +2024,21 @@ app.get('/admin/delete-section/:id', (req, res) => {
 
 app.post('/admin/add-course', (req, res) => {
     if (!req.session.isAdmin) return res.redirect('/');
-    db.get(`SELECT name FROM teachers WHERE id = ?`, [req.body.teacher_id], (err, t) => {
+    db.get(`SELECT name, assigned_sections FROM teachers WHERE id = ?`, [req.body.teacher_id], (err, t) => {
         db.run(`INSERT INTO courses (code, title, credit_hours, teacher_id, teacher_name, class_level) VALUES (?,?,?,?,?,?)`,
-        [req.body.code, req.body.title, 0, req.body.teacher_id || '', t ? t.name : '', req.body.class_level], () => res.redirect('/admin'));
+        [req.body.code, req.body.title, 0, req.body.teacher_id || '', t ? t.name : '', req.body.class_level], () => {
+            // make sure the teacher also "owns" this class (so students + grade entry appear)
+            const cls = String(req.body.class_level || '').trim();
+            if (t && cls) {
+                const secs = String(t.assigned_sections || '').split(/[,;]+/).map(x => x.trim()).filter(Boolean);
+                if (!secs.some(x => x.toLowerCase() === cls.toLowerCase())) {
+                    secs.push(cls);
+                    db.run(`UPDATE teachers SET assigned_sections = ? WHERE id = ?`, [secs.join(', '), req.body.teacher_id], () => {});
+                }
+                ensureSectionExists(cls);
+            }
+            res.redirect('/admin');
+        });
     });
 });
 
@@ -2142,26 +2250,10 @@ app.get('/teacher-dashboard', (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
     db.get('SELECT * FROM teachers WHERE id = ?', [req.session.teacherId], (err, teacher) => {
         if (!teacher) return res.redirect('/');
-        // Build assigned classes from assigned_sections + proctor sections + courses
-let assignedClasses = teacher.assigned_sections
-    ? String(teacher.assigned_sections).split(/[,;]+/).map(s => s.trim()).filter(Boolean)
-    : [];
-
-db.all('SELECT name FROM sections WHERE proctor_name = ?', [teacher.name], (errProc, proctorSecs) => {
-    (proctorSecs || []).forEach(s => {
-        if (s.name && assignedClasses.indexOf(s.name) === -1) assignedClasses.push(s.name);
-    });
-
-    db.all('SELECT class_level FROM courses WHERE teacher_id = ?', [req.session.teacherId], (errC, courseRows) => {
-        (courseRows || []).forEach(r => {
-            const c = (r.class_level || '').trim();
-            if (c && assignedClasses.indexOf(c) === -1) assignedClasses.push(c);
-        });
-
+        getTeacherClasses(teacher, (assignedClasses) => {
         let selectedClass = (req.query.cls || assignedClasses[0] || '').trim();
 
         db.all('SELECT student_id, name, class_level FROM students ORDER BY name ASC', [], (err, allStudents = []) => {
-            // ---- ከዚህ በታች ያለው የድሮው code ሙሉ በሙሉ ይቀጥላል (studentsInClass, courses, assessments...) ----
             let studentsInClass = allStudents.filter(s => isClassMatch(s.class_level, selectedClass));
             db.all('SELECT * FROM courses', [], (err, allCourses = []) => {
                 let classCourses = allCourses.filter(c => (c.teacher_id === req.session.teacherId || !c.teacher_id) && isClassMatch(c.class_level, selectedClass));
@@ -2170,15 +2262,18 @@ db.all('SELECT name FROM sections WHERE proctor_name = ?', [teacher.name], (errP
 
                 let selectedCourseId = req.query.course_id || (classCourses[0] ? classCourses[0].id.toString() : '');
                 let selectedCourse = classCourses.find(c => c.id.toString() === selectedCourseId) || classCourses[0] || null;
-                if (selectedCourse && !selectedCourseId) selectedCourseId = selectedCourse.id.toString();
+                selectedCourseId = selectedCourse ? selectedCourse.id.toString() : (selectedCourseId && !isNaN(Number(selectedCourseId)) ? '' : selectedCourseId);
 
                 const activeCourseCode = selectedCourse ? selectedCourse.code : (teacher.subject || 'GEN-01');
 
                 db.all('SELECT * FROM course_assessments WHERE course_code = ?', [activeCourseCode], (err, assessments = []) => {
-                    db.all('SELECT * FROM absence_requests WHERE class_level = ? ORDER BY id DESC', [selectedClass], (err, classAbsences = []) => {
+                    db.all('SELECT * FROM absence_requests ORDER BY id DESC', [], (err, allAbsences = []) => {
+                        const classAbsences = (allAbsences || []).filter(ab => assignedClasses.some(c => isClassMatch(ab.class_level, c)));
                         db.all('SELECT * FROM sections', [], (err, allSections = []) => {
                             let currentSection = allSections.find(sec => isClassMatch(sec.name, selectedClass));
-                            let isProctor = currentSection && currentSection.proctor_name === teacher.name;
+                            const myProctorSecs = (allSections || []).filter(sec => normTxt(sec.proctor_name) === normTxt(teacher.name)).map(sec => sec.name);
+                            const isProctorAny = myProctorSecs.length > 0;
+                            let isProctor = myProctorSecs.some(n => isClassMatch(n, selectedClass));
 
                             db.all("SELECT * FROM notifications ORDER BY id DESC", [], (err, allNotifs = []) => {
                                 let mySentNotifs = allNotifs.filter(n => n.sender_name === teacher.name);
@@ -2229,32 +2324,48 @@ db.all('SELECT name FROM sections WHERE proctor_name = ?', [teacher.name], (errP
                                     </tr>`;
                                 }).join('');
 
+                                if (!studentRows) {
+                                    const emptyMsg = assignedClasses.length
+                                        ? 'በዚህ ክፍል ውስጥ ተማሪ አልተገኘም / No students found in this class'
+                                        : 'ምንም ክፍል አልተመደበልዎትም — አድሚን ክፍል ይመድብልዎት / No class assigned to you yet';
+                                    studentRows = `<tr><td colspan="9" style="padding:24px;color:#64748b;font-weight:bold;">${emptyMsg}</td></tr>`;
+                                }
+                                if (!classOptions) classOptions = '<option value="">— No class assigned —</option>';
+
                                 let absRows = classAbsences.map(ab => {
-                                    const fb = (ab.teacher_feedback || '').trim();
-                                    let feedbackCell;
-                                    if (fb) {
-                                        feedbackCell = `<span style="color:#27ae60;font-weight:bold;">${fb.replace(/</g,'&lt;')}</span>`;
-                                    } else {
-                                        feedbackCell = `<form action="/teacher/absence-feedback" method="POST" style="display:flex;flex-direction:column;gap:6px;min-width:160px;">
+                                    const fb = String(ab.teacher_feedback || '').trim();
+                                    const safe = (v) => String(v == null ? '' : v).replace(/</g, '&lt;');
+                                    const replyForm = `<form id="absForm_${ab.id}" action="/teacher/absence-feedback" method="POST" style="display:${fb ? 'none' : 'flex'};flex-direction:column;gap:6px;min-width:180px;margin-top:6px;">
+                                            <input type="hidden" name="id" value="${ab.id}">
+                                            <input type="hidden" name="cls" value="${safe(selectedClass)}">
+                                            <textarea name="feedback" rows="2" required placeholder="Reply / Feedback..." style="width:100%;padding:6px;border:1px solid #ccc;border-radius:6px;font-size:12px;">${safe(fb)}</textarea>
+                                            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                                                <button type="submit" style="background:#27ae60;color:#fff;border:none;padding:6px 10px;border-radius:6px;font-weight:bold;cursor:pointer;font-size:12px;">${fb ? '💾 Update reply' : '💬 Reply'}</button>
+                                                ${fb ? `<button type="button" onclick="document.getElementById('absForm_${ab.id}').style.display='none'" style="background:#64748b;color:#fff;border:none;padding:6px 10px;border-radius:6px;font-size:12px;cursor:pointer;">Cancel</button>` : ''}
+                                            </div>
+                                        </form>`;
+                                    const replyShown = fb ? `<div style="color:#27ae60;font-weight:bold;margin-bottom:6px;">✅ ${safe(fb)}</div>
+                                        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
+                                            <button type="button" onclick="document.getElementById('absForm_${ab.id}').style.display='flex'" style="background:#f59e0b;color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;">✏️ Edit reply</button>
+                                            <form action="/teacher/delete-absence-reply" method="POST" style="margin:0;" onsubmit="return confirm('Delete your reply?');">
                                                 <input type="hidden" name="id" value="${ab.id}">
-                                                <input type="hidden" name="cls" value="${selectedClass || ''}">
-                                                <textarea name="feedback" rows="2" required placeholder="Reply / Feedback..." style="width:100%;padding:6px;border:1px solid #ccc;border-radius:6px;font-size:12px;"></textarea>
-                                                <button type="submit" style="background:#27ae60;color:#fff;border:none;padding:6px 10px;border-radius:6px;font-weight:bold;cursor:pointer;font-size:12px;">💬 Reply</button>
-                                            </form>`;
-                                    }
+                                                <input type="hidden" name="cls" value="${safe(selectedClass)}">
+                                                <button type="submit" style="background:#e74c3c;color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;">🗑️ Delete reply</button>
+                                            </form>
+                                        </div>` : '';
                                     const delBtn = `<form action="/teacher/delete-absence" method="POST" style="margin-top:6px;" onsubmit="return confirm('Delete this request?');">
                                             <input type="hidden" name="id" value="${ab.id}">
-                                            <input type="hidden" name="cls" value="${selectedClass || ''}">
-                                            <button type="submit" style="background:#e74c3c;color:#fff;border:none;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;">🗑️ Delete</button>
+                                            <input type="hidden" name="cls" value="${safe(selectedClass)}">
+                                            <button type="submit" style="background:#94a3b8;color:#fff;border:none;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;">🗑️ Delete request</button>
                                         </form>`;
                                     return `<tr>
-                                        <td style="text-align:left;">${ab.student_name || ''}</td>
-                                        <td>${ab.date || ab.created_at || ''}</td>
-                                        <td style="text-align:left;">${ab.reason || ''}${ab.attachment ? `<br><a href="/uploads/${ab.attachment}" target="_blank">📎</a>` : ''}</td>
-                                        <td>${feedbackCell}${delBtn}</td>
+                                        <td style="text-align:left;"><b>${safe(ab.student_name)}</b><br><small style="color:#64748b;">${safe(ab.class_level)}</small></td>
+                                        <td>${safe(ab.date || ab.created_at)}</td>
+                                        <td style="text-align:left;">${safe(ab.reason)}${ab.attachment ? `<br><a href="/uploads/${ab.attachment}" target="_blank">📎</a>` : ''}</td>
+                                        <td>${replyShown}${replyForm}${delBtn}</td>
                                     </tr>`;
                                 }).join('');
-                                
+
                                 let teacherNotiRows = '';
                                 // Received first (with Reply)
                                 teacherNotiRows += myReceivedNotifs.map(n => {
@@ -2297,14 +2408,16 @@ db.all('SELECT name FROM sections WHERE proctor_name = ?', [teacher.name], (errP
 
                                 // Students for teacher search (only from assigned classes)
                                 const teacherStudentsJson = JSON.stringify(
-                                    studentsInClass.map(s => ({ id: s.student_id, name: s.name }))
+                                    allStudents
+                                        .filter(s => assignedClasses.some(c => isClassMatch(s.class_level, c)))
+                                        .map(s => ({ id: s.student_id, name: s.name, cls: s.class_level || '' }))
                                 );
 
                                 const teacherSectionsJson = JSON.stringify(assignedClasses || []);
                                 res.render('teacher', {
                                     lang: 'am', teacher, selectedClass, selectedCourseId: selectedCourseId || 'default',
                                     classOptions, courseOptions, teacherTargetOptions, studentRows, absRows, teacherNotiRows, proctorPanel,
-                                    teacherStudentsJson, teacherSectionsJson, assignedClasses,
+                                    teacherStudentsJson, teacherSectionsJson, assignedClasses, isProctorAny, myProctorSecs,
                                     query: req.query || {}
                                 });
                             });
@@ -2313,63 +2426,99 @@ db.all('SELECT name FROM sections WHERE proctor_name = ?', [teacher.name], (errP
                 });
             });
         });
-    });   // ← proctorSecs callback
-    });   // ← courseRows callback
+    });
+    });
 });
 
 app.post('/teacher/send-notification', upload.single('attachment'), (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
     let returnClass = req.query.cls || '';
-    let chosenTarget = req.body.target_audience || returnClass || 'ALL';
+    let chosenTarget = String(req.body.target_audience || returnClass || 'ADMIN').trim();
     let msg = sanitizeRichText(req.body.message);
     let file = req.file ? req.file.filename : null;
     let nowStr = getFormattedTimestamp();
+    const back = () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(returnClass)}#notifications`);
 
     db.get(`SELECT * FROM teachers WHERE id = ?`, [req.session.teacherId], (err, teacher) => {
         if (!teacher) return res.redirect('/');
-        if (chosenTarget === 'ALL_MY_CLASSES' && teacher.assigned_sections) {
-            const secs = teacher.assigned_sections.split(',').map(s => s.trim()).filter(Boolean);
-            secs.forEach(sec => {
-                db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at, attachment) VALUES (?,?,?,?,?,?)`,
-                    ['Teacher', teacher.name, sec, msg, nowStr, file]);
-            });
-            return res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(returnClass)}#notifications`);
-        } else {
-            db.run(`INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at, attachment) VALUES (?,?,?,?,?,?)`,
-                ['Teacher', teacher.name, chosenTarget, msg, nowStr, file],
-                () => res.redirect(`/teacher-dashboard?cls=${encodeURIComponent(returnClass)}#notifications`));
-        }
+        const insert = (target) => db.run(
+            `INSERT INTO notifications (sender_role, sender_name, target_audience, message, created_at, attachment) VALUES (?,?,?,?,?,?)`,
+            ['Teacher', teacher.name, target, msg, nowStr, file]);
+
+        // Allowed targets: ADMIN, ALL_MY_CLASSES, one of MY classes, or one student of MY classes
+        getTeacherClasses(teacher, (mine) => {
+            if (chosenTarget === 'ALL_MY_CLASSES') { mine.forEach(c => insert(c)); return back(); }
+            if (chosenTarget.toUpperCase() === 'ADMIN') { insert('ADMIN'); return back(); }
+            const hit = mine.find(c => normTxt(c) === normTxt(chosenTarget));
+            if (hit) { insert(hit); return back(); }
+            if (chosenTarget.toUpperCase().indexOf('STUDENT:') === 0) {
+                const sid = chosenTarget.slice(8).trim();
+                return db.get('SELECT student_id, class_level FROM students WHERE student_id = ?', [sid], (e1, st) => {
+                    if (!st) return back();
+                    if (mine.some(c => isClassMatch(st.class_level, c))) { insert('STUDENT:' + st.student_id); return back(); }
+                    // reply to a student who wrote to this teacher
+                    db.get(`SELECT id FROM notifications WHERE sender_role = 'Student' AND sender_id = ? AND target_audience = ?`,
+                        [st.student_id, 'TEACHER:' + teacher.id], (e2, row) => {
+                            if (row) insert('STUDENT:' + st.student_id);
+                            back();
+                        });
+                });
+            }
+            return back(); // any other target is not allowed
+        });
     });
 });
 
-
+// A teacher can touch only absence requests of HIS classes
+function teacherOwnsAbsence(teacherId, absId, cb) {
+    db.get('SELECT * FROM teachers WHERE id = ?', [teacherId], (e, t) => {
+        if (!t) return cb(false);
+        db.get('SELECT * FROM absence_requests WHERE id = ?', [absId], (e2, ab) => {
+            if (!ab) return cb(false);
+            getTeacherClasses(t, (mine) => cb(mine.some(c => isClassMatch(ab.class_level, c))));
+        });
+    });
+}
+const absBack = (res, cls) => res.redirect(cls ? `/teacher-dashboard?cls=${encodeURIComponent(cls)}#absences` : '/teacher-dashboard#absences');
 
 app.post('/teacher/delete-absence', (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
     const id = req.body.id;
     const cls = req.body.cls || '';
-    db.run(`DELETE FROM absence_requests WHERE id = ?`, [id], () => {
-        res.redirect(cls ? `/teacher-dashboard?cls=${encodeURIComponent(cls)}` : '/teacher-dashboard');
+    teacherOwnsAbsence(req.session.teacherId, id, (ok) => {
+        if (!ok) return absBack(res, cls);
+        db.run(`DELETE FROM absence_requests WHERE id = ?`, [id], () => absBack(res, cls));
     });
 });
 
+// Reply to (or edit the reply of) a student's permission / absence request
 app.post('/teacher/absence-feedback', (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
     const id = req.body.id;
     const feedback = xss(String(req.body.feedback || '').trim());
     const cls = req.body.cls || '';
-    if (!id || !feedback) {
-        return res.redirect(cls ? `/teacher-dashboard?cls=${encodeURIComponent(cls)}` : '/teacher-dashboard');
-    }
-    db.run(`UPDATE absence_requests SET teacher_feedback = ?, status = ? WHERE id = ?`,
-        [feedback, 'Replied', id],
-        () => {
-            try { logActivity('Teacher', String(req.session.teacherId), 'ABSENCE_FEEDBACK', 'id=' + id); } catch(e) {}
-            res.redirect(cls ? `/teacher-dashboard?cls=${encodeURIComponent(cls)}` : '/teacher-dashboard');
+    if (!id || !feedback) return absBack(res, cls);
+    teacherOwnsAbsence(req.session.teacherId, id, (ok) => {
+        if (!ok) return absBack(res, cls);
+        db.run(`UPDATE absence_requests SET teacher_feedback = ?, status = ? WHERE id = ?`, [feedback, 'Replied', id], () => {
+            try { logActivity('Teacher', String(req.session.teacherId), 'ABSENCE_FEEDBACK', 'id=' + id); } catch (e) {}
+            absBack(res, cls);
         });
+    });
 });
 
-app.post('/teacher/save-grade', (req, res) => {
+// Delete only MY reply (the student's request stays)
+app.post('/teacher/delete-absence-reply', (req, res) => {
+    if (!req.session.teacherId) return res.redirect('/');
+    const id = req.body.id;
+    const cls = req.body.cls || '';
+    teacherOwnsAbsence(req.session.teacherId, id, (ok) => {
+        if (!ok) return absBack(res, cls);
+        db.run(`UPDATE absence_requests SET teacher_feedback = ?, status = ? WHERE id = ?`, ['', 'Pending', id], () => absBack(res, cls));
+    });
+});
+
+app.post('/teacher/save-grade', ownsStudent, (req, res) => {
     if (!req.session.teacherId) return res.json({ error: 'Unauthorized' });
     let courseId = req.body.course_id || req.query.course_id || '';
     let selectedCls = req.query.cls || req.body.class_level || '';
@@ -3661,7 +3810,7 @@ app.get('/api/library', (req, res) => {
 });
 
 // 1 Homework
-app.post('/teacher/homework', (req, res) => {
+app.post('/teacher/homework', enforceMyClasses, (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
     const { title, description, due_date, class_level } = req.body;
     db.get(`SELECT name FROM teachers WHERE id=?`, [req.session.teacherId], (e, t) => {
@@ -3690,7 +3839,7 @@ app.get('/api/homework', (req, res) => {
 });
 
 // 3 Online Quiz — Telegram-style (one-by-one) + formulas + answer description
-app.post('/teacher/quiz', upload.any(), (req, res) => {
+app.post('/teacher/quiz', upload.any(), enforceMyClasses, (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
     // questions_json can be sent as JSON string from multi-question builder
     let questions = [];
@@ -3807,7 +3956,7 @@ app.get('/api/teacher/quiz/:id', (req, res) => {
     });
 });
 
-app.post('/teacher/quiz/:id/update', upload.any(), (req, res) => {
+app.post('/teacher/quiz/:id/update', upload.any(), enforceMyClasses, (req, res) => {
     if (!req.session.teacherId && !req.session.isAdmin) return res.redirect('/');
     const id = parseInt(req.params.id, 10) || req.params.id;
     db.get(`SELECT * FROM quizzes WHERE id=?`, [id], (e, quiz) => {
@@ -3841,7 +3990,7 @@ app.post('/teacher/quiz/:id/delete', (req, res) => {
 });
 
 // Handout: photo / file for class
-app.post('/teacher/handout', upload.single('file'), (req, res) => {
+app.post('/teacher/handout', upload.single('file'), enforceMyClasses, (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
     const title = (req.body.title || 'Handout').trim();
     const class_level = (req.body.class_level || '').trim();
@@ -3875,19 +4024,13 @@ app.get('/api/teacher/my-sections', (req, res) => {
         if (t && t.assigned_sections) {
             sections = String(t.assigned_sections).split(/[,;]+/).map(s => s.trim()).filter(Boolean);
         }
-        // from courses taught
+        // also sections from courses taught
         db.all(`SELECT class_level FROM courses WHERE teacher_id=?`, [req.session.teacherId], (e2, rows) => {
             (rows || []).forEach(r => {
                 const c = (r.class_level || '').trim();
                 if (c && sections.indexOf(c) === -1) sections.push(c);
             });
-            // NEW: sections where this teacher is the proctor
-            db.all(`SELECT name FROM sections WHERE proctor_name = ?`, [t ? t.name : ''], (e3, prow) => {
-                (prow || []).forEach(s => {
-                    if (s.name && sections.indexOf(s.name) === -1) sections.push(s.name);
-                });
-                res.json({ sections, teacher_name: t ? t.name : '' });
-            });
+            res.json({ sections, teacher_name: t ? t.name : '' });
         });
     });
 });
@@ -4255,7 +4398,7 @@ fetch('/api/quiz/' + encodeURIComponent(quizId), { credentials: 'same-origin' })
 
 
 // 5 Lesson plan
-app.post('/teacher/lesson-plan', (req, res) => {
+app.post('/teacher/lesson-plan', enforceMyClasses, (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
     const { class_level, week_label, content } = req.body;
     db.get(`SELECT name FROM teachers WHERE id=?`, [req.session.teacherId], (e, t) => {
@@ -4972,6 +5115,7 @@ app.get('/admin/attendance-report', (req, res) => {
     const month = (req.query.month || new Date().toISOString().slice(0, 7)).trim(); // YYYY-MM
     db.all(`SELECT * FROM daily_attendance ORDER BY date DESC LIMIT 5000`, [], (e, rows) => {
         rows = rows || [];
+        if (req.proctorSections) rows = rows.filter(r => req.proctorSections.some(pc => isClassMatch(r.class_level, pc)));
         if (cls) rows = rows.filter(r => isClassMatch(r.class_level, cls) || String(r.class_level||'').includes(cls));
         if (month) rows = rows.filter(r => String(r.date||'').startsWith(month) || String(r.created_at||'').includes(month));
         // aggregate by student
@@ -5003,6 +5147,66 @@ app.get('/admin/attendance-report', (req, res) => {
 });
 
 // 3 Homework grade
+// ===== My homework: list / edit / delete =====
+app.get('/api/teacher/homework', (req, res) => {
+    if (!req.session.teacherId) return res.status(401).json({ success: false });
+    db.all(`SELECT * FROM homework WHERE teacher_id = ? ORDER BY id DESC LIMIT 100`, [String(req.session.teacherId)], (e, rows) => res.json({ success: true, rows: rows || [] }));
+});
+app.post('/teacher/homework/:id/update', enforceMyClasses, (req, res) => {
+    if (!req.session.teacherId) return res.json({ success: false });
+    const id = parseInt(req.params.id, 10);
+    db.get(`SELECT * FROM homework WHERE id = ?`, [id], (e, hw) => {
+        if (!hw || String(hw.teacher_id) !== String(req.session.teacherId)) return res.json({ success: false, error: 'forbidden' });
+        const b = req.body || {};
+        db.run(`UPDATE homework SET title=?, description=?, due_date=?, class_level=? WHERE id=?`,
+            [b.title || hw.title, b.description != null ? b.description : hw.description, b.due_date != null ? b.due_date : hw.due_date, b.class_level || hw.class_level, id],
+            () => res.json({ success: true }));
+    });
+});
+app.post('/teacher/homework/:id/delete', (req, res) => {
+    if (!req.session.teacherId) return res.json({ success: false });
+    const id = parseInt(req.params.id, 10);
+    db.get(`SELECT teacher_id FROM homework WHERE id = ?`, [id], (e, hw) => {
+        if (!hw || String(hw.teacher_id) !== String(req.session.teacherId)) return res.json({ success: false, error: 'forbidden' });
+        db.run(`DELETE FROM homework_submissions WHERE homework_id = ?`, [id], () => {
+            db.run(`DELETE FROM homework WHERE id = ?`, [id], () => res.json({ success: true }));
+        });
+    });
+});
+
+// ===== Handout edit =====
+app.post('/teacher/handout/:id/update', upload.single('file'), enforceMyClasses, (req, res) => {
+    if (!req.session.teacherId && !req.session.isAdmin) return res.json({ success: false });
+    const id = parseInt(req.params.id, 10) || req.params.id;
+    const tid = String(req.session.teacherId || '');
+    db.get(`SELECT * FROM library_resources WHERE id = ?`, [id], (e, row) => {
+        if (!row) return res.json({ success: false, error: 'not found' });
+        db.get(`SELECT name FROM teachers WHERE id = ?`, [tid], (e2, t) => {
+            const mineRow = req.session.isAdmin || String(row.teacher_id || '') === tid || (t && row.uploaded_by === t.name);
+            if (!mineRow) return res.json({ success: false, error: 'forbidden' });
+            const b = req.body || {};
+            const file = req.file ? req.file.filename : row.file_path;
+            db.run(`UPDATE library_resources SET title=?, class_level=?, note=?, file_path=? WHERE id=?`,
+                [b.title || row.title, b.class_level || row.class_level, b.note != null ? b.note : row.note, file || '', id],
+                () => res.json({ success: true }));
+        });
+    });
+});
+
+// ===== Lesson plan edit =====
+app.post('/teacher/lesson-plan/:id/update', enforceMyClasses, (req, res) => {
+    if (!req.session.teacherId && !req.session.isAdmin) return res.json({ success: false });
+    const id = req.params.id;
+    db.get(`SELECT * FROM lesson_plans WHERE id = ?`, [id], (e, row) => {
+        if (!row) return res.json({ success: false });
+        if (!req.session.isAdmin && String(row.teacher_id) !== String(req.session.teacherId)) return res.json({ success: false, error: 'forbidden' });
+        const b = req.body || {};
+        db.run(`UPDATE lesson_plans SET week_label=?, class_level=?, content=? WHERE id=?`,
+            [b.week_label || row.week_label, b.class_level || row.class_level, b.content != null ? b.content : row.content, id],
+            () => res.json({ success: true }));
+    });
+});
+
 app.post('/teacher/homework-grade', (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
     const { id, score, status } = req.body;
@@ -5605,37 +5809,32 @@ app.post('/admin/leave-review', (req, res) => {
 });
 
 // ===== Admin dashboard widgets =====
-app.get('/api/admin/dashboard-stats', async (req, res) => {
+app.get('/api/admin/dashboard-stats', (req, res) => {
     if (!req.session.isAdmin) return res.status(401).json({ success: false });
-    const num = (v) => {
-        if (v == null) return 0;
-        const n = Number(v);
-        return Number.isFinite(n) ? n : 0;
-    };
-    try {
-        const today = new Date().toISOString().slice(0, 10);
-        const q = async (sql, params=[]) => {
-            const r = await pool.query(sql, params);
-            const row = r.rows[0] || {};
-            return num(row.c != null ? row.c : row.count);
-        };
-        const out = {
-            students: await q(`SELECT COUNT(*)::int AS c FROM students`),
-            teachers: await q(`SELECT COUNT(*)::int AS c FROM teachers`),
-            pending: await q(`SELECT COUNT(*)::int AS c FROM pending_students`),
-            locked_grades: await q(`SELECT COUNT(*)::int AS c FROM grade_locks WHERE locked=1`),
-            leave_pending: await q(`SELECT COUNT(*)::int AS c FROM staff_leave WHERE status='pending'`),
-            rereg_pending: await q(`SELECT COUNT(*)::int AS c FROM rereg_requests WHERE status='pending'`),
-            present_today: await q(
-                `SELECT COUNT(*)::int AS c FROM daily_attendance WHERE (date=$1 OR date LIKE $2) AND (status ILIKE 'Present' OR status='P')`,
-                [today, today + '%']
-            )
-        };
-        res.json({ success: true, stats: out });
-    } catch (e) {
-        console.error('dashboard-stats', e.message);
-        res.json({ success: true, stats: { students:0, teachers:0, pending:0, locked_grades:0, leave_pending:0, rereg_pending:0, present_today:0 } });
-    }
+    const out = {};
+    db.get(`SELECT COUNT(*) as c FROM students`, [], (e1, s) => {
+        out.students = s ? s.c : 0;
+        db.get(`SELECT COUNT(*) as c FROM teachers`, [], (e2, t) => {
+            out.teachers = t ? t.c : 0;
+            db.get(`SELECT COUNT(*) as c FROM pending_students`, [], (e3, p) => {
+                out.pending = p ? p.c : 0;
+                db.get(`SELECT COUNT(*) as c FROM grade_locks WHERE locked=1`, [], (e4, g) => {
+                    out.locked_grades = g ? g.c : 0;
+                    db.get(`SELECT COUNT(*) as c FROM staff_leave WHERE status='pending'`, [], (e5, l) => {
+                        out.leave_pending = l ? l.c : 0;
+                        db.get(`SELECT COUNT(*) as c FROM rereg_requests WHERE status='pending'`, [], (e6, r) => {
+                            out.rereg_pending = r ? r.c : 0;
+                            const today = new Date().toISOString().slice(0, 10);
+                            db.get(`SELECT COUNT(*) as c FROM daily_attendance WHERE date=? AND status='Present'`, [today], (e7, a) => {
+                                out.present_today = a ? a.c : 0;
+                                res.json({ success: true, stats: out });
+                            });
+                        });
+                    });
+                });
+            });
+        });
+    });
 });
 
 // ===== Transfer certificate (simple printable) =====
@@ -5798,31 +5997,16 @@ app.get('/api/admin/report-builder', (req, res) => {
     if (!req.session.isAdmin) return res.status(401).send('Unauthorized');
     const entity = (req.query.entity || 'students').toLowerCase();
     const cols = String(req.query.cols || '').split(',').map(s => s.trim()).filter(Boolean);
-    const classFilter = String(req.query.class_level || req.query.section || '').trim();
-    const orderBy = String(req.query.order || '').trim();
     const allowedStudents = ['student_id','name','mother_name','gender','age','phone','emergency_phone','region','zone','woreda','kebele','class_level','status','year_average','year_result','promoted_to','payment_type'];
     const allowedTeachers = ['id','name','phone','subject','gender','assigned_sections','assigned_grades','is_proctor','emergency_phone'];
     const allowed = entity === 'teachers' ? allowedTeachers : allowedStudents;
     const useCols = cols.length ? cols.filter(c => allowed.includes(c)) : allowed.slice(0, 8);
     if (!useCols.length) return res.status(400).send('No valid columns');
     const table = entity === 'teachers' ? 'teachers' : 'students';
+    // safe column list only from allowlist
     const sqlCols = useCols.join(', ');
-    let where = '';
-    const params = [];
-    if (entity === 'students' && classFilter && classFilter.toLowerCase() !== 'all') {
-        where = ' WHERE class_level ILIKE ?';
-        params.push('%' + classFilter + '%');
-    }
-    let orderSql = '';
-    if (entity === 'students') {
-        if (orderBy === 'name') orderSql = ' ORDER BY name ASC';
-        else if (orderBy === 'id') orderSql = ' ORDER BY student_id ASC';
-        else orderSql = ' ORDER BY class_level ASC, name ASC';
-    } else {
-        orderSql = ' ORDER BY name ASC';
-    }
-    db.all(`SELECT ${sqlCols} FROM ${table}${where}${orderSql}`, params, (e, rows) => {
-        if (e) { console.error(e); return res.status(500).send('DB error'); }
+    db.all(`SELECT ${sqlCols} FROM ${table}`, [], (e, rows) => {
+        if (e) return res.status(500).send('DB error');
         const lines = [useCols.join(',')];
         (rows || []).forEach(r => {
             lines.push(useCols.map(c => {
@@ -5831,15 +6015,11 @@ app.get('/api/admin/report-builder', (req, res) => {
                 return '"' + String(v).replace(/"/g, '""') + '"';
             }).join(','));
         });
-        const fname = entity === 'students'
-            ? ('students_' + (classFilter || 'all').replace(/[^a-zA-Z0-9_-]/g, '_') + '.csv')
-            : 'teachers_report.csv';
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-        res.setHeader('Content-Disposition', 'attachment; filename="' + fname + '"');
+        res.setHeader('Content-Disposition', `attachment; filename="${entity}_report.csv"`);
         res.send('\uFEFF' + lines.join('\n'));
     });
 });
-
 
 
 httpServer.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
