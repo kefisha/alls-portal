@@ -1896,8 +1896,29 @@ app.post('/admin/add-section', (req, res) => {
 });
 
 app.post('/admin/edit-section/:id', (req, res) => {
-    if (!req.session.isAdmin) return res.redirect('/');
-    db.run(`UPDATE sections SET proctor_name=? WHERE id=?`, [req.body.proctor_name, req.params.id], () => res.redirect('/admin'));
+    const proctorName = (req.body.proctor_name || '').trim();
+    db.get(`SELECT name FROM sections WHERE id = ?`, [req.params.id], (e, sec) => {
+        db.run(`UPDATE sections SET proctor_name=? WHERE id=?`, [proctorName, req.params.id], () => {
+            // Auto-add this section to the proctor teacher's assigned_sections
+            if (proctorName && sec && sec.name) {
+                db.get(`SELECT id, assigned_sections FROM teachers WHERE name = ?`, [proctorName], (e2, tch) => {
+                    if (tch) {
+                        let secs = (tch.assigned_sections || '').split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+                        if (secs.indexOf(sec.name) === -1) {
+                            secs.push(sec.name);
+                            db.run(`UPDATE teachers SET assigned_sections = ? WHERE id = ?`, [secs.join(', '), tch.id], () => {
+                                res.redirect('/admin');
+                            });
+                            return;
+                        }
+                    }
+                    res.redirect('/admin');
+                });
+            } else {
+                res.redirect('/admin');
+            }
+        });
+    });
 });
 
 app.get('/admin/delete-section/:id', (req, res) => {
@@ -2121,10 +2142,26 @@ app.get('/teacher-dashboard', (req, res) => {
     if (!req.session.teacherId) return res.redirect('/');
     db.get('SELECT * FROM teachers WHERE id = ?', [req.session.teacherId], (err, teacher) => {
         if (!teacher) return res.redirect('/');
-        let assignedClasses = teacher.assigned_sections ? teacher.assigned_sections.split(',').map(s => s.trim()).filter(Boolean) : [];
+        // Build assigned classes from assigned_sections + proctor sections + courses
+let assignedClasses = teacher.assigned_sections
+    ? String(teacher.assigned_sections).split(/[,;]+/).map(s => s.trim()).filter(Boolean)
+    : [];
+
+db.all('SELECT name FROM sections WHERE proctor_name = ?', [teacher.name], (errProc, proctorSecs) => {
+    (proctorSecs || []).forEach(s => {
+        if (s.name && assignedClasses.indexOf(s.name) === -1) assignedClasses.push(s.name);
+    });
+
+    db.all('SELECT class_level FROM courses WHERE teacher_id = ?', [req.session.teacherId], (errC, courseRows) => {
+        (courseRows || []).forEach(r => {
+            const c = (r.class_level || '').trim();
+            if (c && assignedClasses.indexOf(c) === -1) assignedClasses.push(c);
+        });
+
         let selectedClass = (req.query.cls || assignedClasses[0] || '').trim();
 
         db.all('SELECT student_id, name, class_level FROM students ORDER BY name ASC', [], (err, allStudents = []) => {
+            // ---- ከዚህ በታች ያለው የድሮው code ሙሉ በሙሉ ይቀጥላል (studentsInClass, courses, assessments...) ----
             let studentsInClass = allStudents.filter(s => isClassMatch(s.class_level, selectedClass));
             db.all('SELECT * FROM courses', [], (err, allCourses = []) => {
                 let classCourses = allCourses.filter(c => (c.teacher_id === req.session.teacherId || !c.teacher_id) && isClassMatch(c.class_level, selectedClass));
@@ -2276,7 +2313,8 @@ app.get('/teacher-dashboard', (req, res) => {
                 });
             });
         });
-    });
+    });   // ← proctorSecs callback
+    });   // ← courseRows callback
 });
 
 app.post('/teacher/send-notification', upload.single('attachment'), (req, res) => {
@@ -3837,13 +3875,19 @@ app.get('/api/teacher/my-sections', (req, res) => {
         if (t && t.assigned_sections) {
             sections = String(t.assigned_sections).split(/[,;]+/).map(s => s.trim()).filter(Boolean);
         }
-        // also sections from courses taught
+        // from courses taught
         db.all(`SELECT class_level FROM courses WHERE teacher_id=?`, [req.session.teacherId], (e2, rows) => {
             (rows || []).forEach(r => {
                 const c = (r.class_level || '').trim();
                 if (c && sections.indexOf(c) === -1) sections.push(c);
             });
-            res.json({ sections, teacher_name: t ? t.name : '' });
+            // NEW: sections where this teacher is the proctor
+            db.all(`SELECT name FROM sections WHERE proctor_name = ?`, [t ? t.name : ''], (e3, prow) => {
+                (prow || []).forEach(s => {
+                    if (s.name && sections.indexOf(s.name) === -1) sections.push(s.name);
+                });
+                res.json({ sections, teacher_name: t ? t.name : '' });
+            });
         });
     });
 });
