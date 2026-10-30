@@ -182,9 +182,23 @@ body.dark a{color:var(--primary)}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important;scroll-behavior:auto !important}}
 @media print{.card{animation:none}.top-bar{position:static;backdrop-filter:none}}
+
+/* teacher v3 additions */
+.quick-nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px}
+.quick-nav a{padding:9px 16px;border-radius:99px;background:var(--card);border:1px solid var(--border);color:var(--primary);font-weight:700;font-size:13px;text-decoration:none;box-shadow:var(--soft);transition:border-color .2s}
+.quick-nav a:hover{border-color:var(--accent)}
+.class-chips{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px}
+.class-chips .chips-label{font-weight:700;font-size:13px;color:var(--text2)}
+.class-chips .chip{padding:7px 14px;border-radius:99px;border:1px solid var(--border);background:var(--input);color:var(--text);font-weight:700;font-size:13px;text-decoration:none}
+.class-chips .chip.active{background:var(--grad);color:#fff;border-color:transparent}
+.cls-checks{display:flex;flex-wrap:wrap;gap:8px 12px}
+.cls-check{display:inline-flex;align-items:center;gap:6px;background:var(--input);border:1px solid var(--border);padding:6px 10px;border-radius:10px;font-weight:600;font-size:13px;color:var(--text)}
+.cls-check input{width:auto;margin:0}
+body.dark div[style*="background:#fffbeb"]{background:var(--input) !important;color:var(--text) !important;border-color:var(--border) !important}
+html{scroll-padding-top:90px}
 </style>
 </head>
-<script>window.TEACHER_SECTIONS = <%- typeof teacherSectionsJson !== 'undefined' ? teacherSectionsJson : '[]' %>;</script>
+<script>window.TEACHER_SECTIONS = <%- typeof teacherSectionsJson !== 'undefined' ? teacherSectionsJson : '[]' %>; window.MY_TEACHER_ID = <%- JSON.stringify(String(teacher.id)) %>;</script>
 <body class="lang-am">
     <div class="container">
         <div id="topLogout" style="display:flex;justify-content:flex-end;margin-bottom:12px;gap:8px;flex-wrap:wrap;">
@@ -201,6 +215,157 @@ body.dark a{color:var(--primary)}
                 <button type="button" onclick="setLang('am')" id="btn-am" style="background:#27ae60; color:white; padding:7px 14px;">🇪🇹 አማርኛ</button>
                 <button type="button" onclick="setLang('en')" id="btn-en" style="background:#7f8c8d; color:white; padding:7px 14px;">🇬🇧 English</button>
                 
+    <a href="/logout" class="logout-btn">🚪 <span class="am">ውጣ</span><span class="en">Logout</span></a>
+            </div>
+        </div>
+
+        <nav class="quick-nav">
+            <a href="#grades">📊 <span class="am">ውጤት</span><span class="en">Grades</span></a>
+            <a href="#notifications">📢 <span class="am">ማስታወቂያ</span><span class="en">Messages</span></a>
+            <a href="#absenceCard">📝 <span class="am">የፈቃድ ጥያቄ</span><span class="en">Absence</span></a>
+            <a href="#homework">📚 <span class="am">ሆምወርክ / ኩዊዝ</span><span class="en">Homework / Quiz</span></a>
+        </nav>
+
+        <!-- Class & Course Selector -->
+        <div class="card" style="border-top-color:#8e44ad;">
+            <h3>🏫 <span class="am">ክፍል እና ትምህርት ይምረጡ</span><span class="en">Select Class & Subject</span></h3>
+            <form method="GET" action="/teacher-dashboard" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:12px; align-items:end;">
+                <div>
+                    <label style="font-weight:bold; font-size:13px;"><span class="am">ክፍል / Section:</span><span class="en">Class / Section:</span></label>
+                    <select name="cls" onchange="this.form.submit()" style="margin-bottom:0;"><%- classOptions %></select>
+                </div>
+                <div>
+                    <label style="font-weight:bold; font-size:13px;"><span class="am">የትምህርት ዓይነት / Course:</span><span class="en">Course / Subject:</span></label>
+                    <select name="course_id" onchange="this.form.submit()" style="margin-bottom:0;"><%- courseOptions %></select>
+                </div>
+                <div>
+                    <button type="submit" style="width:100%; background:#8e44ad;">🔄 <span class="am">ክፍሉን ክፈት</span><span class="en">Load Class</span></button>
+                </div>
+            </form>
+            <% if (typeof assignedClasses !== 'undefined' && assignedClasses.length) { %>
+            <div class="class-chips">
+                <span class="chips-label"><span class="am">የእርስዎ ክፍሎች፦</span><span class="en">Your classes:</span></span>
+                <% assignedClasses.forEach(function(c){ %><a class="chip<%= c === selectedClass ? ' active' : '' %>" href="/teacher-dashboard?cls=<%= encodeURIComponent(c) %>"><%= c %></a><% }); %>
+            </div>
+            <% } else { %>
+            <div class="empty-state"><span class="ico">🏫</span><span class="am">ምንም ክፍል አልተመደበልዎትም — አድሚን ክፍል ይመድብልዎት።</span><span class="en">No class assigned to you yet — ask Admin to assign one.</span></div>
+            <% } %>
+        </div>
+
+        <%- proctorPanel %>
+
+        <!-- Student Grades Entry -->
+        <div class="card" id="grades" style="border-top-color:#27ae60;">
+            <h3>📊 <span class="am">የተማሪዎች ውጤት መሙያ (<%= selectedClass %>)</span><span class="en">Student Assessment & Grades (<%= selectedClass %>)</span></h3>
+            <div style="overflow-x:auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>ID</th>
+                            <th><span class="am">የተማሪ ስም</span><span class="en">Student Name</span></th>
+                            <th>Quiz</th>
+                            <th>Assign</th>
+                            <th>Project</th>
+                            <th>Mid</th>
+                            <th>Final</th>
+                            <th><span class="am">አስቀምጥ</span><span class="en">Save</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <%- studentRows %>
+                    </tbody>
+                </table>
+            </div>
+
+            <% if (typeof query !== 'undefined' && query.submitted) { %>
+        <div style="padding:12px;background:#fef3c7;border:2px solid #f59e0b;border-radius:10px;margin:12px 0;font-weight:bold;color:#92400e;">
+          ✅ Grades submitted to Admin — editing is locked until Admin unlocks or auto-backup runs.
+        </div>
+        <% } %>
+        <div style="margin-top:20px; padding:15px; background:#f0fdf4; border:2px solid #27ae60; border-radius:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+                <div>
+                    <strong style="color:#166534; font-size:15px;">📤 <span class="am">የክፍሉን ውጤት ለአድሚን ያስረክቡ፦</span><span class="en">Submit Final Class Grades to Admin:</span></strong>
+                </div>
+                <form action="/teacher/submit-final-grades" method="POST" style="display:flex; gap:10px; align-items:center; margin:0;">
+                    <input type="hidden" name="class_level" value="<%= selectedClass %>">
+                    <input type="hidden" name="course_id" value="<%= selectedCourseId %>">
+                    <input type="text" name="academic_year" value="2019 E.C" style="width:110px; margin:0; font-weight:bold;">
+                    <button type="submit" style="background:#27ae60; padding:10px 20px;">✅ <span class="am">ውጤቱን ለአድሚን አስረክብ</span><span class="en">Submit to Admin</span></button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Teacher Notification Center with Search + Rich Text -->
+        <div class="card" id="notifications" style="border-top-color:#e67e22;">
+            <h3>📢 <span class="am">ማስታወቂያ መላኪያ (ለአድሚን፣ ለክፍሎቼ ወይም ለተማሪ)</span><span class="en">Send Notification (Admin / My Classes / Student)</span></h3>
+            <form id="teacherNotifForm" action="/teacher/send-notification?cls=<%= encodeURIComponent(selectedClass) %>" method="POST" enctype="multipart/form-data">
+                
+                <label style="font-weight:bold; display:block; margin-bottom:6px;">
+                    🎯 <span class="am">1. ቀላል ምርጫ (ለአድሚን / ለክፍሎቼ)</span><span class="en">1. Quick Select:</span>
+                </label>
+                <select id="teacherQuickTarget" style="max-width:450px; margin-bottom:12px;">
+                    <% if (typeof teacherTargetOptions !== 'undefined' && teacherTargetOptions) { %>
+                        <%- teacherTargetOptions %>
+                    <% } else { %>
+                        <option value="ADMIN">👑 ለአድሚን / ዲሬክተር (To Admin)</option>
+                        <option value="<%= selectedClass %>">🏫 ለዚህ ክፍል (<%= selectedClass %>)</option>
+                    <% } %>
+                </select>
+                <input type="hidden" name="target_audience" id="teacherFinalTarget" value="ADMIN">
+
+                <!-- Search individual student (only from teacher's classes) -->
+                <div style="background:#f0f7ff; border:2px solid #3498db; border-radius:10px; padding:14px; margin-bottom:16px;">
+                    <label style="font-weight:bold; display:block; margin-bottom:6px; color:#1f4e79;">
+                        🔍 <span class="am">2. ወይም የተማሪ ስም / ID ፈልገው ይላኩ (ከሚያስተምሩባቸው ክፍሎች ብቻ)</span>
+                        <span class="en">2. Or search student by name/ID (only your classes)</span>
+                    </label>
+                    <input type="text" id="teacherSearchInput" placeholder="ስም ወይም ID... (e.g. Bereket or ALLS-5430)"
+                           style="max-width:450px; padding:10px; border:1px solid #3498db; border-radius:6px;" autocomplete="off">
+                    <div id="teacherSearchResults" style="display:none; max-width:450px; max-height:180px; overflow-y:auto; background:white; border:1px solid #cbd5e1; border-radius:0 0 6px 6px;"></div>
+                    <div id="teacherSelectedBox" style="display:none; margin-top:10px; padding:8px 12px; background:#e8f5e9; border:1px solid #27ae60; border-radius:6px; max-width:450px;">
+                        <span style="font-weight:bold; color:#1b5e20;">✅ ተመርጧል:</span>
+                        <span id="teacherSelectedText" style="font-weight:bold;"></span>
+                        <button type="button" onclick="clearTeacherSelection()" style="float:right; background:#e74c3c; color:white; border:none; padding:3px 8px; border-radius:4px; font-size:12px; cursor:pointer;">✕</button>
+                    </div>
+                    <input type="hidden" id="teacherIndividualTarget" value="">
+                </div>
+
+                <label style="font-weight:bold; display:block; margin-bottom:6px;">
+                    🎨 <span class="am">መልዕክትዎን ይጻፉ (ከለር፣ ፎንት፣ ሳይዝ፣ Bold)፦</span>
+                    <span class="en">Write message (Color, Font, Size, Bold):</span>
+                </label>
+                <div id="teacherEditor"></div>
+                <input type="hidden" name="message" id="teacherHiddenMsg">
+
+                <label style="font-weight:bold; display:block; margin-top:12px; margin-bottom:6px;">
+                    📎 <span class="am">ፋይል / ፎቶ አያይዝ (አማራጭ)</span><span class="en">Attach File / Photo (Optional)</span>
+                </label>
+                <input type="file" name="attachment" style="max-width:350px;">
+
+                <button type="submit" style="background:#e67e22; display:block; margin-top:12px;">
+                    📩 <span class="am">ማስታወቂያውን ላክ</span><span class="en">Send Notification</span>
+                </button>
+            </form>
+        </div>
+
+        <!-- Sent Notifications -->
+        <div class="card">
+            <h3>🔔 <span class="am">እርስዎ የላኳቸው ማስታወቂያዎች (የራስዎን ብቻ ማስተካከል/ማጥፋት ይችላሉ)</span><span class="en">Your Sent Notifications (Edit/Delete own only)</span></h3>
+            <div>
+                <%- teacherNotiRows || '<p style="color:#777;">ምንም የተላከ ማስታወቂያ የለም። / No sent notifications.</p>' %>
+            </div>
+        </div>
+
+        <!-- Absence Requests -->
+        <div class="card" id="absenceCard">
+            <h3>📝 <span class="am">የተማሪዎች የፈቃድ ጥያቄዎች</span><span class="en">Student Absence Requests</span></h3>
+            <table>
+                <tr id="absences"><th>Student</th><th>Date</th><th>Reason</th><th>Feedback / Reply</th></tr>
+                <%- absRows || '<tr><td colspan="4">ምንም የፈቃድ ጥያቄ የለም። / No requests.</td></tr>' %>
+            </table>
+        </div>
+
     <div class="card" id="homework">
         <h3>📝 Homework · ❓ Quiz · 📋 Lesson Plan · 📥 Bulk Grades</h3>
         <form action="/teacher/homework" method="POST" style="margin-bottom:14px;">
@@ -221,6 +386,10 @@ body.dark a{color:var(--primary)}
         </form>
         
         
+        <div id="myHomeworkBox" style="margin:14px 0;padding:14px;border:2px solid #f59e0b;border-radius:12px;background:#fffbeb;">
+            <h4 style="margin:0 0 10px;color:#b45309;">📚 My Homework — Edit · Delete</h4>
+            <div id="myHomeworkList"><span style="color:#64748b;">Loading...</span></div>
+        </div>
         <div id="quizAnalyticsBox" style="margin:14px 0;padding:14px;border:2px solid #7c3aed;border-radius:12px;background:#faf5ff;">
             <h4 style="margin:0 0 10px;color:#6d28d9;">📊 Quiz Analytics</h4>
             <div id="quizAnalyticsList"><span style="color:#64748b;">Loading...</span></div>
@@ -238,7 +407,7 @@ body.dark a{color:var(--primary)}
                 <h4 style="margin:0 0 8px;">✏️ Edit quiz</h4>
                 <input type="hidden" id="editQuizId">
                 <input type="text" id="editQuizTitle" placeholder="Title" style="width:100%;margin-bottom:8px;">
-                <input type="text" id="editQuizClass" placeholder="Class" style="width:100%;margin-bottom:8px;">
+                <div id="editQuizClassBox" class="cls-checks" style="margin-bottom:8px;"></div>
                 <div id="editQuestions"></div>
                 <button type="button" onclick="addEditQuestion()" style="background:#8e44ad;color:#fff;border:none;padding:8px 12px;border-radius:8px;margin-top:8px;">➕ Add question</button>
                 <button type="button" onclick="saveEditQuiz()" style="background:#27ae60;color:#fff;border:none;padding:8px 12px;border-radius:8px;margin-top:8px;">💾 Save changes</button>
@@ -246,6 +415,7 @@ body.dark a{color:var(--primary)}
             </div>
         </div>
         <!-- Handout photo / file -->
+        <a id="handout"></a>
         <div id="handoutBox" style="margin:14px 0;padding:14px;border:2px solid #0ea5e9;border-radius:12px;background:#f0f9ff;">
             <h4 style="margin:0 0 10px;color:#0369a1;">📎 Handout — send photo / file to class</h4>
             <p style="font-size:12px;color:#0369a1;margin:0 0 8px;">Only students in the selected class/section will see this handout or photo.</p>
@@ -270,6 +440,7 @@ body.dark a{color:var(--primary)}
             <div id="myHandoutsList" style="font-size:13px;"><span style="color:#64748b;">Loading...</span></div>
         </div>
 
+        <a id="quiz"></a>
         <form id="quizBuilderForm" action="/teacher/quiz" method="POST" enctype="multipart/form-data" style="margin-bottom:14px;border-top:1px solid #ddd;padding-top:12px;">
             <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px;margin-bottom:12px;font-size:13px;line-height:1.5;">
                 <b>📌 ቀመር እንደ ፎቶ ለማስቀመጥ (ምርጥ መንገድ):</b><br>
@@ -467,9 +638,10 @@ body.dark a{color:var(--primary)}
             });
         })();
         </script>
+        <a id="lesson"></a>
         <form action="/teacher/lesson-plan" method="POST" style="margin-bottom:14px;border-top:1px solid #ddd;padding-top:12px;">
             <input type="text" name="week_label" placeholder="Week e.g. Week 12" required>
-            <input type="text" name="class_level" placeholder="Class">
+            <select name="class_level" class="my-class-select" data-all="1" required><option value="">— Select class / section —</option></select>
             <textarea name="content" rows="3" placeholder="Lesson plan content..." required></textarea>
             <button type="submit">📋 Save Lesson Plan</button>
         </form>
@@ -485,149 +657,15 @@ body.dark a{color:var(--primary)}
           <a href="/learning-hub" style="display:block;text-align:center;background:linear-gradient(135deg,#1d4ed8,#7c3aed);color:#fff;padding:18px 20px;border-radius:14px;text-decoration:none;font-weight:900;font-size:22px;letter-spacing:0.3px;box-shadow:0 8px 20px rgba(29,78,216,.35);">
             📚 Learning Hub / የትምህርት ማዕከል
           </a>
+          <% if (typeof isProctorAny !== 'undefined' && isProctorAny) { %>
           <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;">
             <a href="/admin/attendance-report" style="background:#0f766e;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:bold;">📋 Attendance</a>
             <a href="/qr-scan" style="background:#ea580c;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:bold;">📷 QR Attendance</a>
           </div>
+          <% } %>
         </div>
         <div id="classAvg" style="margin-top:10px;font-weight:bold;color:#1f4e79;"></div>
     </div>
-
-    <a href="/logout" class="logout-btn">🚪 <span class="am">ውጣ</span><span class="en">Logout</span></a>
-            </div>
-        </div>
-
-        <!-- Class & Course Selector -->
-        <div class="card" style="border-top-color:#8e44ad;">
-            <h3>🏫 <span class="am">ክፍል እና ትምህርት ይምረጡ</span><span class="en">Select Class & Subject</span></h3>
-            <form method="GET" action="/teacher-dashboard" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:12px; align-items:end;">
-                <div>
-                    <label style="font-weight:bold; font-size:13px;"><span class="am">ክፍል / Section:</span><span class="en">Class / Section:</span></label>
-                    <select name="cls" onchange="this.form.submit()" style="margin-bottom:0;"><%- classOptions %></select>
-                </div>
-                <div>
-                    <label style="font-weight:bold; font-size:13px;"><span class="am">የትምህርት ዓይነት / Course:</span><span class="en">Course / Subject:</span></label>
-                    <select name="course_id" onchange="this.form.submit()" style="margin-bottom:0;"><%- courseOptions %></select>
-                </div>
-                <div>
-                    <button type="submit" style="width:100%; background:#8e44ad;">🔄 <span class="am">ክፍሉን ክፈት</span><span class="en">Load Class</span></button>
-                </div>
-            </form>
-        </div>
-
-        <%- proctorPanel %>
-
-        <!-- Student Grades Entry -->
-        <div class="card" style="border-top-color:#27ae60;">
-            <h3>📊 <span class="am">የተማሪዎች ውጤት መሙያ (<%= selectedClass %>)</span><span class="en">Student Assessment & Grades (<%= selectedClass %>)</span></h3>
-            <div style="overflow-x:auto;">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>ID</th>
-                            <th><span class="am">የተማሪ ስም</span><span class="en">Student Name</span></th>
-                            <th>Quiz</th>
-                            <th>Assign</th>
-                            <th>Project</th>
-                            <th>Mid</th>
-                            <th>Final</th>
-                            <th><span class="am">አስቀምጥ</span><span class="en">Save</span></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <%- studentRows %>
-                    </tbody>
-                </table>
-            </div>
-
-            <% if (typeof query !== 'undefined' && query.submitted) { %>
-        <div style="padding:12px;background:#fef3c7;border:2px solid #f59e0b;border-radius:10px;margin:12px 0;font-weight:bold;color:#92400e;">
-          ✅ Grades submitted to Admin — editing is locked until Admin unlocks or auto-backup runs.
-        </div>
-        <% } %>
-        <div style="margin-top:20px; padding:15px; background:#f0fdf4; border:2px solid #27ae60; border-radius:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-                <div>
-                    <strong style="color:#166534; font-size:15px;">📤 <span class="am">የክፍሉን ውጤት ለአድሚን ያስረክቡ፦</span><span class="en">Submit Final Class Grades to Admin:</span></strong>
-                </div>
-                <form action="/teacher/submit-final-grades" method="POST" style="display:flex; gap:10px; align-items:center; margin:0;">
-                    <input type="hidden" name="class_level" value="<%= selectedClass %>">
-                    <input type="hidden" name="course_id" value="<%= selectedCourseId %>">
-                    <input type="text" name="academic_year" value="2019 E.C" style="width:110px; margin:0; font-weight:bold;">
-                    <button type="submit" style="background:#27ae60; padding:10px 20px;">✅ <span class="am">ውጤቱን ለአድሚን አስረክብ</span><span class="en">Submit to Admin</span></button>
-                </form>
-            </div>
-        </div>
-
-        <!-- Teacher Notification Center with Search + Rich Text -->
-        <div class="card" style="border-top-color:#e67e22;">
-            <h3>📢 <span class="am">ማስታወቂያ መላኪያ (ለአድሚን፣ ለክፍሎቼ ወይም ለተማሪ)</span><span class="en">Send Notification (Admin / My Classes / Student)</span></h3>
-            <form id="teacherNotifForm" action="/teacher/send-notification?cls=<%= encodeURIComponent(selectedClass) %>" method="POST" enctype="multipart/form-data">
-                
-                <label style="font-weight:bold; display:block; margin-bottom:6px;">
-                    🎯 <span class="am">1. ቀላል ምርጫ (ለአድሚን / ለክፍሎቼ)</span><span class="en">1. Quick Select:</span>
-                </label>
-                <select id="teacherQuickTarget" style="max-width:450px; margin-bottom:12px;">
-                    <% if (typeof teacherTargetOptions !== 'undefined' && teacherTargetOptions) { %>
-                        <%- teacherTargetOptions %>
-                    <% } else { %>
-                        <option value="ADMIN">👑 ለአድሚን / ዲሬክተር (To Admin)</option>
-                        <option value="<%= selectedClass %>">🏫 ለዚህ ክፍል (<%= selectedClass %>)</option>
-                    <% } %>
-                </select>
-                <input type="hidden" name="target_audience" id="teacherFinalTarget" value="ADMIN">
-
-                <!-- Search individual student (only from teacher's classes) -->
-                <div style="background:#f0f7ff; border:2px solid #3498db; border-radius:10px; padding:14px; margin-bottom:16px;">
-                    <label style="font-weight:bold; display:block; margin-bottom:6px; color:#1f4e79;">
-                        🔍 <span class="am">2. ወይም የተማሪ ስም / ID ፈልገው ይላኩ (ከሚያስተምሩባቸው ክፍሎች ብቻ)</span>
-                        <span class="en">2. Or search student by name/ID (only your classes)</span>
-                    </label>
-                    <input type="text" id="teacherSearchInput" placeholder="ስም ወይም ID... (e.g. Bereket or ALLS-5430)"
-                           style="max-width:450px; padding:10px; border:1px solid #3498db; border-radius:6px;" autocomplete="off">
-                    <div id="teacherSearchResults" style="display:none; max-width:450px; max-height:180px; overflow-y:auto; background:white; border:1px solid #cbd5e1; border-radius:0 0 6px 6px;"></div>
-                    <div id="teacherSelectedBox" style="display:none; margin-top:10px; padding:8px 12px; background:#e8f5e9; border:1px solid #27ae60; border-radius:6px; max-width:450px;">
-                        <span style="font-weight:bold; color:#1b5e20;">✅ ተመርጧል:</span>
-                        <span id="teacherSelectedText" style="font-weight:bold;"></span>
-                        <button type="button" onclick="clearTeacherSelection()" style="float:right; background:#e74c3c; color:white; border:none; padding:3px 8px; border-radius:4px; font-size:12px; cursor:pointer;">✕</button>
-                    </div>
-                    <input type="hidden" id="teacherIndividualTarget" value="">
-                </div>
-
-                <label style="font-weight:bold; display:block; margin-bottom:6px;">
-                    🎨 <span class="am">መልዕክትዎን ይጻፉ (ከለር፣ ፎንት፣ ሳይዝ፣ Bold)፦</span>
-                    <span class="en">Write message (Color, Font, Size, Bold):</span>
-                </label>
-                <div id="teacherEditor"></div>
-                <input type="hidden" name="message" id="teacherHiddenMsg">
-
-                <label style="font-weight:bold; display:block; margin-top:12px; margin-bottom:6px;">
-                    📎 <span class="am">ፋይል / ፎቶ አያይዝ (አማራጭ)</span><span class="en">Attach File / Photo (Optional)</span>
-                </label>
-                <input type="file" name="attachment" style="max-width:350px;">
-
-                <button type="submit" style="background:#e67e22; display:block; margin-top:12px;">
-                    📩 <span class="am">ማስታወቂያውን ላክ</span><span class="en">Send Notification</span>
-                </button>
-            </form>
-        </div>
-
-        <!-- Sent Notifications -->
-        <div class="card">
-            <h3>🔔 <span class="am">እርስዎ የላኳቸው ማስታወቂያዎች (የራስዎን ብቻ ማስተካከል/ማጥፋት ይችላሉ)</span><span class="en">Your Sent Notifications (Edit/Delete own only)</span></h3>
-            <div>
-                <%- teacherNotiRows || '<p style="color:#777;">ምንም የተላከ ማስታወቂያ የለም። / No sent notifications.</p>' %>
-            </div>
-        </div>
-
-        <!-- Absence Requests -->
-        <div class="card">
-            <h3>📝 <span class="am">የተማሪዎች የፈቃድ ጥያቄዎች</span><span class="en">Student Absence Requests</span></h3>
-            <table>
-                <tr id="absences"><th>Student</th><th>Date</th><th>Reason</th><th>Feedback / Reply</th></tr>
-                <%- absRows || '<tr><td colspan="4">ምንም የፈቃድ ጥያቄ የለም። / No requests.</td></tr>' %>
-            </table>
-        </div>
     </div>
 
     <script>
@@ -719,10 +757,10 @@ body.dark a{color:var(--primary)}
                         tResults.innerHTML = '<div style="padding:10px;color:#777;">ምንም አልተገኘም / No results</div>';
                     } else {
                         tResults.innerHTML = matches.slice(0, 12).map(s => `
-                            <div class="t-search-item" data-value="STUDENT:${s.id}" data-label="👨‍🎓 ${s.name} (${s.id})"
+                            <div class="t-search-item" data-value="STUDENT:${s.id}" data-label="👨‍🎓 ${s.name} (${s.id}) — ${s.cls || ''}"
                                  style="padding:10px 12px; cursor:pointer; border-bottom:1px solid #eee; font-size:13.5px;"
                                  onmouseover="this.style.background='#e3f2fd'" onmouseout="this.style.background='white'">
-                                👨‍🎓 ${s.name} (${s.id})
+                                👨‍🎓 ${s.name} (${s.id}) <small style="color:#64748b;">${s.cls || ''}</small>
                             </div>
                         `).join('');
                     }
@@ -979,24 +1017,17 @@ body.dark a{color:var(--primary)}
     // homework class if select/input
     var hw = document.querySelector('form[action="/teacher/homework"] input[name="class_level"], form[action="/teacher/homework"] select[name="class_level"]');
     if (hw && hw.tagName === 'SELECT') fillSelect(hw);
-    // convert homework text to select if needed
-    var hwForm = document.querySelector('form[action="/teacher/homework"]');
-    if (hwForm) {
-      var inp = hwForm.querySelector('input[name="class_level"]');
-      if (inp && !hwForm.querySelector('select[name="class_level"]')) {
-        var sel = document.createElement('select');
-        sel.name = 'class_level';
-        sel.required = true;
-        sel.style.cssText = inp.style.cssText || 'width:100%;margin-bottom:8px;';
-        sel.innerHTML = '<option value="">— Select class / section —</option>';
-        secsList().forEach(function(s){
-          var o=document.createElement('option'); o.value=s; o.textContent=s;
-          if (inp.value && inp.value===s) o.selected=true;
-          sel.appendChild(o);
-        });
-        inp.parentNode.replaceChild(sel, inp);
+    // fill every "my class" select (lesson plan, unlock request)
+    document.querySelectorAll('select.my-class-select').forEach(function(sel){
+      if (sel.getAttribute('data-filled')) return;
+      sel.setAttribute('data-filled','1');
+      if (sel.getAttribute('data-all') === '1' && secsList().length > 1) {
+        var oa = document.createElement('option'); oa.value = 'ALL'; oa.textContent = 'All my classes'; sel.appendChild(oa);
       }
-    }
+      secsList().forEach(function(sec){
+        var o = document.createElement('option'); o.value = sec; o.textContent = sec; sel.appendChild(o);
+      });
+    });
   }
 
   window.loadMyQuizzes = function(){
@@ -1037,10 +1068,12 @@ body.dark a{color:var(--primary)}
       .then(function(d){
         if (!d || !d.success) { box.innerHTML = '<p style="color:#c00;margin:0">Failed to load handouts</p>'; return; }
         if (!(d.rows||[]).length) { box.innerHTML = '<p style="color:#64748b;margin:0">No handouts yet.</p>'; return; }
+        window.__handouts = d.rows;
         box.innerHTML = d.rows.map(function(h){
           var link = h.file_path ? ('<a href="/uploads/'+h.file_path+'" target="_blank">Open</a>') : '';
           return '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #bae6fd;">'+
             '<div style="flex:1;min-width:140px"><b>'+(h.title||'')+'</b><br><small>Class: '+(h.class_level||'')+'</small> '+link+'</div>'+
+            '<button type="button" onclick="editHandout('+h.id+')" style="background:#f59e0b;color:#fff;border:none;padding:6px 10px;border-radius:6px;">✏️ Edit</button>'+
             '<button type="button" onclick="deleteHandout('+h.id+')" style="background:#e74c3c;color:#fff;border:none;padding:6px 10px;border-radius:6px;">🗑️ Delete</button>'+
           '</div>';
         }).join('');
@@ -1063,7 +1096,7 @@ body.dark a{color:var(--primary)}
         var q = d.quiz;
         document.getElementById('editQuizId').value = q.id;
         document.getElementById('editQuizTitle').value = q.title || '';
-        document.getElementById('editQuizClass').value = q.class_level || '';
+        buildClassChecks(document.getElementById('editQuizClassBox'), q.class_level || '');
         var wrap = document.getElementById('editQuestions');
         wrap.innerHTML = '';
         (q.questions||[]).forEach(function(qq, i){ appendEditQ(wrap, qq, i); });
@@ -1129,7 +1162,7 @@ body.dark a{color:var(--primary)}
     form.action = '/teacher/quiz/'+id+'/update';
     function hid(n,v){ var i=document.createElement('input'); i.type='hidden'; i.name=n; i.value=v; form.appendChild(i); }
     hid('title', document.getElementById('editQuizTitle').value);
-    hid('class_level', document.getElementById('editQuizClass').value);
+    hid('class_level', readClassChecks(document.getElementById('editQuizClassBox')));
     hid('questions_json', JSON.stringify(questions));
     document.body.appendChild(form);
     form.submit();
@@ -1291,11 +1324,14 @@ body.dark a{color:var(--primary)}
     fetch('/api/lesson-plans',{credentials:'same-origin'}).then(r=>r.json()).then(function(d){
       var rows=d.rows||[];
       if(!rows.length){ box.innerHTML='<p style="margin:0;color:#64748b">No lesson plans yet. Save one below.</p>'; return; }
+      window.__lessons = rows;
       box.innerHTML=rows.map(function(p){
         return '<div style="border-bottom:1px solid #99f6e4;padding:8px 0"><b>'+(p.week_label||'Plan')+'</b> · '+(p.class_level||'')+
           '<br><small>'+(p.teacher_name||'')+' · '+(p.created_at||'')+'</small>'+
           '<div style="white-space:pre-wrap;font-size:13px;margin-top:4px">'+(p.content||'')+'</div>'+
-          '<button type="button" onclick="deleteLesson('+p.id+')" style="margin-top:6px;background:#e11d48;color:#fff;border:none;border-radius:6px;padding:4px 10px">🗑️ Delete</button></div>';
+          (String(p.teacher_id)===String(window.MY_TEACHER_ID)
+            ? '<button type="button" onclick="editLesson('+p.id+')" style="margin-top:6px;background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:4px 10px">✏️ Edit</button> <button type="button" onclick="deleteLesson('+p.id+')" style="margin-top:6px;background:#e11d48;color:#fff;border:none;border-radius:6px;padding:4px 10px">🗑️ Delete</button>'
+            : '')+'</div>';
       }).join('');
     }).catch(function(){ box.innerHTML='Failed'; });
   }
@@ -1312,7 +1348,7 @@ body.dark a{color:var(--primary)}
 <div class="card" style="border-top:4px solid #b45309;margin:16px 0;padding:14px;">
   <h4 style="margin:0 0 8px;color:#b45309;">🔓 Request grade unlock (after submit)</h4>
   <p style="font-size:13px;color:#64748b;margin:0 0 8px;">Submit ካደረጉ በኋላ edit አይችሉም። Admin እንዲከፍትልዎ class ይምረጡ → Request።</p>
-  <input type="text" id="unlockReqClass" placeholder="Class e.g. Grade 5 - Section A" style="width:100%;max-width:320px;padding:10px;margin:4px 0;">
+  <select id="unlockReqClass" class="my-class-select" style="width:100%;max-width:320px;padding:10px;margin:4px 0;"><option value="">— Select class —</option></select>
   <input type="text" id="unlockReqReason" placeholder="Reason" style="width:100%;max-width:320px;padding:10px;margin:4px 0;">
   <button type="button" onclick="requestUnlock()" style="background:#b45309;color:#fff;border:none;padding:10px 14px;border-radius:8px;font-weight:bold;">📩 Send unlock request</button>
 </div>
@@ -1324,6 +1360,126 @@ function requestUnlock(){
   fetch('/teacher/request-unlock',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({class_level:cls,reason:reason})})
     .then(r=>r.json()).then(function(d){ alert(d.success?'Request sent to Admin':'Failed'); });
 }
+</script>
+
+<div id="qeModal" class="preview-modal"><div class="box" style="width:min(540px,92vw);">
+  <button type="button" class="close" onclick="closeQuickEdit()">×</button>
+  <h3 id="qeTitle" style="margin:4px 30px 12px 0;"></h3>
+  <div id="qeBody"></div>
+  <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+    <button type="button" id="qeSave">💾 Save</button>
+    <button type="button" onclick="closeQuickEdit()" style="background:#64748b;">Cancel</button>
+  </div>
+</div></div>
+
+<script>
+(function(){
+  function secs(){ return Array.isArray(window.TEACHER_SECTIONS) ? window.TEACHER_SECTIONS : []; }
+  function esc(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+
+  // checkbox list of MY classes only
+  window.buildClassChecks = function(box, current){
+    if (!box) return;
+    var cur = String(current||'').split(/[,;]+/).map(function(x){ return x.trim().toLowerCase(); }).filter(Boolean);
+    box.innerHTML = '';
+    if (!secs().length) { box.innerHTML = '<span style="color:#b91c1c;font-size:13px;">No assigned classes — Admin must assign sections.</span>'; return; }
+    secs().forEach(function(sec){
+      var lab = document.createElement('label'); lab.className = 'cls-check';
+      var inp = document.createElement('input'); inp.type = 'checkbox'; inp.value = sec;
+      inp.checked = cur.indexOf(sec.toLowerCase()) >= 0 || cur.indexOf('all') >= 0;
+      var sp = document.createElement('span'); sp.textContent = sec;
+      lab.appendChild(inp); lab.appendChild(sp); box.appendChild(lab);
+    });
+  };
+  window.readClassChecks = function(box){
+    var v = []; if (box) box.querySelectorAll('input:checked').forEach(function(c){ v.push(c.value); });
+    return v.join(', ');
+  };
+
+  window.closeQuickEdit = function(){ document.getElementById('qeModal').classList.remove('show'); };
+  window.openQuickEdit = function(cfg){
+    document.getElementById('qeTitle').textContent = cfg.title;
+    var body = document.getElementById('qeBody'); body.innerHTML = '';
+    (cfg.fields||[]).forEach(function(f){
+      var w = document.createElement('div'); w.style.marginBottom = '8px';
+      var lb = document.createElement('label'); lb.style.cssText = 'font-weight:bold;font-size:13px;display:block;margin-bottom:4px;'; lb.textContent = f.label; w.appendChild(lb);
+      var el;
+      if (f.type === 'textarea') { el = document.createElement('textarea'); el.rows = 3; }
+      else if (f.type === 'classes') { el = document.createElement('div'); el.className = 'cls-checks'; buildClassChecks(el, f.value); }
+      else { el = document.createElement('input'); el.type = f.type || 'text'; }
+      el.setAttribute('data-f', f.name);
+      if (f.type !== 'classes' && f.type !== 'file') el.value = (f.value == null ? '' : f.value);
+      w.appendChild(el); body.appendChild(w);
+    });
+    document.getElementById('qeSave').onclick = function(){
+      var ok = true, fd = cfg.multipart ? new FormData() : new URLSearchParams();
+      body.querySelectorAll('[data-f]').forEach(function(el){
+        var n = el.getAttribute('data-f');
+        if (el.classList.contains('cls-checks')) { var v = readClassChecks(el); if (!v) ok = false; fd.append(n, v); }
+        else if (el.type === 'file') { if (cfg.multipart && el.files && el.files[0]) fd.append(n, el.files[0]); }
+        else fd.append(n, el.value);
+      });
+      if (!ok) { alert('Select at least one class / section'); return; }
+      var opts = { method: 'POST', credentials: 'same-origin', headers: { 'Accept': 'application/json' }, body: cfg.multipart ? fd : fd.toString() };
+      if (!cfg.multipart) opts.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+      fetch(cfg.url, opts).then(function(r){ return r.json(); }).then(function(d){
+        if (d && d.success) { closeQuickEdit(); if (window.showToast) showToast('✅ Saved'); if (cfg.after) cfg.after(); }
+        else alert((d && d.error) || 'Save failed');
+      }).catch(function(){ alert('Network error'); });
+    };
+    document.getElementById('qeModal').classList.add('show');
+  };
+
+  // ----- My homework: list / edit / delete -----
+  window.loadMyHomework = function(){
+    var box = document.getElementById('myHomeworkList'); if (!box) return;
+    fetch('/api/teacher/homework', { credentials: 'same-origin' }).then(function(r){ return r.json(); }).then(function(d){
+      var rows = (d && d.rows) || []; window.__homework = rows;
+      if (!rows.length) { box.innerHTML = '<p style="margin:0;color:#64748b">No homework yet. Assign one above.</p>'; return; }
+      box.innerHTML = rows.map(function(h){
+        return '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #fde68a;">'
+          + '<div style="flex:1;min-width:160px"><b>' + esc(h.title) + '</b><br><small>' + esc(h.class_level) + (h.due_date ? ' · Due ' + esc(h.due_date) : '') + '</small></div>'
+          + '<button type="button" onclick="editHomework(' + h.id + ')" style="background:#f59e0b;color:#fff;border:none;padding:6px 10px;border-radius:6px;">✏️ Edit</button>'
+          + '<button type="button" onclick="deleteHomework(' + h.id + ')" style="background:#e74c3c;color:#fff;border:none;padding:6px 10px;border-radius:6px;">🗑️ Delete</button>'
+          + '</div>';
+      }).join('');
+    }).catch(function(){ box.innerHTML = '<p style="color:#c00;margin:0">Failed to load</p>'; });
+  };
+  window.editHomework = function(id){
+    var h = (window.__homework||[]).filter(function(x){ return String(x.id) === String(id); })[0]; if (!h) return;
+    openQuickEdit({ title: '✏️ Edit homework', url: '/teacher/homework/' + id + '/update', after: loadMyHomework, fields: [
+      { name: 'title', label: 'Title', value: h.title },
+      { name: 'description', label: 'Instructions', type: 'textarea', value: h.description },
+      { name: 'due_date', label: 'Due date', type: 'date', value: h.due_date },
+      { name: 'class_level', label: 'Class / Section', type: 'classes', value: h.class_level } ] });
+  };
+  window.deleteHomework = function(id){
+    if (!confirm('Delete this homework (and its submissions)?')) return;
+    fetch('/teacher/homework/' + id + '/delete', { method: 'POST', credentials: 'same-origin' }).then(function(r){ return r.json(); })
+      .then(function(d){ if (d.success) loadMyHomework(); else alert('Delete failed'); });
+  };
+
+  // ----- Handout edit -----
+  window.editHandout = function(id){
+    var h = (window.__handouts||[]).filter(function(x){ return String(x.id) === String(id); })[0]; if (!h) return;
+    openQuickEdit({ title: '✏️ Edit handout', url: '/teacher/handout/' + id + '/update', multipart: true, after: function(){ loadMyHandouts(); }, fields: [
+      { name: 'title', label: 'Title', value: h.title },
+      { name: 'note', label: 'Note', type: 'textarea', value: h.note },
+      { name: 'class_level', label: 'Class / Section', type: 'classes', value: h.class_level },
+      { name: 'file', label: 'Replace photo / file (optional)', type: 'file' } ] });
+  };
+
+  // ----- Lesson plan edit -----
+  window.editLesson = function(id){
+    var p = (window.__lessons||[]).filter(function(x){ return String(x.id) === String(id); })[0]; if (!p) return;
+    openQuickEdit({ title: '✏️ Edit lesson plan', url: '/teacher/lesson-plan/' + id + '/update', after: function(){ location.reload(); }, fields: [
+      { name: 'week_label', label: 'Week', value: p.week_label },
+      { name: 'class_level', label: 'Class / Section', type: 'classes', value: p.class_level },
+      { name: 'content', label: 'Lesson plan', type: 'textarea', value: p.content } ] });
+  };
+
+  loadMyHomework();
+})();
 </script>
 
 </body>
